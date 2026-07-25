@@ -1,0 +1,110 @@
+/* ============================================================
+   iOS 26 — System Colors
+   Apple Human Interface Guidelines. Values match the documented
+   sRGB system palette for Light and Dark appearances.
+   ============================================================ */
+
+:root {
+  /* --- System colors (Light) --- */
+  --system-blue: #007aff;
+  --system-green: #34c759;
+  --system-indigo: #5856d6;
+  --system-orange: #ff9500;
+  --system-pink: #ff2d55;
+  --system-purple: #af52de;
+  --system-red: #ff3b30;
+  --system-teal: #30b0c7;
+  --system-mint: #00c7be;
+  --system-cyan: #32ade6;
+  --system-yellow: #ffcc00;
+  --system-brown: #a2845e;
+
+  /* --- System grays (Light) --- */
+  --system-gray: #8e8e93;
+  --system-gray-2: #aeaeb2;
+  --system-gray-3: #c7c7cc;
+  --system-gray-4: #d1d1d6;
+  --system-gray-5: #e5e5ea;
+  --system-gray-6: #f2f2f7;
+
+  /* --- Labels (Light) — opacity baked onto black --- */
+  --label: rgba(0, 0, 0, 1);
+  --label-secondary: rgba(60, 60, 67, 0.6);
+  --label-tertiary: rgba(60, 60, 67, 0.3);
+  --label-quaternary: rgba(60, 60, 67, 0.18);
+
+  /* --- Backgrounds (Light) --- */
+  --bg: #ffffff;
+  --bg-secondary: #f2f2f7;
+  --bg-tertiary: #ffffff;
+  --bg-grouped: #f2f2f7;
+  --bg-grouped-secondary: #ffffff;
+  --bg-grouped-tertiary: #f2f2f7;
+
+  /* --- Fills (Light) — translucent, layer over content --- */
+  --fill: rgba(120, 120, 128, 0.2);
+  --fill-secondary: rgba(120, 120, 128, 0.16);
+  --fill-tertiary: rgba(118, 118, 128, 0.12);
+  --fill-quaternary: rgba(116, 116, 128, 0.08);
+
+  /* --- Separators (Light) --- */
+  --separator: rgba(60, 60, 67, 0.29);
+  --separator-opaque: #c6c6c8;
+
+  /* --- Tint (default interactive accent) --- */
+  --tint: var(--system-blue);
+  --tint-pressed: #0062cc;
+
+  /* --- On-color text --- */
+  --on-tint: #ffffff;
+}
+
+/* ============================================================
+   Dark appearance
+   ============================================================ */
+:root[data-theme="dark"],
+.ios-dark {
+  --system-blue: #0a84ff;
+  --system-green: #30d158;
+  --system-indigo: #5e5ce6;
+  --system-orange: #ff9f0a;
+  --system-pink: #ff375f;
+  --system-purple: #bf5af2;
+  --system-red: #ff453a;
+  --system-teal: #40cbe0;
+  --system-mint: #66d4cf;
+  --system-cyan: #64d2ff;
+  --system-yellow: #ffd60a;
+  --system-brown: #ac8e68;
+
+  --system-gray: #8e8e93;
+  --system-gray-2: #636366;
+  --system-gray-3: #48484a;
+  --system-gray-4: #3a3a3c;
+  --system-gray-5: #2c2c2e;
+  --system-gray-6: #1c1c1e;
+
+  --label: rgba(255, 255, 255, 1);
+  --label-secondary: rgba(235, 235, 245, 0.6);
+  --label-tertiary: rgba(235, 235, 245, 0.3);
+  --label-quaternary: rgba(235, 235, 245, 0.16);
+
+  --bg: #000000;
+  --bg-secondary: #1c1c1e;
+  --bg-tertiary: #2c2c2e;
+  --bg-grouped: #000000;
+  --bg-grouped-secondary: #1c1c1e;
+  --bg-grouped-tertiary: #2c2c2e;
+
+  --fill: rgba(120, 120, 128, 0.36);
+  --fill-secondary: rgba(120, 120, 128, 0.32);
+  --fill-tertiary: rgba(118, 118, 128, 0.24);
+  --fill-quaternary: rgba(118, 118, 128, 0.18);
+
+  --separator: rgba(84, 84, 88, 0.6);
+  --separator-opaque: #38383a;
+
+  --tint: var(--system-blue);
+  --tint-pressed: #409cff;
+  --on-tint: #ffffff;
+}

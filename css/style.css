@@ -1,0 +1,106 @@
+:root{
+  --font-text:'Pretendard Variable',Pretendard,-apple-system,'Segoe UI',sans-serif;
+  --font-display:'Pretendard Variable',Pretendard,-apple-system,'Segoe UI',sans-serif;
+  /* Raised look — the default treatment for every button and card. */
+  --tc-sheen:linear-gradient(180deg,rgba(255,255,255,.34),rgba(255,255,255,.06) 48%,rgba(0,0,0,.06));
+  --tc-raise:inset 0 1px 0 rgba(255,255,255,.55),0 1px 2px rgba(0,0,0,.10),0 3px 8px rgba(0,0,0,.10),0 8px 18px rgba(0,0,0,.07);
+  --tc-raise-sm:inset 0 1px 0 rgba(255,255,255,.45),0 1px 2px rgba(0,0,0,.08),0 2px 6px rgba(0,0,0,.08);
+  --tc-card-shadow:0 1px 2px rgba(0,0,0,.05),0 4px 12px rgba(0,0,0,.07),0 16px 36px rgba(0,0,0,.10),inset 0 1px 0 rgba(255,255,255,.65);
+}
+:root[data-theme="dark"]{
+  --tc-sheen:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.03) 48%,rgba(0,0,0,.18));
+  --tc-raise:inset 0 1px 0 rgba(255,255,255,.10),0 1px 2px rgba(0,0,0,.5),0 4px 10px rgba(0,0,0,.45),0 10px 22px rgba(0,0,0,.4);
+  --tc-raise-sm:inset 0 1px 0 rgba(255,255,255,.08),0 1px 2px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.4);
+  --tc-card-shadow:0 1px 2px rgba(0,0,0,.4),0 6px 16px rgba(0,0,0,.45),0 18px 40px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06);
+}
+/* Default card. Anything that groups content (calendar, sheets, login box)
+   uses this so depth stays consistent with the buttons. */
+.card{background:var(--bg);background-image:var(--tc-sheen);background-repeat:no-repeat;
+  background-size:100% 96px;border-radius:20px;box-shadow:var(--tc-card-shadow)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg-secondary);color:var(--label);font-family:var(--font-text);min-height:100vh}
+a{color:var(--tint);text-decoration:none}
+a:hover{text-decoration:underline}
+input:focus,textarea:focus{outline:2px solid var(--tint);outline-offset:-1px}
+@keyframes tcFade{from{opacity:0}to{opacity:1}}
+@keyframes tcSheet{from{transform:translateY(60px);opacity:.4}to{transform:none;opacity:1}}
+@keyframes iosMenuIn{from{opacity:0;transform:translateY(-6px) scale(.96)}to{opacity:1;transform:none}}
+
+/* --- iOS 26 Button (port of DS Button.jsx) --- */
+.btn{display:inline-flex;align-items:center;justify-content:center;border:none;outline:none;
+  font-family:var(--font-text);font-weight:var(--weight-semibold);letter-spacing:var(--text-body-tracking);
+  line-height:1;cursor:pointer;-webkit-tap-highlight-color:transparent;border-radius:var(--radius-capsule);
+  background-image:var(--tc-sheen);box-shadow:var(--tc-raise);
+  transition:transform var(--duration-fast) var(--ease-standard),background var(--duration-fast) var(--ease-standard),filter var(--duration-fast) var(--ease-standard)}
+.btn:active:not(:disabled){transform:scale(var(--press-scale))}
+.btn:disabled{opacity:.4;cursor:default}
+.btn-sm{height:34px;min-width:34px;padding:0 14px;gap:5px;font-size:var(--text-subheadline-size)}
+.btn-md{height:44px;min-width:44px;padding:0 18px;gap:6px;font-size:var(--text-body-size)}
+.btn-lg{height:50px;min-width:50px;padding:0 22px;gap:8px;font-size:var(--text-headline-size)}
+.btn-icon.btn-sm{width:34px;padding:0}
+.btn-icon.btn-md{width:44px;padding:0}
+.btn-icon.btn-lg{width:50px;padding:0}
+/* Variants set background-COLOR only — the shorthand would wipe the .btn sheen. */
+.btn-prominent{background-color:var(--tint);color:var(--on-tint)}
+.btn-prominent:hover:not(:disabled){filter:brightness(1.08)}
+.btn-gray{background-color:var(--fill-tertiary);color:var(--label)}
+.btn-plain{background:transparent;background-image:none;box-shadow:none;color:var(--tint)}
+.btn-plain:hover:not(:disabled){opacity:.7}
+.btn-glass{background-color:var(--glass-fill);color:var(--label);
+  -webkit-backdrop-filter:blur(var(--blur-glass)) saturate(var(--backdrop-saturate));
+  backdrop-filter:blur(var(--blur-glass)) saturate(var(--backdrop-saturate));
+  box-shadow:inset 0 1px 0 var(--glass-highlight),inset 0 0 0 .5px var(--glass-border),var(--shadow-glass)}
+.btn-glass:hover:not(:disabled){background-color:var(--glass-fill-hover)}
+.btn-glass:active:not(:disabled){background-color:var(--glass-fill-pressed)}
+
+/* --- Colour-matched shadows for the two accented button groups --- */
+[data-raise="glass"] .btn{box-shadow:inset 0 1px 0 var(--glass-highlight),inset 0 0 0 .5px var(--glass-border),0 1px 2px rgba(0,0,0,.08),0 4px 10px rgba(0,0,0,.10),0 12px 26px rgba(0,0,0,.12)}
+[data-raise="tint"] .btn{box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 2px 4px color-mix(in srgb,var(--tint) 35%,transparent),0 6px 14px color-mix(in srgb,var(--tint) 30%,transparent),0 14px 30px color-mix(in srgb,var(--tint) 25%,transparent)}
+
+/* --- iOS 26 Switch (port of DS Switch.jsx) --- */
+.sw{position:relative;width:51px;height:31px;flex-shrink:0;padding:0;border:none;
+  border-radius:var(--radius-capsule);background:var(--fill);cursor:pointer;vertical-align:middle;
+  transition:background var(--duration-base) var(--ease-standard);-webkit-tap-highlight-color:transparent}
+.sw[aria-checked="true"]{background:var(--system-green)}
+.sw span{position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;
+  box-shadow:0 3px 8px rgba(0,0,0,.15),0 1px 1px rgba(0,0,0,.16);
+  transition:transform var(--duration-base) var(--ease-spring)}
+.sw[aria-checked="true"] span{transform:translateX(20px)}
+
+/* --- iOS 26 PickerButton (port of DS PickerButton.jsx) --- */
+.picker{position:relative;display:inline-block}
+.picker-btn{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px 0 14px;
+  border-radius:var(--radius-capsule);border:none;cursor:pointer;background:var(--fill-tertiary);color:var(--label);
+  background-image:var(--tc-sheen);box-shadow:var(--tc-raise-sm);
+  font-family:var(--font-text);font-size:var(--text-body-size);font-weight:var(--weight-semibold);
+  letter-spacing:var(--text-body-tracking);transition:background var(--duration-fast) var(--ease-standard)}
+.picker-menu{position:absolute;top:40px;left:0;min-width:220px;padding:6px;border-radius:var(--radius-lg);
+  background:var(--material-thick);
+  -webkit-backdrop-filter:blur(var(--blur-thick)) saturate(var(--backdrop-saturate));
+  backdrop-filter:blur(var(--blur-thick)) saturate(var(--backdrop-saturate));
+  box-shadow:inset 0 0 0 .5px var(--separator),var(--shadow-3);z-index:50;
+  animation:iosMenuIn var(--duration-fast) var(--ease-decelerate)}
+.picker-menu button{display:flex;align-items:center;justify-content:space-between;width:100%;height:40px;
+  padding:0 10px;border-radius:var(--radius-sm);border:none;background:transparent;color:var(--label);
+  font-family:var(--font-text);font-size:var(--text-body-size);cursor:pointer;text-align:left}
+.picker-menu button:hover{background:var(--fill-quaternary)}
+
+.field{width:100%;border:none;background:var(--fill-tertiary);border-radius:12px;
+  font-family:inherit;color:var(--label)}
+/* Segmented control — the wrapper is a recessed card, each segment a raised
+   chip, so all three read as buttons like the rest of the UI. */
+.seg-wrap{display:flex;gap:3px;padding:3px;border-radius:999px;background:var(--fill-tertiary);
+  box-shadow:inset 0 1px 3px rgba(0,0,0,.10),inset 0 0 0 .5px var(--separator)}
+.seg{border:none;cursor:pointer;padding:0 18px;height:32px;border-radius:999px;font-family:inherit;
+  font-size:13px;font-weight:600;transition:all .18s ease;color:var(--label-secondary);
+  background-color:var(--bg-secondary);background-image:var(--tc-sheen);box-shadow:var(--tc-raise-sm)}
+.seg:active{transform:scale(var(--press-scale))}
+.seg-on{color:var(--label);background-color:var(--bg);box-shadow:var(--tc-raise)}
+.pri{display:flex;align-items:center;gap:6px;border:none;cursor:pointer;padding:0 14px;height:36px;
+  border-radius:999px;font-family:inherit;font-size:13px;font-weight:600;transition:all .15s ease;
+  background-image:var(--tc-sheen);box-shadow:var(--tc-raise-sm)}
+.cell{min-height:96px;padding:5px 4px;border-top:.5px solid var(--separator);cursor:pointer;overflow:hidden}
+.pill{font-size:10.5px;font-weight:600;padding:2px 6px;border-radius:5px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.row-title{font-size:16px;font-weight:600}
+.trunc{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

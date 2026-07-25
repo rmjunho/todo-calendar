@@ -1,0 +1,72 @@
+/* ============================================================
+   iOS 26 — Typography
+   SF Pro type scale (Apple HIG Dynamic Type, Large sizes).
+   SF Pro is a proprietary Apple typeface and is NOT shipped with
+   this system. The stack below renders SF Pro natively on Apple
+   platforms via -apple-system / system-ui and falls back to the
+   host UI font elsewhere. See readme.md → Typography.
+   ============================================================ */
+
+:root {
+  /* Families — SF Pro Text (< 20pt) / SF Pro Display (>= 20pt) */
+  --font-text: -apple-system, "SF Pro Text", "SF Pro", system-ui,
+    "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-display: -apple-system, "SF Pro Display", "SF Pro", system-ui,
+    "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-rounded: "SF Pro Rounded", ui-rounded, -apple-system, system-ui,
+    sans-serif;
+  --font-mono: "SF Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
+
+  /* Weights */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* Text styles — size / line-height / weight / tracking
+     (points === px at 1x). */
+  --text-large-title-size: 34px;
+  --text-large-title-line: 41px;
+  --text-large-title-tracking: 0.4px;
+
+  --text-title1-size: 28px;
+  --text-title1-line: 34px;
+  --text-title1-tracking: 0.36px;
+
+  --text-title2-size: 22px;
+  --text-title2-line: 28px;
+  --text-title2-tracking: -0.26px;
+
+  --text-title3-size: 20px;
+  --text-title3-line: 25px;
+  --text-title3-tracking: -0.45px;
+
+  --text-headline-size: 17px;
+  --text-headline-line: 22px;
+  --text-headline-tracking: -0.43px;
+
+  --text-body-size: 17px;
+  --text-body-line: 22px;
+  --text-body-tracking: -0.43px;
+
+  --text-callout-size: 16px;
+  --text-callout-line: 21px;
+  --text-callout-tracking: -0.31px;
+
+  --text-subheadline-size: 15px;
+  --text-subheadline-line: 20px;
+  --text-subheadline-tracking: -0.23px;
+
+  --text-footnote-size: 13px;
+  --text-footnote-line: 18px;
+  --text-footnote-tracking: -0.08px;
+
+  --text-caption1-size: 12px;
+  --text-caption1-line: 16px;
+  --text-caption1-tracking: 0px;
+
+  --text-caption2-size: 11px;
+  --text-caption2-line: 13px;
+  --text-caption2-tracking: 0.06px;
+}

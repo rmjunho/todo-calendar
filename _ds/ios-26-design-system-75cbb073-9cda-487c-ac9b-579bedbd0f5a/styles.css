@@ -1,0 +1,16 @@
+/* ============================================================
+   iOS 26 Design System — global entry point
+   Consumers link THIS file only. It is a manifest of @import
+   lines; all tokens, materials and font declarations live in the
+   imported files.
+
+   Typography note: SF Pro (Apple's proprietary typeface) is NOT
+   bundled. The type stack in tokens/typography.css renders SF Pro
+   natively on Apple platforms and falls back to the host UI font
+   elsewhere, so there is no @font-face closure to ship.
+   ============================================================ */
+
+@import url("tokens/colors.css");
+@import url("tokens/typography.css");
+@import url("tokens/spacing.css");
+@import url("tokens/effects.css");
