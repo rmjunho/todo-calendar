@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "todo-calendar",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "5500",
+        "--directory",
+        "."
+      ],
+      "port": 5500
+    }
+  ]
+}
