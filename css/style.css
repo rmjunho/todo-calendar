@@ -3,19 +3,31 @@
   --font-display:'Pretendard Variable',Pretendard,-apple-system,'Segoe UI',sans-serif;
   /* Raised look — the default treatment for every button and card. */
   --tc-sheen:linear-gradient(180deg,rgba(255,255,255,.34),rgba(255,255,255,.06) 48%,rgba(0,0,0,.06));
+  /* Cards get their own sheen because .card clamps it to a fixed 96px band.
+     The button sheen ends on an OPAQUE stop, which is correct when the gradient
+     spans the whole element (it shades the bottom edge) but wrong when clamped:
+     that stop lands mid-card and leaves a hard step — 밝은 테마에서 rgb(240)→
+     rgb(255) 단차로 드러났다. Every stop below therefore ends at alpha 0, so the
+     clamp cannot produce an edge at any card height. Keep it that way.
+     Light inverts the direction: the card is #fff on a #F2F2F7 page, so a white
+     highlight would be invisible — a faint top shade is what reads. */
+  --tc-card-sheen:linear-gradient(180deg,rgba(0,0,0,.05) 0%,rgba(0,0,0,.02) 48%,rgba(0,0,0,0) 100%);
   --tc-raise:inset 0 1px 0 rgba(255,255,255,.55),0 1px 2px rgba(0,0,0,.10),0 3px 8px rgba(0,0,0,.10),0 8px 18px rgba(0,0,0,.07);
   --tc-raise-sm:inset 0 1px 0 rgba(255,255,255,.45),0 1px 2px rgba(0,0,0,.08),0 2px 6px rgba(0,0,0,.08);
   --tc-card-shadow:0 1px 2px rgba(0,0,0,.05),0 4px 12px rgba(0,0,0,.07),0 16px 36px rgba(0,0,0,.10),inset 0 1px 0 rgba(255,255,255,.65);
 }
 :root[data-theme="dark"]{
   --tc-sheen:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.03) 48%,rgba(0,0,0,.18));
+  /* 어두운 카드는 페이지보다 밝아서 흰 하이라이트가 실제로 보인다 — 방향은
+     그대로 두고 마지막 stop 만 투명으로. 밝은 쪽과 같은 규칙이다. */
+  --tc-card-sheen:linear-gradient(180deg,rgba(255,255,255,.16) 0%,rgba(255,255,255,.03) 48%,rgba(255,255,255,0) 100%);
   --tc-raise:inset 0 1px 0 rgba(255,255,255,.10),0 1px 2px rgba(0,0,0,.5),0 4px 10px rgba(0,0,0,.45),0 10px 22px rgba(0,0,0,.4);
   --tc-raise-sm:inset 0 1px 0 rgba(255,255,255,.08),0 1px 2px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.4);
   --tc-card-shadow:0 1px 2px rgba(0,0,0,.4),0 6px 16px rgba(0,0,0,.45),0 18px 40px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06);
 }
 /* Default card. Anything that groups content (calendar, sheets, login box)
    uses this so depth stays consistent with the buttons. */
-.card{background:var(--bg);background-image:var(--tc-sheen);background-repeat:no-repeat;
+.card{background:var(--bg);background-image:var(--tc-card-sheen);background-repeat:no-repeat;
   background-size:100% 96px;border-radius:20px;box-shadow:var(--tc-card-shadow)}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg-secondary);color:var(--label);font-family:var(--font-text);min-height:100vh}
