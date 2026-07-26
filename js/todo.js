@@ -12,7 +12,7 @@ const blankForm = (date) => ({ title: '', date, hasTime: false, time: '09:00', p
 function commit(items, write) {
   state.items = items;
   render();
-  write().catch((e) => fb.fail('저장에 실패했습니다', e));
+  write().catch((e) => fb.fail(t('err.save'), e));
 }
 
 function toggleDone(id, ds) {
@@ -36,18 +36,19 @@ function renderSheet() {
       (on ? 'color-mix(in srgb, ' + c + ' 16%, transparent)' : 'var(--fill-tertiary)') +
       ';color:' + (on ? c : 'var(--label-secondary)') +
       (on ? ';box-shadow:inset 0 0 0 1.5px ' + c + ', var(--tc-raise-sm)' : '') + '">' +
-      '<span style="width:9px;height:9px;border-radius:50%;background:' + c + '"></span>' + PRI[k].label + '</button>';
+      '<span style="width:9px;height:9px;border-radius:50%;background:' + c + '"></span>' + esc(priLabel(k)) + '</button>';
   }).join('');
 
   const repeatMenu = state.repeatOpen ? '<div class="picker-menu" role="menu">' +
-    Object.keys(REP).map((k) =>
+    REP_KEYS.map((k) =>
       '<button role="menuitemradio" aria-checked="' + (f.repeat === k) + '" data-repeat="' + k + '">' +
-      '<span>' + REP[k] + '</span>' + (f.repeat === k ? icon('checkmark', 16, 'var(--tint)') : '') + '</button>'
+      '<span>' + esc(repLabel(k)) + '</span>' + (f.repeat === k ? icon('checkmark', 16, 'var(--tint)') : '') + '</button>'
     ).join('') + '</div>' : '';
 
   const timeBlock = f.hasTime
     ? '<input class="field" type="time" data-f="time" value="' + esc(f.time) + '" style="padding:11px 14px;font-size:15px">'
-    : '<div style="padding:11px 14px;font-size:14px;color:var(--label-tertiary);background:var(--fill-quaternary);border-radius:12px">하루 종일</div>';
+    : '<div style="padding:11px 14px;font-size:14px;color:var(--label-tertiary);background:var(--fill-quaternary);border-radius:12px">' +
+      esc(t('item.allDay')) + '</div>';
 
   return '<div data-act="close" style="position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.35);animation:tcFade .2s ease-out"></div>' +
     '<div style="position:fixed;left:0;right:0;bottom:0;z-index:101;display:flex;justify-content:center;pointer-events:none">' +
@@ -56,41 +57,45 @@ function renderSheet() {
       'animation:tcSheet .3s cubic-bezier(.34,1.3,.64,1)">' +
       '<div style="width:38px;height:5px;border-radius:3px;background:var(--fill-secondary);margin:0 auto 12px"></div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
-        '<h3 style="margin:0;font-size:19px;font-weight:700">' + (state.editingId ? '할 일 편집' : '새로운 할 일') + '</h3>' +
-        '<button data-act="close" aria-label="닫기" style="border:none;cursor:pointer;width:30px;height:30px;border-radius:50%;' +
+        '<h3 style="margin:0;font-size:19px;font-weight:700">' + esc(t(state.editingId ? 'form.edit' : 'form.new')) + '</h3>' +
+        '<button data-act="close" aria-label="' + esc(t('a.close')) + '" style="border:none;cursor:pointer;width:30px;height:30px;border-radius:50%;' +
           'background:var(--fill-tertiary);color:var(--label-secondary);display:flex;align-items:center;justify-content:center;padding:0">' +
           icon('xmark', 14) + '</button></div>' +
 
-      '<div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">제목</div>' +
-      '<input class="field" type="text" data-f="title" placeholder="무엇을 해야 하나요?" value="' + esc(f.title) +
+      '<div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">' + esc(t('form.title')) + '</div>' +
+      '<input class="field" type="text" data-f="title" placeholder="' + esc(t('form.titlePh')) + '" value="' + esc(f.title) +
         '" style="padding:12px 14px;font-size:16px">' +
 
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">' +
-        '<div><div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">날짜</div>' +
+        '<div><div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">' + esc(t('form.date')) + '</div>' +
+          // value 는 'YYYY-MM-DD' 그대로다. type="date" 가 요구하는 형식이자 저장 키의
+          // 형식이라 Intl 을 끼우면 안 된다 — 표시 형식은 브라우저가 로케일에 맞춘다.
           '<input class="field" type="date" data-f="date" value="' + esc(f.date) + '" style="padding:11px 14px;font-size:15px"></div>' +
         '<div><div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 6px">' +
-            '<span style="font-size:13px;font-weight:600;color:var(--label-secondary)">시간</span>' +
-            '<button class="sw" role="switch" data-act="toggleTime" aria-checked="' + f.hasTime + '" aria-label="시간 지정"><span></span></button>' +
+            '<span style="font-size:13px;font-weight:600;color:var(--label-secondary)">' + esc(t('form.time')) + '</span>' +
+            '<button class="sw" role="switch" data-act="toggleTime" aria-checked="' + f.hasTime +
+              '" aria-label="' + esc(t('form.timeToggle')) + '"><span></span></button>' +
           '</div>' + timeBlock + '</div></div>' +
 
-      '<div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">우선순위</div>' +
+      '<div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">' + esc(t('form.pri')) + '</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap">' + priChoices + '</div>' +
 
-      '<div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">반복</div>' +
+      '<div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">' + esc(t('form.repeat')) + '</div>' +
       '<div class="picker"><button class="picker-btn" data-act="repeatToggle" aria-haspopup="menu" aria-expanded="' + state.repeatOpen + '">' +
-        '<span>' + REP[f.repeat] + '</span>' + icon('chevron.up.chevron.down', 15, 'var(--tint)') + '</button>' + repeatMenu + '</div>' +
+        '<span>' + esc(repLabel(f.repeat)) + '</span>' + icon('chevron.up.chevron.down', 15, 'var(--tint)') + '</button>' + repeatMenu + '</div>' +
 
-      '<div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">메모</div>' +
-      '<textarea class="field" rows="2" data-f="memo" placeholder="메모를 남겨 보세요 (선택)" ' +
+      '<div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">' + esc(t('form.memo')) + '</div>' +
+      '<textarea class="field" rows="2" data-f="memo" placeholder="' + esc(t('form.memoPh')) + '" ' +
         'style="padding:12px 14px;font-size:15px;resize:vertical">' + esc(f.memo) + '</textarea>' +
 
       '<div style="display:flex;gap:10px;margin-top:20px;align-items:center">' +
-        (state.editingId ? '<button class="btn btn-plain btn-md" data-act="delete" style="color:#FF3B30">삭제</button>' : '') +
+        (state.editingId ? '<button class="btn btn-plain btn-md" data-act="delete" style="color:#FF3B30">' +
+          esc(t('form.delete')) + '</button>' : '') +
         '<div style="flex:1"></div>' +
-        '<button class="btn btn-gray btn-md" data-act="close">취소</button>' +
+        '<button class="btn btn-gray btn-md" data-act="close">' + esc(t('form.cancel')) + '</button>' +
         '<span data-raise="tint" style="display:inline-flex">' +
           '<button class="btn btn-prominent btn-md" id="saveBtn" data-act="save"' +
-          (f.title.trim() ? '' : ' disabled') + '>저장</button></span>' +
+          (f.title.trim() ? '' : ' disabled') + '>' + esc(t('form.save')) + '</button></span>' +
       '</div></div></div>';
 }
 
@@ -153,6 +158,9 @@ app.addEventListener('click', (e) => {
   }
   // 약관 전문 보기. data-agree 보다 먼저 본다 — 체크 행 바로 옆에 있는 버튼이다.
   if ((el = hit('[data-legal]'))) { state.legal = el.dataset.legal; return render(); }
+  // 테마·언어. 설정 시트와 로그인 화면 양쪽에서 같은 핸들러를 쓴다.
+  // 로그인 전이면 localStorage 까지만 — Firestore 쓰기는 setPref 안에서 막힌다.
+  if ((el = hit('[data-pref]'))) return setPref(el.dataset.pref, el.dataset.val);
   if ((el = hit('[data-agree]'))) {
     const g = state.auth.agree, k = el.dataset.agree;
     if (k === 'all') {
@@ -265,7 +273,9 @@ document.addEventListener('keydown', (e) => {
     return state.auth.mode === 'login' ? login() : signup();
   }
 });
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
+// theme:'system' 일 때만 의미가 있다. render() 안의 applyTheme() 이 저장값을
+// 먼저 보므로, 밝은/어두운으로 고정해 둔 사람은 OS 를 바꿔도 흔들리지 않는다.
+darkMQ.addEventListener('change', render);
 // The "now" indicator tracks a real clock, so refresh the day view each minute.
 setInterval(() => { if (state.view === 'day' && !state.showForm) render(); }, 60000);
 
@@ -275,7 +285,7 @@ render();
 setTimeout(() => {
   if (!state.booting) return;
   state.booting = false;
-  state.auth.error = '서버에 연결하지 못했습니다. 네트워크를 확인하고 새로고침해 주세요.';
+  state.auth.error = t('app.offline');
   render();
 }, 10000);
 
@@ -334,6 +344,48 @@ if (location.search.includes('selftest')) {
   ok(!canDeleteSelf({ role: 'admin' }), 'an admin cannot delete their own account');
   ok(canDeleteSelf({ role: 'user' }), 'a normal user can delete their own account');
   ok(!canDeleteSelf(null), 'no session means there is nothing to delete');
+
+  // --- 설정 값 ---
+  ok(okTheme('light') && okTheme('dark') && okTheme('system'), 'the three themes are accepted');
+  ok(!okTheme('Dark') && !okTheme('') && !okTheme(null), 'unknown theme values are rejected');
+  ok(okLang('ko') && okLang('en') && !okLang('jp'), 'only the two supported languages are accepted');
+
+  // 원격에 있는 키는 Firestore 가 이기고, 빠진 키는 로컬 값이 살아남는다 —
+  // 로그인 화면에서 고른 언어가 첫 로그인 때 사라지지 않게 하는 규칙이다.
+  const keep = { theme: SETTINGS.theme, lang: SETTINGS.lang };
+  setSettings({ theme: 'dark', lang: 'en' });
+  ok(adoptSettings({ theme: 'light', lang: 'ko' }) === true &&
+     SETTINGS.theme === 'light' && SETTINGS.lang === 'ko', 'a complete remote settings map wins');
+  setSettings({ theme: 'dark', lang: 'en' });
+  ok(adoptSettings({ theme: 'light' }) === false && SETTINGS.lang === 'en',
+    'a missing remote key keeps the local value and asks to be promoted');
+  ok(adoptSettings(undefined) === false, 'an account with no settings field asks to be promoted');
+  ok(adoptSettings({ theme: 'neon', lang: 'jp' }) === false && SETTINGS.lang === 'en',
+    'garbage from the server is ignored, not adopted');
+
+  // --- ★ 언어를 바꿔도 날짜 데이터 키는 그대로여야 한다 ---
+  // 여기가 뚫리면 Intl 이 저장 경로로 새어 들어간 것이고, 할 일이 하루씩 밀린다.
+  // 표시 문자열은 달라지고 데이터는 안 달라진다 — 그 둘을 한 번에 본다.
+  const probe = new Date(2026, 6, 25);            // 로컬 자정, 토요일
+  setSettings({ lang: 'ko' });
+  const koDate = fmt(probe), koDay = dayTitle(probe), koDow = dow().join();
+  const koOcc = [occursOn(w, '2026-01-12'), occursOn(m, '2026-03-31'), occursOn(o, '2026-01-05')].join();
+  const koDone = [isDone(w, '2026-01-12'), isDone(w, '2026-01-05'), isDone(o, '2026-01-05')].join();
+  setSettings({ lang: 'en' });
+  ok(fmt(probe) === koDate && fmt(probe) === '2026-07-25', 'fmt() is byte-identical in English');
+  ok(fmt(parse('2026-07-25')) === '2026-07-25', 'the date key survives a parse/format round trip');
+  ok(addDays('2026-07-25', 1) === '2026-07-26' && addDays('2026-12-31', 1) === '2027-01-01',
+    'addDays stays on the local-string calendar across a year boundary');
+  ok([occursOn(w, '2026-01-12'), occursOn(m, '2026-03-31'), occursOn(o, '2026-01-05')].join() === koOcc,
+    'occursOn does not depend on the language');
+  ok([isDone(w, '2026-01-12'), isDone(w, '2026-01-05'), isDone(o, '2026-01-05')].join() === koDone,
+    'isDone does not depend on the language');
+  ok(itemsOn([w, m, o], '2026-01-05', true).map((x) => x.id).join() === 'w,o',
+    'ordering does not depend on the language');
+  // 반대쪽도 확인한다 — 표시 문자열까지 안 바뀌면 Intl 이 아예 안 걸린 것이다.
+  ok(dayTitle(probe) !== koDay && dow().join() !== koDow, 'the displayed month and weekday names do change');
+  ok(dow().length === 7 && dow('long')[0] === 'Sunday', 'the weekday array is Sunday-first');
+  setSettings(keep);   // ?selftest 가 저장된 설정을 건드리고 끝나지 않게 되돌린다
 
   console.log('selftest: all checks passed');
 }

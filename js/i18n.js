@@ -1,0 +1,451 @@
+'use strict';
+// 화면 설정(테마·언어)의 단일 출처 + 문자열 테이블.
+//
+// 클래식 스크립트다. import/export 를 붙이지 말 것 — legal/auth/calendar/todo 와
+// 같은 전역 스코프를 쓰고, firebase.js 모듈은 전역 렉시컬 바인딩으로 여기를 읽는다.
+// 로드 순서는 legal.js 와 같은 계층, 그중에서도 맨 앞이다 (아래 applyTheme 이유).
+//
+// ★ 날짜 데이터 키는 여기 없다. fmt()/parse()(calendar.js)가 만드는
+//   'YYYY-MM-DD' 로컬 문자열이 저장·비교·반복 판정의 유일한 형식이고,
+//   이 파일의 Intl 은 전부 화면 표시 전용이다. 둘을 섞으면 타임존 경계에서
+//   할 일이 하루씩 밀린다.
+
+// ---------------------------------------------------------------- 설정 값
+const SETTINGS_KEY = 'todo-cal-settings-v1';
+const THEMES = ['light', 'dark', 'system'];
+const LANGS = ['ko', 'en'];
+
+// 이 객체가 단일 소스다. state 에 넣지 않는 이유는 terms/privacy/delete-account
+// 페이지에 state 가 없기 때문 — 그 세 페이지도 같은 값을 읽어야 한다.
+const SETTINGS = { theme: 'system', lang: 'ko' };
+
+const okTheme = (v) => THEMES.indexOf(v) >= 0;
+const okLang = (v) => LANGS.indexOf(v) >= 0;
+
+// localStorage 는 로그인 전 임시 저장소이자, Firestore 를 읽을 수 없는 정적
+// 페이지들이 설정을 알아내는 유일한 창구다. 로그인 후에도 계속 미러로 쓴다.
+function loadSettings() {
+  let raw = null;
+  try { raw = JSON.parse(localStorage.getItem(SETTINGS_KEY)); } catch (e) { raw = null; }
+  if (raw && okTheme(raw.theme)) SETTINGS.theme = raw.theme;
+  if (raw && okLang(raw.lang)) SETTINGS.lang = raw.lang;
+}
+
+// 검증을 통과한 키만 반영한다. 서버 값이든 사용자 클릭이든 같은 문을 지난다.
+function setSettings(patch) {
+  const p = patch || {};
+  if (okTheme(p.theme)) SETTINGS.theme = p.theme;
+  if (okLang(p.lang)) SETTINGS.lang = p.lang;
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(SETTINGS)); } catch (e) { /* 사파리 시크릿 등 */ }
+  applyTheme();
+}
+
+// 로그인 시 원격 값과 로컬 값을 합친다.
+// 있는 키는 Firestore 가 이기고, 빠진 키는 로컬 값이 그대로 남는다.
+// 돌려주는 값이 false 면 원격에 빠진 키가 있다는 뜻 — 호출부가 승격 저장한다.
+// (로그인 화면에서 고른 언어가 첫 로그인 때 사라지지 않게 하는 장치다.)
+function adoptSettings(remote) {
+  const r = remote || {};
+  setSettings({
+    theme: okTheme(r.theme) ? r.theme : SETTINGS.theme,
+    lang: okLang(r.lang) ? r.lang : SETTINGS.lang
+  });
+  return okTheme(r.theme) && okLang(r.lang);
+}
+
+// ---------------------------------------------------------------- 테마 적용
+const darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
+
+// data-theme 한 속성이 _ds/tokens/{colors,effects}.css 와 css/style.css 의
+// 다크 블록을 한꺼번에 켠다. 그래서 테마 전환에 새 CSS 가 필요 없다.
+function applyTheme() {
+  document.documentElement.setAttribute('data-theme',
+    SETTINGS.theme === 'system' ? (darkMQ.matches ? 'dark' : 'light') : SETTINGS.theme);
+}
+
+// 로드 즉시 한 번. 첫 render() 를 기다리면 그 사이 흰 화면이 번쩍인다.
+loadSettings();
+applyTheme();
+
+// ---------------------------------------------------------------- 날짜 표시
+// 요일·월 이름은 하드코딩하지 않는다. 아래 함수들만 Intl 을 쓰고, 결과는
+// 전부 화면에만 들어간다 — 저장되는 값으로 되돌아가는 경로가 없다.
+const curLang = () => SETTINGS.lang;
+const locale = () => (SETTINGS.lang === 'en' ? 'en-US' : 'ko-KR');
+
+// 셀마다 포매터를 새로 만들면 월 뷰 42칸에서 낭비가 크다.
+const _dtf = {};
+function dtf(opts) {
+  const k = SETTINGS.lang + '|' + JSON.stringify(opts);
+  return _dtf[k] || (_dtf[k] = new Intl.DateTimeFormat(locale(), opts));
+}
+
+// ★ 2024-01-07 은 일요일이다. Date.getDay() 색인(0=일)에 그대로 맞추려고
+//   이 날짜를 기준으로 뽑는다. new Date('2024-01-07') 은 UTC 파싱이라 시간대에
+//   따라 하루 밀리므로 반드시 (y, m, d) 생성자를 쓸 것.
+//   주 시작 요일은 로케일과 무관하게 일요일 고정이다 — calendar.js 의
+//   startOffset 계산이 그 전제로 짜여 있다. Intl 은 이름만 준다.
+function dow(style) {
+  const f = dtf({ weekday: style || 'short' });
+  const out = [];
+  for (let i = 0; i < 7; i++) out.push(f.format(new Date(2024, 0, 7 + i)));
+  return out;
+}
+
+// 'HH:MM' → 로케일 시각. ko '오후 2:30' / en '2:30 PM'
+// 인자 이름을 t 로 두지 말 것 — 아래 문자열 함수 t() 를 가린다.
+function timeLabel(hhmm) {
+  if (!hhmm) return '';
+  const p = hhmm.split(':').map(Number);
+  return dtf({ hour: 'numeric', minute: '2-digit' }).format(new Date(2000, 0, 1, p[0], p[1]));
+}
+// 달력 머리말. ko '2026년 7월' / en 'July 2026'
+const monthTitle = (y, m) => dtf({ year: 'numeric', month: 'long' }).format(new Date(y, m, 1));
+// 선택한 날. ko '7월 25일 토요일' / en 'Saturday, July 25'
+const dayTitle = (d) => dtf({ month: 'long', day: 'numeric', weekday: 'long' }).format(d);
+// 짧은 날. ko '7월 25일 (토)' / en 'Jul 25 (Sat)'
+const shortDay = (d) =>
+  dtf({ month: 'short', day: 'numeric' }).format(d) + ' (' + dtf({ weekday: 'short' }).format(d) + ')';
+// 가입일 같은 순수 날짜. 표시 전용이라 fmt() 를 쓰지 않는다.
+const dateLabel = (d) => dtf({ year: 'numeric', month: 'short', day: 'numeric' }).format(d);
+
+// ---------------------------------------------------------------- 문자열
+// 값이 함수면 인자를 받아 문장을 만든다 (개수·이름 같은 자리 채우기).
+// 키가 없으면 한국어로, 한국어에도 없으면 키 자체를 돌려준다 — 화면이 비지 않고
+// 빠진 키가 눈에 띈다.
+const STR = {
+  ko: {
+    'app.loading': '불러오는 중…',
+    'app.tagline': '개인 할 일 캘린더',
+    'app.offline': '서버에 연결하지 못했습니다. 네트워크를 확인하고 새로고침해 주세요.',
+    'a.close': '닫기',
+
+    // 헤더 · 달력
+    'hdr.admin': '관리자',
+    'hdr.signups': '회원가입 신청',
+    'hdr.settings': '설정',
+    'hdr.logout': '로그아웃',
+    'hdr.today': (s) => '오늘 · ' + s,
+    'nav.prev': '이전',
+    'nav.next': '다음',
+    'nav.today': '오늘',
+    'view.month': '월',
+    'view.week': '주',
+    'view.day': '일',
+    'cell.more': (n) => '+' + n + '개',
+    'list.todayPrefix': '오늘 · ',
+    'list.allDone': '모두 완료!',
+    'list.remain': (n) => n + '개 남음',
+    'list.empty': '할 일이 없습니다',
+    'list.emptyHint': '오른쪽 아래 + 버튼으로 추가해 보세요',
+    'list.check': '완료 체크',
+    'item.allDay': '하루 종일',
+    'item.add': '할 일 추가',
+
+    'pri.high': '높음', 'pri.med': '보통', 'pri.low': '낮음', 'pri.none': '없음',
+    'rep.none': '반복 안 함', 'rep.daily': '매일', 'rep.weekly': '매주', 'rep.monthly': '매월',
+
+    // 입력 시트
+    'form.new': '새로운 할 일',
+    'form.edit': '할 일 편집',
+    'form.title': '제목',
+    'form.titlePh': '무엇을 해야 하나요?',
+    'form.date': '날짜',
+    'form.time': '시간',
+    'form.timeToggle': '시간 지정',
+    'form.pri': '우선순위',
+    'form.repeat': '반복',
+    'form.memo': '메모',
+    'form.memoPh': '메모를 남겨 보세요 (선택)',
+    'form.delete': '삭제',
+    'form.cancel': '취소',
+    'form.save': '저장',
+
+    // 로그인 · 회원가입
+    'auth.login': '로그인',
+    'auth.signup': '회원가입 신청',
+    'auth.submit': '가입 신청하기',
+    'auth.busy': '잠시만요…',
+    'auth.name': '이름',
+    'auth.namePh': '이름을 입력하세요',
+    'auth.email': '이메일',
+    'auth.emailHint': 'PIN을 잊었을 때 재설정 메일을 받는 주소입니다.',
+    'auth.pin': 'PIN 번호',
+    'auth.pinDigits': ' (숫자 6자리)',
+    'auth.pin2': 'PIN 번호 확인',
+    'auth.remember': '자동 로그인',
+    'auth.rememberHint': '다음에 열 때 로그인 화면을 건너뜁니다',
+    'auth.afterSignup': '관리자가 신청을 수락하면 로그인할 수 있습니다.',
+    'auth.needName': '이름을 입력해 주세요.',
+    'auth.needEmail': '이메일 주소를 정확히 입력해 주세요.',
+    'auth.pinRule': 'PIN은 숫자 6자리입니다.',
+    'auth.pinRuleSignup': 'PIN은 숫자 6자리로 입력해 주세요.',
+    'auth.pinMismatch': 'PIN이 서로 다릅니다.',
+    'auth.signupDone': '회원가입 신청이 접수되었습니다. 관리자 승인 후 로그인할 수 있습니다.',
+
+    // 약관 동의
+    'ag.all': '전체 동의하기',
+    'ag.allHint': '선택 항목을 포함해 모두 동의합니다.',
+    'ag.terms': '이용약관 동의',
+    'ag.privacy': '개인정보 수집·이용 동의',
+    'ag.required': '필수',
+    'ag.optional': '선택',
+    'ag.doc': '전문 보기',
+    'ag.ageTitle': '나이 확인',
+    'ag.agePick': '하나를 선택해 주세요',
+    'ag.over14': '만 14세 이상입니다',
+    'ag.under14': '만 14세 미만이며, 보호자(법정대리인)의 동의를 받았습니다',
+    'ag.marketing': '서비스 알림·업데이트 수신',
+    'ag.needTerms': '이용약관에 동의해 주세요.',
+    'ag.needPrivacy': '개인정보 수집·이용에 동의해 주세요.',
+    'ag.needAge': '나이 확인 항목을 선택해 주세요.',
+    'legal.newWindow': '새 창에서 열기',
+    'legal.terms': '이용약관',
+    'legal.privacy': '개인정보 처리방침',
+
+    // 설정 시트
+    'set.title': '설정',
+    'set.account': '계정',
+    'set.role': '권한',
+    'set.roleAdmin': '관리자',
+    'set.roleUser': '일반 회원',
+    'set.display': '화면',
+    'set.theme': '테마',
+    'set.themeLight': '밝은',
+    'set.themeDark': '어두운',
+    'set.themeSystem': '기기 설정',
+    'set.lang': '언어',
+    'set.danger': '위험 구역',
+    'set.adminNoDelete': '관리자 계정은 여기에서 삭제할 수 없습니다. 다른 관리자에게 요청하거나, ' +
+      'Firebase 콘솔에서 직접 처리하세요.',
+    'set.delConfirm': '계정과 할 일이 <strong>영구 삭제</strong>되며 되돌릴 수 없습니다.<br>' +
+      '계속하려면 PIN 6자리를 다시 입력하세요.',
+    'set.delCancel': '취소',
+    'set.delGo': '영구 삭제',
+    'set.delBusy': '삭제 중…',
+    'set.delOpen': '계정 삭제',
+    'set.delHint': '계정과 모든 할 일이 영구 삭제됩니다. 되돌릴 수 없습니다.',
+    'set.delDone': (n) => '계정과 할 일 ' + n + '개를 모두 삭제했습니다. 그동안 감사했습니다.',
+    'set.delFail': '삭제에 실패했습니다.',
+
+    // 관리자 시트
+    'adm.title': '회원 관리',
+    'adm.pending': '회원가입 신청',
+    'adm.all': '전체 회원',
+    'adm.noPending': '대기 중인 신청이 없습니다',
+    'adm.noUsers': '회원이 없습니다',
+    'adm.reject': '거절',
+    'adm.approve': '수락',
+    'adm.resetPin': 'PIN 재설정 메일',
+    'adm.delete': '완전 삭제',
+    'adm.joined': (d) => d + ' 신청',
+    'adm.migrate': '데이터 이전',
+    'adm.migrateHint': '이 기기의 localStorage에 남아 있는 할 일을 내 계정으로 한 번 올립니다.',
+    'adm.migrateBtn': 'localStorage → Firestore 업로드',
+    'adm.stPending': '승인 대기', 'adm.stApproved': '승인됨', 'adm.stRejected': '거절됨',
+    'adm.ageOver14': '만 14세 이상',
+    'adm.ageUnder14': '만 14세 미만 · 보호자 동의',
+    'adm.ageNone': '약관 미동의',
+    'adm.askReset': (n, e) => n + ' 님의 이메일(' + e + ')로 PIN 재설정 메일을 보낼까요?',
+    'adm.resetSent': '재설정 메일을 보냈습니다.',
+    'adm.askDelete': (n) => n + '님의 계정과 모든 할 일이 영구 삭제됩니다.\n이 작업은 되돌릴 수 없습니다.',
+    'adm.deleteDone': (n, c) => n + '님의 계정과 할 일 ' + c + '개를 삭제했습니다.\n\n' +
+      'Firebase 콘솔 Authentication에서 계정도 지워주세요.',
+    'adm.askMigrate': '다른 기기에서 누르면 데이터가 덮어써집니다.\n\n' +
+      '이 기기의 localStorage에 남아 있는 할 일을 Firestore로 올릴까요?',
+    'adm.migrateDone': (n) => n + '개를 업로드했습니다.',
+    'adm.migrateNone': '올릴 데이터가 없습니다.',
+
+    // 오류
+    'err.login': '이름 또는 PIN이 올바르지 않습니다.',
+    'err.nameTaken': '이미 사용 중인 이름입니다.',
+    'err.emailUsed': '이미 가입된 이메일 주소입니다.',
+    'err.emailBad': '이메일 주소 형식이 올바르지 않습니다.',
+    'err.weakPin': 'PIN은 숫자 6자리여야 합니다.',
+    'err.needAgree': '필수 약관에 동의해야 가입할 수 있습니다.',
+    'err.signup': (c) => '가입에 실패했습니다. (' + c + ')',
+    'err.noProfile': '계정 정보를 찾을 수 없습니다.',
+    'err.pending': '관리자 승인을 기다리는 중입니다.',
+    'err.rejected': '가입 신청이 거절된 계정입니다.',
+    'err.needLogin': '로그인이 필요합니다.',
+    'err.badPin': 'PIN이 올바르지 않습니다.',
+    'err.loadProfile': '계정 정보를 불러오지 못했습니다',
+    'err.loadTodos': '할 일을 불러오지 못했습니다',
+    'err.loadUsers': '회원 목록을 불러오지 못했습니다',
+    'err.save': '저장에 실패했습니다',
+    'err.settings': '설정을 저장하지 못했습니다',
+    'err.logout': '로그아웃에 실패했습니다',
+    'err.status': '상태 변경에 실패했습니다',
+    'err.mail': '메일 발송에 실패했습니다',
+    'err.delete': '삭제에 실패했습니다',
+    'err.upload': '업로드에 실패했습니다'
+  },
+
+  en: {
+    'app.loading': 'Loading…',
+    'app.tagline': 'Personal to-do calendar',
+    'app.offline': 'Could not reach the server. Check your connection and reload.',
+    'a.close': 'Close',
+
+    'hdr.admin': 'Admin',
+    'hdr.signups': 'Sign-up requests',
+    'hdr.settings': 'Settings',
+    'hdr.logout': 'Sign out',
+    'hdr.today': (s) => 'Today · ' + s,
+    'nav.prev': 'Previous',
+    'nav.next': 'Next',
+    'nav.today': 'Today',
+    'view.month': 'Month',
+    'view.week': 'Week',
+    'view.day': 'Day',
+    'cell.more': (n) => '+' + n + ' more',
+    'list.todayPrefix': 'Today · ',
+    'list.allDone': 'All done!',
+    'list.remain': (n) => n + ' left',
+    'list.empty': 'Nothing to do',
+    'list.emptyHint': 'Tap the + button at the bottom right to add one',
+    'list.check': 'Mark complete',
+    'item.allDay': 'All day',
+    'item.add': 'Add a to-do',
+
+    'pri.high': 'High', 'pri.med': 'Medium', 'pri.low': 'Low', 'pri.none': 'None',
+    'rep.none': 'Does not repeat', 'rep.daily': 'Daily', 'rep.weekly': 'Weekly', 'rep.monthly': 'Monthly',
+
+    'form.new': 'New to-do',
+    'form.edit': 'Edit to-do',
+    'form.title': 'Title',
+    'form.titlePh': 'What needs doing?',
+    'form.date': 'Date',
+    'form.time': 'Time',
+    'form.timeToggle': 'Set a time',
+    'form.pri': 'Priority',
+    'form.repeat': 'Repeat',
+    'form.memo': 'Note',
+    'form.memoPh': 'Add a note (optional)',
+    'form.delete': 'Delete',
+    'form.cancel': 'Cancel',
+    'form.save': 'Save',
+
+    'auth.login': 'Sign in',
+    'auth.signup': 'Request an account',
+    'auth.submit': 'Send request',
+    'auth.busy': 'One moment…',
+    'auth.name': 'Name',
+    'auth.namePh': 'Enter your name',
+    'auth.email': 'Email',
+    'auth.emailHint': 'Where your PIN reset link is sent if you forget it.',
+    'auth.pin': 'PIN',
+    'auth.pinDigits': ' (6 digits)',
+    'auth.pin2': 'Confirm PIN',
+    'auth.remember': 'Stay signed in',
+    'auth.rememberHint': 'Skip the sign-in screen next time',
+    'auth.afterSignup': 'You can sign in once an administrator approves your request.',
+    'auth.needName': 'Please enter your name.',
+    'auth.needEmail': 'Please enter a valid email address.',
+    'auth.pinRule': 'The PIN must be 6 digits.',
+    'auth.pinRuleSignup': 'Please enter a 6-digit PIN.',
+    'auth.pinMismatch': 'The PINs do not match.',
+    'auth.signupDone': 'Your request has been received. You can sign in once an administrator approves it.',
+
+    'ag.all': 'Agree to everything',
+    'ag.allHint': 'Includes the optional item.',
+    'ag.terms': 'I agree to the Terms of Service',
+    'ag.privacy': 'I agree to the collection and use of personal data',
+    'ag.required': 'Required',
+    'ag.optional': 'Optional',
+    'ag.doc': 'Read in full',
+    'ag.ageTitle': 'Age confirmation',
+    'ag.agePick': 'Pick one',
+    'ag.over14': 'I am 14 or older',
+    'ag.under14': 'I am under 14 and have my guardian’s consent',
+    'ag.marketing': 'Receive service notices and updates',
+    'ag.needTerms': 'Please agree to the Terms of Service.',
+    'ag.needPrivacy': 'Please agree to the collection and use of personal data.',
+    'ag.needAge': 'Please confirm your age.',
+    'legal.newWindow': 'Open in a new window',
+    'legal.terms': 'Terms of Service',
+    'legal.privacy': 'Privacy Policy',
+
+    'set.title': 'Settings',
+    'set.account': 'Account',
+    'set.role': 'Role',
+    'set.roleAdmin': 'Administrator',
+    'set.roleUser': 'Member',
+    'set.display': 'Display',
+    'set.theme': 'Theme',
+    'set.themeLight': 'Light',
+    'set.themeDark': 'Dark',
+    'set.themeSystem': 'System',
+    'set.lang': 'Language',
+    'set.danger': 'Danger zone',
+    'set.adminNoDelete': 'An administrator account cannot be deleted here. Ask another administrator, ' +
+      'or remove it from the Firebase console.',
+    'set.delConfirm': 'Your account and to-dos will be <strong>permanently deleted</strong> and cannot be recovered.<br>' +
+      'Enter your 6-digit PIN again to continue.',
+    'set.delCancel': 'Cancel',
+    'set.delGo': 'Delete permanently',
+    'set.delBusy': 'Deleting…',
+    'set.delOpen': 'Delete account',
+    'set.delHint': 'Your account and every to-do will be permanently deleted. This cannot be undone.',
+    'set.delDone': (n) => 'Your account and ' + n + ' to-do(s) have been deleted. Thank you for using the app.',
+    'set.delFail': 'Deletion failed.',
+
+    'adm.title': 'Members',
+    'adm.pending': 'Sign-up requests',
+    'adm.all': 'All members',
+    'adm.noPending': 'No pending requests',
+    'adm.noUsers': 'No members',
+    'adm.reject': 'Reject',
+    'adm.approve': 'Approve',
+    'adm.resetPin': 'Send PIN reset',
+    'adm.delete': 'Delete permanently',
+    'adm.joined': (d) => 'requested ' + d,
+    'adm.migrate': 'Data migration',
+    'adm.migrateHint': 'Uploads to-dos still in this device’s localStorage to your account, once.',
+    'adm.migrateBtn': 'Upload localStorage → Firestore',
+    'adm.stPending': 'Pending', 'adm.stApproved': 'Approved', 'adm.stRejected': 'Rejected',
+    'adm.ageOver14': '14 or older',
+    'adm.ageUnder14': 'Under 14 · guardian consent',
+    'adm.ageNone': 'No consent on file',
+    'adm.askReset': (n, e) => 'Send a PIN reset email to ' + n + ' at ' + e + '?',
+    'adm.resetSent': 'Reset email sent.',
+    'adm.askDelete': (n) => n + '’s account and every to-do will be permanently deleted.\n' +
+      'This cannot be undone.',
+    'adm.deleteDone': (n, c) => 'Deleted ' + n + '’s account and ' + c + ' to-do(s).\n\n' +
+      'Remember to remove the account from Firebase console → Authentication.',
+    'adm.askMigrate': 'Running this on another device will overwrite your data.\n\n' +
+      'Upload the to-dos left in this device’s localStorage to Firestore?',
+    'adm.migrateDone': (n) => 'Uploaded ' + n + ' item(s).',
+    'adm.migrateNone': 'Nothing to upload.',
+
+    'err.login': 'That name or PIN is not correct.',
+    'err.nameTaken': 'That name is already taken.',
+    'err.emailUsed': 'That email address is already registered.',
+    'err.emailBad': 'That email address is not valid.',
+    'err.weakPin': 'The PIN must be 6 digits.',
+    'err.needAgree': 'You must accept the required agreements to sign up.',
+    'err.signup': (c) => 'Sign-up failed. (' + c + ')',
+    'err.noProfile': 'No account information found.',
+    'err.pending': 'Waiting for administrator approval.',
+    'err.rejected': 'This sign-up request was rejected.',
+    'err.needLogin': 'You need to be signed in.',
+    'err.badPin': 'That PIN is not correct.',
+    'err.loadProfile': 'Could not load your account',
+    'err.loadTodos': 'Could not load your to-dos',
+    'err.loadUsers': 'Could not load the member list',
+    'err.save': 'Could not save',
+    'err.settings': 'Could not save your settings',
+    'err.logout': 'Sign-out failed',
+    'err.status': 'Could not change the status',
+    'err.mail': 'Could not send the email',
+    'err.delete': 'Deletion failed',
+    'err.upload': 'Upload failed'
+  }
+};
+
+function t(k, a, b) {
+  const table = STR[SETTINGS.lang] || STR.ko;
+  const v = table[k] !== undefined ? table[k] : STR.ko[k];
+  if (v === undefined) return k;
+  return typeof v === 'function' ? v(a, b) : v;
+}

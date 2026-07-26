@@ -13,21 +13,29 @@
 </head>
 <body>
 <main style="max-width:720px;margin:0 auto;padding:36px 18px 80px">
-  <a href="index.html" style="font-size:13px;font-weight:600">← 할 일 캘린더</a>
+  <a id="home" href="index.html" style="font-size:13px;font-weight:600">← 할 일 캘린더</a>
   <h1 id="docTitle" style="margin:12px 0 22px;font-size:28px;font-weight:700;letter-spacing:.2px"></h1>
   <article id="doc" class="legal card" style="padding:24px 22px"></article>
-  <p style="margin-top:22px;font-size:13px;color:var(--label-tertiary)">
+  <p id="other" style="margin-top:22px;font-size:13px;color:var(--label-tertiary)">
     <a href="privacy.html">개인정보 처리방침</a> 도 함께 확인해 주세요.</p>
 </main>
 
+<script src="js/i18n.js"></script>
 <script src="js/legal.js"></script>
 <script>
-  // 단독 페이지에는 render() 가 없다 — 테마 토큰을 직접 물린다.
-  document.documentElement.setAttribute('data-theme',
-    matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  // 단독 페이지에는 render() 가 없다. i18n.js 가 로드되면서 applyTheme() 을 이미
+  // 돌렸고(저장된 테마 우선), 언어도 localStorage 에서 읽어 왔다 — 이 페이지는
+  // Firestore 를 읽을 수 없어서 그 값이 유일한 창구다.
+  var d = legalDoc('terms'), en = curLang() === 'en';
+  document.documentElement.lang = curLang();
+  document.title = d.title + ' · ' + (en ? 'Todo Calendar' : '할 일 캘린더');
+  document.getElementById('home').textContent = '← ' + (en ? 'Todo Calendar' : '할 일 캘린더');
+  document.getElementById('other').innerHTML = en
+    ? 'Please also read the <a href="privacy.html">Privacy Policy</a>.'
+    : '<a href="privacy.html">개인정보 처리방침</a> 도 함께 확인해 주세요.';
   // 본문은 js/legal.js 한 곳에서 온다. 회원가입 모달이 쓰는 문자열과 같은 값이다.
-  document.getElementById('docTitle').textContent = LEGAL.terms.title;
-  document.getElementById('doc').innerHTML = LEGAL.terms.body;
+  document.getElementById('docTitle').textContent = d.title;
+  document.getElementById('doc').innerHTML = d.body;
 </script>
 </body>
 </html>

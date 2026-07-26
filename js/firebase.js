@@ -29,14 +29,15 @@ function fail(msg, e) {
 }
 
 // ---------------------------------------------------------------- 인증
-const LOGIN_FAIL = '이름 또는 PIN이 올바르지 않습니다.';
+// 문자열은 i18n.js 에서 온다. 상수로 굳혀 두면 로드 시점의 언어에 고정되므로
+// 값이 아니라 키만 들고 있다가 던질 때 t() 로 푼다.
 const SIGNUP_ERR = {
-  'auth/email-already-in-use': '이미 가입된 이메일 주소입니다.',
-  'auth/invalid-email': '이메일 주소 형식이 올바르지 않습니다.',
-  'auth/weak-password': 'PIN은 숫자 6자리여야 합니다.',
+  'auth/email-already-in-use': 'err.emailUsed',
+  'auth/invalid-email': 'err.emailBad',
+  'auth/weak-password': 'err.weakPin',
   // 필수 동의가 빠지면 보안 규칙이 users 문서 생성을 거부한다. 화면에서 이미
   // 걸러지므로 여기까지 왔다면 규칙과 클라이언트가 어긋났다는 뜻이다.
-  'permission-denied': '필수 약관에 동의해야 가입할 수 있습니다.'
+  'permission-denied': 'err.needAgree'
 };
 
 // 회원가입 중에는 인증 상태 변화를 무시한다 — 계정 생성 직후 자동 로그인이
@@ -54,19 +55,19 @@ async function signIn(name, pin, remember) {
   await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
   // 로그인 전이라 Auth 토큰이 없다 — usernames 는 규칙에서 get 만 공개돼 있다.
   const snap = await getDoc(doc(db, 'usernames', name));
-  if (!snap.exists()) throw new Error(LOGIN_FAIL);
+  if (!snap.exists()) throw new Error(t('err.login'));
   try {
     await signInWithEmailAndPassword(auth, snap.data().email, pin);
   } catch (e) {
     // 이름이 없는지 PIN이 틀렸는지 구분해서 알려주지 않는다.
-    throw new Error(LOGIN_FAIL);
+    throw new Error(t('err.login'));
   }
   // 이후 화면 전환은 onAuthStateChanged 가 맡는다.
 }
 
 async function signUp(name, email, pin, agree) {
   // 이름 중복은 usernames 문서 존재 여부로 막는다.
-  if ((await getDoc(doc(db, 'usernames', name))).exists()) throw new Error('이미 사용 중인 이름입니다.');
+  if ((await getDoc(doc(db, 'usernames', name))).exists()) throw new Error(t('err.nameTaken'));
   busy = true;
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, pin);
@@ -90,7 +91,7 @@ async function signUp(name, email, pin, agree) {
     // 계정만 만들어지고 문서 생성이 실패하면 반쪽 상태로 남는다. 로그아웃해 두면
     // 다음 로그인 때 "계정 정보를 찾을 수 없습니다"로 걸려서 조용히 넘어가지 않는다.
     if (auth.currentUser) await signOut(auth).catch(() => {});
-    throw new Error(SIGNUP_ERR[e.code] || ('가입에 실패했습니다. (' + (e.code || e.message) + ')'));
+    throw new Error(SIGNUP_ERR[e.code] ? t(SIGNUP_ERR[e.code]) : t('err.signup', e.code || e.message));
   } finally {
     busy = false;
   }
@@ -117,22 +118,31 @@ onAuthStateChanged(auth, async (u) => {
     const snap = await getDoc(doc(db, 'users', u.uid));
     data = snap.exists() ? snap.data() : null;
   } catch (e) {
-    fail('계정 정보를 불러오지 못했습니다', e);
+    fail(t('err.loadProfile'), e);
   }
 
   // 승인 대기·거절 계정은 Auth 로그인 자체는 되지만 여기서 잘라낸다.
   // 데이터 접근은 보안 규칙이 따로 막는다 (화면 검사만 믿지 않는다).
   if (!data || data.status !== 'approved') {
     await signOut(auth).catch(() => {});
-    state.auth.error = !data ? '계정 정보를 찾을 수 없습니다.'
-      : data.status === 'pending' ? '관리자 승인을 기다리는 중입니다.'
-      : '가입 신청이 거절된 계정입니다.';
+    state.auth.error = !data ? t('err.noProfile')
+      : data.status === 'pending' ? t('err.pending')
+      : t('err.rejected');
     return applyLoggedOut();
   }
 
   state.user = { uid: u.uid, name: data.name, email: data.email, role: data.role, status: data.status };
   state.auth = blankAuth();
   state.booting = false;
+  // 원격 설정이 로컬을 덮는다. 다만 원격에 없는 키는 로컬 값이 살아남고,
+  // 그때는 곧바로 승격해 저장한다 — 로그인 화면에서 고른 언어가 사라지지 않고,
+  // settings 필드가 아예 없는 옛 계정도 다음 로그인부터는 갖추게 된다.
+  //
+  // 실패해도 로그인은 막지 않는다. localStorage 에 남아 있어 이 기기에서는
+  // 그대로 동작하고, 다음 로그인 때 다시 승격을 시도한다.
+  if (!adoptSettings(data.settings)) {
+    saveSettings().catch((e) => console.warn('설정 승격 실패 (로컬 값은 유효):', e));
+  }
   watch(state.user);
   render();
 });
@@ -146,14 +156,28 @@ function watch(user) {
     // 다시 만들기 때문에 원격 변경이 올 때마다 시트가 튄다. 시트를 닫을 때의
     // render() 가 이미 갱신된 state.items 를 그대로 집어간다.
     if (!state.showForm) render();
-  }, (e) => fail('할 일을 불러오지 못했습니다', e));
+  }, (e) => fail(t('err.loadTodos'), e));
 
   if (user.role !== 'admin') return;
   unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
     state.users = snap.docs.map((d) => Object.assign({ uid: d.id }, d.data()));
     if (!state.showForm) render();
-  }, (e) => fail('회원 목록을 불러오지 못했습니다', e));
+  }, (e) => fail(t('err.loadUsers'), e));
 }
+
+// 화면 설정. 규칙이 hasOnly(['settings']) 를 보므로 다른 필드를 같이 보내면
+// 통째로 거부된다 — theme/lang 두 키만 담은 맵을 통으로 교체한다.
+//
+// 세션이 없으면 조용히 넘어간다. 로그아웃 직후·탈퇴 직후처럼 state.user 는 아직
+// 남아 있는데 auth.currentUser 가 먼저 비는 순간이 있는데, 여기서 currentUser.uid
+// 를 그냥 읽으면 promise 가 아니라 동기 TypeError 가 나서 호출부의 .catch 가
+// 아예 붙지 못한다. 값은 이미 localStorage 에 있고 다음 로그인 때 승격되므로
+// 이 경우 할 일이 없는 게 맞다.
+const saveSettings = () =>
+  auth.currentUser
+    ? updateDoc(doc(db, 'users', auth.currentUser.uid),
+        { settings: { theme: SETTINGS.theme, lang: SETTINGS.lang } })
+    : Promise.resolve();
 
 // ---------------------------------------------------------------- 할 일 쓰기
 // 문서 id 는 Firestore 가 만든다 — 예전 uid() 는 기기 간 충돌 가능성이 있었다.
@@ -232,13 +256,13 @@ async function uploadLocal(name) {
 // deleteUser 로 클라이언트에서 지울 수 있어서 Cloud Function 이 필요 없다.
 async function deleteSelf(pin) {
   const u = auth.currentUser;
-  if (!u) throw new Error('로그인이 필요합니다.');
+  if (!u) throw new Error(t('err.needLogin'));
   // Auth 는 계정 삭제 같은 민감한 작업에 최근 인증을 요구한다(requires-recent-login).
   // PIN 재입력을 여기에 물려서 실수 방지 확인과 재인증을 한 번에 끝낸다.
   try {
     await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, pin));
   } catch (e) {
-    throw new Error('PIN이 올바르지 않습니다.');
+    throw new Error(t('err.badPin'));
   }
   // Firestore 를 먼저 지운다. Auth 를 먼저 지우면 그 순간 권한을 잃어서 데이터가
   // 주인 없이 남는다 — 아무도 읽지도 지우지도 못하는 쓰레기가 된다.
@@ -252,5 +276,5 @@ async function deleteSelf(pin) {
 window.fb = {
   signIn, signUp, signOutNow: () => signOut(auth),
   newId, saveTodo, removeTodo, setToggle,
-  setStatus, resetPin, deleteAccount, deleteSelf, uploadLocal, fail
+  setStatus, resetPin, deleteAccount, deleteSelf, uploadLocal, saveSettings, fail
 };

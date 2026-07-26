@@ -2,15 +2,19 @@
 // 공용 상수 · 유틸 · 반복 규칙 · 전역 state · 캘린더 렌더링.
 
 // ---------------------------------------------------------------- constants
+// 색만 남긴다. 이름은 i18n.js 의 문자열 테이블에서 온다 — 라벨을 여기 두면
+// 언어를 바꿔도 우선순위·반복 이름만 한국어로 남는다.
 const PRI = {
-  high: { c: '#FF3B30', label: '높음' },
-  med:  { c: '#FF9500', label: '보통' },
-  low:  { c: '#34C759', label: '낮음' },
-  none: { c: '#8E8E93', label: '없음' }
+  high: { c: '#FF3B30' },
+  med:  { c: '#FF9500' },
+  low:  { c: '#34C759' },
+  none: { c: '#8E8E93' }
 };
 const PRI_ORDER = { high: 0, med: 1, low: 2, none: 3 };
-const REP = { none: '반복 안 함', daily: '매일', weekly: '매주', monthly: '매월' };
-const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+const priLabel = (k) => t('pri.' + k);
+// 배열 순서가 곧 반복 메뉴의 순서다.
+const REP_KEYS = ['none', 'daily', 'weekly', 'monthly'];
+const repLabel = (k) => t('rep.' + k);
 const HOUR_START = 6, HOUR_H = 52;
 const SHOW_COMPLETED = true;
 
@@ -37,13 +41,8 @@ const fmt = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.g
 const parse = (s) => { const p = s.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); };
 const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate() + n); return fmt(d); };
 
-function timeLabel(t) {
-  if (!t) return '';
-  const p = t.split(':').map(Number);
-  const ap = p[0] < 12 ? '오전' : '오후';
-  const hh = p[0] % 12 === 0 ? 12 : p[0] % 12;
-  return ap + ' ' + hh + ':' + pad(p[1]);
-}
+// timeLabel() 은 i18n.js 로 옮겼다 — 오전/오후는 로케일 문자열이라
+// Intl.DateTimeFormat 이 준다. 여기 남은 fmt/parse 는 데이터 키 전용이다.
 
 // ------------------------------------------------------------- recurrence
 // ponytail: monthly recurrence matches on day-of-month, so a task on the 31st
@@ -109,7 +108,7 @@ function pill(it, ds) {
     bg: 'color-mix(in srgb, ' + c + ' 16%, transparent)',
     deco: done ? 'line-through' : 'none',
     op: done ? 0.5 : 1,
-    timeLabel: it.time ? timeLabel(it.time) : '하루 종일'
+    timeLabel: it.time ? timeLabel(it.time) : t('item.allDay')
   };
 }
 // data-open carries the id + the date the row was rendered for, so editing a
@@ -124,14 +123,14 @@ function render() {
   const todayD = new Date();
   const items = state.items;
 
-  document.documentElement.setAttribute('data-theme',
-    window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  // 저장된 설정이 이긴다. 'system' 일 때만 OS 설정을 따라간다 (i18n.js).
+  applyTheme();
 
   // 인증 상태를 확인하기 전에 로그인 화면을 그리면 새로고침마다 한 번 번쩍인다.
   if (state.booting) {
     document.getElementById('app').innerHTML =
       '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;' +
-      'font-size:15px;font-weight:600;color:var(--label-secondary)">불러오는 중…</div>';
+      'font-size:15px;font-weight:600;color:var(--label-secondary)">' + esc(t('app.loading')) + '</div>';
     return;
   }
   // 약관 모달은 로그인 화면 위에만 뜬다 — 여기서 return 하므로 아래 본문 렌더까지
@@ -142,14 +141,16 @@ function render() {
   }
 
   // -- header ---------------------------------------------------------------
+  // 월·요일 이름은 Intl 이 만든다. 여기 들어오는 값은 전부 화면용이다.
   const monthLabel = state.view === 'month'
-    ? state.cy + '년 ' + (state.cm + 1) + '월'
-    : selD.getFullYear() + '년 ' + (selD.getMonth() + 1) + '월';
-  const todayLabel = '오늘 · ' + (todayD.getMonth() + 1) + '월 ' + todayD.getDate() + '일 (' + DOW[todayD.getDay()] + ')';
+    ? monthTitle(state.cy, state.cm)
+    : monthTitle(selD.getFullYear(), selD.getMonth());
+  const todayLabel = t('hdr.today', shortDay(todayD));
 
-  const segments = [['month', '월'], ['week', '주'], ['day', '일']].map(([k, label]) => {
+  const segments = ['month', 'week', 'day'].map((k) => {
     const on = state.view === k;
-    return '<button class="seg' + (on ? ' seg-on' : '') + '" data-view="' + k + '">' + label + '</button>';
+    return '<button class="seg' + (on ? ' seg-on' : '') + '" data-view="' + k + '">' +
+      esc(t('view.' + k)) + '</button>';
   }).join('');
 
   const isAdmin = state.user.role === 'admin';
@@ -157,13 +158,13 @@ function render() {
   const accountBar = '<div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-bottom:14px">' +
     '<span style="font-size:13px;font-weight:600;color:var(--label-secondary);background:var(--fill-quaternary);' +
       'padding:6px 12px;border-radius:999px">' + esc(state.user.name) +
-      (isAdmin ? ' · 관리자' : '') + '</span>' +
-    (isAdmin ? '<button class="btn btn-gray btn-sm" data-act="admin">회원가입 신청' +
+      (isAdmin ? ' · ' + esc(t('hdr.admin')) : '') + '</span>' +
+    (isAdmin ? '<button class="btn btn-gray btn-sm" data-act="admin">' + esc(t('hdr.signups')) +
       (pending ? '<span style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;' +
         'padding:0 5px;margin-left:2px;border-radius:999px;background:#FF3B30;color:#fff;font-size:11px;font-weight:700">' +
         pending + '</span>' : '') + '</button>' : '') +
-    '<button class="btn btn-gray btn-sm" data-act="settings">설정</button>' +
-    '<button class="btn btn-gray btn-sm" data-act="logout">로그아웃</button></div>';
+    '<button class="btn btn-gray btn-sm" data-act="settings">' + esc(t('hdr.settings')) + '</button>' +
+    '<button class="btn btn-gray btn-sm" data-act="logout">' + esc(t('hdr.logout')) + '</button></div>';
 
   let html = '<div style="max-width:1024px;margin:0 auto;padding:28px 16px 130px">' + accountBar +
     '<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px">' +
@@ -174,16 +175,16 @@ function render() {
       '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
         '<div class="seg-wrap">' + segments + '</div>' +
         '<div data-raise="glass" style="display:flex;gap:8px;align-items:center">' +
-          '<button class="btn btn-glass btn-sm btn-icon" data-nav="prev" aria-label="이전">' + icon('chevron.left', 15) + '</button>' +
-          '<button class="btn btn-glass btn-sm" data-nav="today">오늘</button>' +
-          '<button class="btn btn-glass btn-sm btn-icon" data-nav="next" aria-label="다음">' + icon('chevron.right', 15) + '</button>' +
+          '<button class="btn btn-glass btn-sm btn-icon" data-nav="prev" aria-label="' + esc(t('nav.prev')) + '">' + icon('chevron.left', 15) + '</button>' +
+          '<button class="btn btn-glass btn-sm" data-nav="today">' + esc(t('nav.today')) + '</button>' +
+          '<button class="btn btn-glass btn-sm btn-icon" data-nav="next" aria-label="' + esc(t('nav.next')) + '">' + icon('chevron.right', 15) + '</button>' +
         '</div>' +
       '</div>' +
     '</div>';
 
   // -- month view -----------------------------------------------------------
   if (state.view === 'month') {
-    const heads = DOW.map((l, i) =>
+    const heads = dow().map((l, i) =>
       '<div style="text-align:center;padding:11px 0 9px;font-size:12px;font-weight:600;color:' +
       (i === 0 ? '#FF3B30' : i === 6 ? 'var(--tint)' : 'var(--label-secondary)') + '">' + l + '</div>').join('');
 
@@ -203,7 +204,8 @@ function render() {
           ';text-decoration:' + p.deco + ';opacity:' + p.op + '">' + esc(p.title) + '</div>';
       }).join('');
       const more = list.length > 3
-        ? '<div style="font-size:10px;color:var(--label-tertiary);padding:0 6px">+' + (list.length - 3) + '개</div>' : '';
+        ? '<div style="font-size:10px;color:var(--label-tertiary);padding:0 6px">' +
+          esc(t('cell.more', list.length - 3)) + '</div>' : '';
       cells += '<div class="cell" data-day="' + ds + '" style="background:' +
         (isSel ? 'color-mix(in srgb, var(--tint) 7%, transparent)' : 'transparent') + ';opacity:' + (inM ? 1 : 0.35) + '">' +
         '<div style="width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;' +
@@ -220,6 +222,8 @@ function render() {
 
   // -- week view ------------------------------------------------------------
   if (state.view === 'week') {
+    // 주 시작은 일요일 고정이다. Intl 은 이름만 주고 배열 순서는 getDay() 색인.
+    const wdow = dow();
     const ws = addDays(sel, -selD.getDay());
     let cols = '';
     for (let i = 0; i < 7; i++) {
@@ -237,7 +241,7 @@ function render() {
       cols += '<div style="min-height:320px;border-left:' + (i === 0 ? 'none' : '.5px solid var(--separator)') + '">' +
         '<div data-day="' + ds + '" style="cursor:pointer;text-align:center;padding:10px 4px 8px;border-bottom:.5px solid var(--separator)">' +
           '<div style="font-size:11px;font-weight:600;color:' +
-            (i === 0 ? '#FF3B30' : i === 6 ? 'var(--tint)' : 'var(--label-secondary)') + '">' + DOW[i] + '</div>' +
+            (i === 0 ? '#FF3B30' : i === 6 ? 'var(--tint)' : 'var(--label-secondary)') + '">' + esc(wdow[i]) + '</div>' +
           '<div style="width:28px;height:28px;margin:4px auto 0;border-radius:50%;display:flex;align-items:center;' +
             'justify-content:center;font-size:15px;font-weight:600;background:' +
             (isToday ? 'var(--tint)' : isSel ? 'var(--fill-tertiary)' : 'transparent') +
@@ -295,9 +299,8 @@ function render() {
   const selAll = itemsOn(items, sel, true);
   const selShown = SHOW_COMPLETED ? selAll : selAll.filter((it) => !isDone(it, sel));
   const remaining = selAll.filter((it) => !isDone(it, sel)).length;
-  const selectedTitle = (sel === today ? '오늘 · ' : '') +
-    (selD.getMonth() + 1) + '월 ' + selD.getDate() + '일 ' + DOW[selD.getDay()] + '요일';
-  const remainLabel = selAll.length === 0 ? '' : remaining === 0 ? '모두 완료!' : remaining + '개 남음';
+  const selectedTitle = (sel === today ? t('list.todayPrefix') : '') + dayTitle(selD);
+  const remainLabel = selAll.length === 0 ? '' : remaining === 0 ? t('list.allDone') : t('list.remain', remaining);
 
   let listHtml;
   if (selShown.length) {
@@ -307,7 +310,7 @@ function render() {
       const open = 'data-open="' + esc(it.id) + '" data-ds="' + sel + '"';
       return '<div style="display:flex;align-items:center;gap:12px;padding:13px 16px;border-top:' +
         (idx === 0 ? 'none' : '.5px solid var(--separator)') + '">' +
-        '<button data-toggle="' + esc(it.id) + '" aria-label="완료 체크" aria-pressed="' + done + '" ' +
+        '<button data-toggle="' + esc(it.id) + '" aria-label="' + esc(t('list.check')) + '" aria-pressed="' + done + '" ' +
           'style="width:24px;height:24px;border-radius:50%;flex:none;cursor:pointer;padding:0;display:flex;' +
           'align-items:center;justify-content:center;border:2px solid ' + (done ? c : 'var(--label-quaternary)') +
           ';background:' + (done ? c : 'transparent') + ';transition:all .15s ease">' +
@@ -321,7 +324,7 @@ function render() {
         '<div style="display:flex;align-items:center;gap:8px;flex:none">' +
           (it.repeat && it.repeat !== 'none'
             ? '<span style="font-size:11px;font-weight:600;color:var(--label-secondary);background:var(--fill-quaternary);' +
-              'padding:3px 8px;border-radius:999px">' + esc(REP[it.repeat] || '') + '</span>' : '') +
+              'padding:3px 8px;border-radius:999px">' + esc(repLabel(it.repeat)) + '</span>' : '') +
           (it.time ? '<span style="font-size:13px;font-weight:500;color:var(--label-secondary);' +
             'font-variant-numeric:tabular-nums">' + esc(timeLabel(it.time)) + '</span>' : '') +
           '<span ' + open + ' style="cursor:pointer;color:var(--label-tertiary);display:flex">' +
@@ -330,8 +333,8 @@ function render() {
     }).join('');
   } else {
     listHtml = '<div style="padding:34px 16px;text-align:center">' +
-      '<div style="font-size:15px;font-weight:600;color:var(--label-secondary)">할 일이 없습니다</div>' +
-      '<div style="font-size:13px;color:var(--label-tertiary);margin-top:3px">오른쪽 아래 + 버튼으로 추가해 보세요</div></div>';
+      '<div style="font-size:15px;font-weight:600;color:var(--label-secondary)">' + esc(t('list.empty')) + '</div>' +
+      '<div style="font-size:13px;color:var(--label-tertiary);margin-top:3px">' + esc(t('list.emptyHint')) + '</div></div>';
   }
 
   html += '<div style="margin-top:22px">' +
@@ -345,7 +348,7 @@ function render() {
 
   // -- floating add button --------------------------------------------------
   html += '<div data-raise="tint" style="position:fixed;right:24px;bottom:28px;z-index:60">' +
-    '<button class="btn btn-prominent btn-lg btn-icon" data-act="open" aria-label="할 일 추가">' +
+    '<button class="btn btn-prominent btn-lg btn-icon" data-act="open" aria-label="' + esc(t('item.add')) + '">' +
     icon('plus', 20) + '</button></div>';
 
   // -- form sheet -----------------------------------------------------------

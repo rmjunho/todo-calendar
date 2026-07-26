@@ -11,6 +11,9 @@
 <body>
 <div id="app"></div>
 
+<!-- 테마·언어 설정 + 문자열 테이블. legal.js 와 같은 계층이고 그중 맨 앞이다 —
+     로드 즉시 applyTheme() 이 돌아야 첫 페인트에 흰 화면이 번쩍이지 않는다. -->
+<script src="js/i18n.js"></script>
 <!-- 약관 본문 상수. terms.html / privacy.html 도 이 파일 하나를 읽는다. -->
 <script src="js/legal.js"></script>
 <!-- 로드 순서 고정: auth → calendar(state 생성) → todo(부트스트랩) -->

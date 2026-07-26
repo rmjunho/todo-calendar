@@ -27,6 +27,13 @@ service cloud.firestore {
     function isAdmin() {
       return hasProfile() && me().status == 'approved' && me().role == 'admin';
     }
+    // 화면 설정(테마·언어). 값을 여기서 좁혀 두지 않으면 users 문서가 임의의 맵을
+    // 받는 통로가 된다 — 키 목록과 값 집합을 둘 다 고정한다.
+    function validSettings(s) {
+      return s.keys().hasOnly(['theme', 'lang'])
+             && s.theme in ['light', 'dark', 'system']
+             && s.lang in ['ko', 'en'];
+    }
 
     // 로그인 전에 이름 → 이메일을 찾기 위한 색인.
     // get 만 열고 list 는 막는다 — 안 그러면 전체 이름·이메일을 통째로 긁어간다.
@@ -70,10 +77,21 @@ service cloud.firestore {
                     && request.resource.data.agreements.privacy.agreed == true
                     && request.resource.data.agreements.age in ['over14', 'under14_guardian'];
 
-      // 관리자만, 그것도 status 한 필드만 바꿀 수 있다.
-      allow update: if isAdmin()
-                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-                    && request.resource.data.status in ['pending', 'approved', 'rejected'];
+      // 두 갈래를 일부러 분리한다. 한 조건으로 합쳐서 hasOnly(['status','settings'])
+      // 로 풀면 관리자가 남의 화면 설정까지 바꿀 수 있게 된다.
+      //
+      // 1) 관리자는 남의 status 만. settings 는 못 건드린다.
+      // 2) 본인은 자기 settings 만. status·role·agreements 는 못 건드린다.
+      //
+      // 관리자가 자기 문서를 고칠 때는 2번으로 통과한다(uid == uid). 1번은
+      // hasOnly(['status']) 라 settings 가 섞이는 순간 막히므로 교차 오염이 없다.
+      allow update: if (isAdmin()
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+                        && request.resource.data.status in ['pending', 'approved', 'rejected'])
+                    || (request.auth.uid == uid
+                        && approved()
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['settings'])
+                        && validSettings(request.resource.data.settings));
       // 관리자만 계정을 완전히 지운다. 자기 자신은 못 지운다 — 관리자가 자기
       // users 문서를 날리면 isAdmin() 이 거짓이 되어 스스로 잠긴다. 화면에서도
       // 버튼을 감추지만, 콘솔로 우회하는 발등까지 여기서 막는다.

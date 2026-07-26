@@ -19,11 +19,38 @@ const blankAuth = () => ({
 // 필수 동의 검사. 미충족이면 안내 문구를, 다 됐으면 '' 를 돌려준다.
 // 화면용이다 — 진짜 강제는 firestore.rules 의 users create 조건이 한다.
 function agreeMissing(g) {
-  if (!g.terms) return '이용약관에 동의해 주세요.';
-  if (!g.privacy) return '개인정보 수집·이용에 동의해 주세요.';
-  if (g.age !== 'over14' && g.age !== 'under14_guardian') return '나이 확인 항목을 선택해 주세요.';
+  if (!g.terms) return t('ag.needTerms');
+  if (!g.privacy) return t('ag.needPrivacy');
+  if (g.age !== 'over14' && g.age !== 'under14_guardian') return t('ag.needAge');
   return '';
 }
+
+// ---------------------------------------------------------------- 화면 설정
+// 즉시 적용 → 화면 갱신 → 서버 저장. 저장이 실패해도 화면은 되돌리지 않는다 —
+// localStorage 에 이미 들어가 있어서 이 기기에서는 유효하고, 다음 로그인 때
+// adoptSettings 가 다시 승격을 시도한다.
+// 로그인 전에는 서버 쓰기를 건너뛴다. 그 값은 로그인 시점에 승격된다.
+function setPref(key, val) {
+  const patch = {};
+  patch[key] = val;
+  setSettings(patch);
+  render();
+  if (state.user) fb.saveSettings().catch((e) => fb.fail(t('err.settings'), e));
+}
+
+// 테마·언어 고르는 줄. 이미 있는 .seg-wrap / .seg 를 그대로 쓴다 (새 CSS 없음).
+function prefRow(label, key, opts) {
+  return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;' +
+    'padding:11px 4px;border-top:.5px solid var(--separator);flex-wrap:wrap">' +
+    '<span style="font-size:14px;color:var(--label-secondary)">' + esc(label) + '</span>' +
+    '<div class="seg-wrap">' + opts.map((o) =>
+      '<button class="seg' + (SETTINGS[key] === o[0] ? ' seg-on' : '') +
+      '" data-pref="' + key + '" data-val="' + o[0] + '" aria-pressed="' + (SETTINGS[key] === o[0]) + '">' +
+      esc(o[1]) + '</button>').join('') + '</div></div>';
+}
+const THEME_OPTS = () => [['light', t('set.themeLight')], ['dark', t('set.themeDark')], ['system', t('set.themeSystem')]];
+// 언어 이름은 번역하지 않는다 — 읽을 수 없는 언어로 적히면 고를 수가 없다.
+const LANG_OPTS = [['ko', '한국어'], ['en', 'English']];
 
 // state.users 는 관리자로 로그인했을 때만 채워진다 (users 컬렉션 스냅샷).
 const pendingUsers = () => state.users.filter((u) => u.status === 'pending');
@@ -34,8 +61,8 @@ function authFail(msg) { state.auth.busy = false; state.auth.error = msg; render
 async function login() {
   const a = state.auth;
   a.error = ''; a.notice = '';
-  if (!normName(a.name)) return authFail('이름을 입력해 주세요.');
-  if (!validPin(a.pin)) return authFail('PIN은 숫자 6자리입니다.');
+  if (!normName(a.name)) return authFail(t('auth.needName'));
+  if (!validPin(a.pin)) return authFail(t('auth.pinRule'));
   a.busy = true; render();
   try {
     await fb.signIn(normName(a.name), a.pin, a.remember);
@@ -49,18 +76,17 @@ async function signup() {
   const a = state.auth;
   const name = normName(a.name), email = (a.email || '').trim();
   a.error = ''; a.notice = '';
-  if (!name) return authFail('이름을 입력해 주세요.');
-  if (!validEmail(email)) return authFail('이메일 주소를 정확히 입력해 주세요.');
-  if (!validPin(a.pin)) return authFail('PIN은 숫자 6자리로 입력해 주세요.');
-  if (a.pin !== a.pin2) return authFail('PIN이 서로 다릅니다.');
+  if (!name) return authFail(t('auth.needName'));
+  if (!validEmail(email)) return authFail(t('auth.needEmail'));
+  if (!validPin(a.pin)) return authFail(t('auth.pinRuleSignup'));
+  if (a.pin !== a.pin2) return authFail(t('auth.pinMismatch'));
   // 버튼은 disabled 로 막지 않는다 — 눌렀을 때 무엇이 빠졌는지 알려주려는 것이다.
   const missing = agreeMissing(a.agree);
   if (missing) return authFail(missing);
   a.busy = true; render();
   try {
     await fb.signUp(name, email, a.pin, a.agree);
-    state.auth = Object.assign(blankAuth(), { name,
-      notice: '회원가입 신청이 접수되었습니다. 관리자 승인 후 로그인할 수 있습니다.' });
+    state.auth = Object.assign(blankAuth(), { name, notice: t('auth.signupDone') });
     render();
   } catch (e) {
     authFail(e.message);
@@ -69,22 +95,22 @@ async function signup() {
 
 function logout() {
   state.auth = blankAuth();
-  fb.signOutNow().catch((e) => fb.fail('로그아웃에 실패했습니다', e));
+  fb.signOutNow().catch((e) => fb.fail(t('err.logout'), e));
   // 화면 정리는 onAuthStateChanged 가 한다.
 }
 
 // 승인·거절. users 스냅샷이 돌아오면서 목록이 저절로 갱신된다.
 function decide(uid, status) {
-  fb.setStatus(uid, status).catch((e) => fb.fail('상태 변경에 실패했습니다', e));
+  fb.setStatus(uid, status).catch((e) => fb.fail(t('err.status'), e));
 }
 
 function resetPin(uid) {
   const u = state.users.find((x) => x.uid === uid);
   if (!u || !u.email) return;
-  if (!confirm(u.name + ' 님의 이메일(' + u.email + ')로 PIN 재설정 메일을 보낼까요?')) return;
+  if (!confirm(t('adm.askReset', u.name, u.email))) return;
   fb.resetPin(u.email)
-    .then(() => alert('재설정 메일을 보냈습니다.'))
-    .catch((e) => fb.fail('메일 발송에 실패했습니다', e));
+    .then(() => alert(t('adm.resetSent')))
+    .catch((e) => fb.fail(t('err.mail'), e));
 }
 
 // 관리자는 스스로 탈퇴할 수 없다. 자기 users 문서를 지우면 isAdmin() 이 거짓이
@@ -96,7 +122,7 @@ const canDeleteSelf = (u) => !!u && u.role !== 'admin';
 function removeSelf() {
   const d = state.del;
   if (!d || d.busy || !canDeleteSelf(state.user)) return;
-  if (!validPin(d.pin)) { d.error = 'PIN은 숫자 6자리입니다.'; return render(); }
+  if (!validPin(d.pin)) { d.error = t('auth.pinRule'); return render(); }
   d.busy = true; d.error = ''; render();
   fb.deleteSelf(d.pin)
     .then((n) => {
@@ -104,12 +130,12 @@ function removeSelf() {
       // applyLoggedOut 은 state.auth 를 건드리지 않으므로 안내 문구가 남는다.
       state.del = null;
       state.showSettings = false;
-      state.auth.notice = '계정과 할 일 ' + n + '개를 모두 삭제했습니다. 그동안 감사했습니다.';
+      state.auth.notice = t('set.delDone', n);
       render();
     })
     .catch((e) => {
       d.busy = false;
-      d.error = e.message || '삭제에 실패했습니다.';
+      d.error = e.message || t('set.delFail');
       render();
     });
 }
@@ -119,20 +145,17 @@ function removeSelf() {
 function removeAccount(uid) {
   const u = state.users.find((x) => x.uid === uid);
   if (!u || uid === state.user.uid) return;
-  if (!confirm(u.name + '님의 계정과 모든 할 일이 영구 삭제됩니다.\n' +
-    '이 작업은 되돌릴 수 없습니다.')) return;
+  if (!confirm(t('adm.askDelete', u.name))) return;
   fb.deleteAccount(uid, u.name)
-    .then((n) => alert(u.name + '님의 계정과 할 일 ' + n + '개를 삭제했습니다.\n\n' +
-      'Firebase 콘솔 Authentication에서 계정도 지워주세요.'))
-    .catch((e) => fb.fail('삭제에 실패했습니다', e));
+    .then((n) => alert(t('adm.deleteDone', u.name, n)))
+    .catch((e) => fb.fail(t('err.delete'), e));
 }
 
 function migrateLocal() {
-  if (!confirm('다른 기기에서 누르면 데이터가 덮어써집니다.\n\n' +
-    '이 기기의 localStorage에 남아 있는 할 일을 Firestore로 올릴까요?')) return;
+  if (!confirm(t('adm.askMigrate'))) return;
   fb.uploadLocal(state.user.name)
-    .then((n) => alert(n ? n + '개를 업로드했습니다.' : '올릴 데이터가 없습니다.'))
-    .catch((e) => fb.fail('업로드에 실패했습니다', e));
+    .then((n) => alert(n ? t('adm.migrateDone', n) : t('adm.migrateNone')))
+    .catch((e) => fb.fail(t('err.upload'), e));
 }
 
 // ---------------------------------------------------------------- 약관 동의
@@ -162,7 +185,7 @@ function renderAgree() {
   // 안에 넣으면 링크를 눌러도 체크가 같이 토글된다.
   const doc = (k) => '<button type="button" data-legal="' + k + '" style="flex:none;border:none;background:none;' +
     'cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;color:var(--tint);' +
-    'text-decoration:underline;padding:11px 4px">전문 보기</button>';
+    'text-decoration:underline;padding:11px 4px">' + esc(t('ag.doc')) + '</button>';
 
   const line = (inner) => '<div style="display:flex;align-items:center;gap:8px">' + inner + '</div>';
   const txt = (t) => '<span style="flex:1;min-width:0;font-size:14px;font-weight:500;line-height:1.4">' + t + '</span>';
@@ -171,31 +194,34 @@ function renderAgree() {
   return '<div style="margin-top:20px;' + hr + ';padding-top:6px">' +
 
     line(check('data-agree="all"', allOn,
-      '<span style="flex:1;font-size:15px;font-weight:700">전체 동의하기</span>')) +
+      '<span style="flex:1;font-size:15px;font-weight:700">' + esc(t('ag.all')) + '</span>')) +
     '<div style="font-size:12px;color:var(--label-tertiary);margin:0 0 6px 32px">' +
-      '선택 항목을 포함해 모두 동의합니다.</div>' +
+      esc(t('ag.allHint')) + '</div>' +
 
     '<div style="' + hr + ';padding-top:4px">' +
-      line(check('data-agree="terms"', g.terms, txt('이용약관 동의') + tag('필수', true)) + doc('terms')) +
-      line(check('data-agree="privacy"', g.privacy, txt('개인정보 수집·이용 동의') + tag('필수', true)) + doc('privacy')) +
+      line(check('data-agree="terms"', g.terms, txt(esc(t('ag.terms'))) + tag(esc(t('ag.required')), true)) + doc('terms')) +
+      line(check('data-agree="privacy"', g.privacy, txt(esc(t('ag.privacy'))) + tag(esc(t('ag.required')), true)) + doc('privacy')) +
     '</div>' +
 
     '<div style="display:flex;align-items:center;gap:6px;margin:14px 0 2px;flex-wrap:wrap">' +
-      '<span style="font-size:13px;font-weight:600;color:var(--label-secondary)">나이 확인</span>' + tag('필수', true) +
-      '<span style="font-size:12px;color:var(--label-tertiary)">하나를 선택해 주세요</span></div>' +
-    line(check('data-agree="age" data-val="over14"', g.age === 'over14', txt('만 14세 이상입니다'))) +
+      '<span style="font-size:13px;font-weight:600;color:var(--label-secondary)">' + esc(t('ag.ageTitle')) + '</span>' +
+      tag(esc(t('ag.required')), true) +
+      '<span style="font-size:12px;color:var(--label-tertiary)">' + esc(t('ag.agePick')) + '</span></div>' +
+    line(check('data-agree="age" data-val="over14"', g.age === 'over14', txt(esc(t('ag.over14'))))) +
     line(check('data-agree="age" data-val="under14_guardian"', g.age === 'under14_guardian',
-      txt('만 14세 미만이며, 보호자(법정대리인)의 동의를 받았습니다'))) +
+      txt(esc(t('ag.under14'))))) +
 
     '<div style="' + hr + ';margin-top:8px;padding-top:4px">' +
-      line(check('data-agree="marketing"', g.marketing, txt('서비스 알림·업데이트 수신') + tag('선택', false))) +
+      line(check('data-agree="marketing"', g.marketing,
+        txt(esc(t('ag.marketing'))) + tag(esc(t('ag.optional')), false))) +
     '</div></div>';
 }
 
 // 약관 전문 모달. 본문은 js/legal.js 한 곳에서 오고, 단독 페이지
 // terms.html / privacy.html 도 같은 문자열을 쓴다.
 function renderLegalSheet() {
-  const d = LEGAL[state.legal];
+  // 언어에 맞는 본문을 고른다. 영문본이 없으면 한국어로 떨어진다 (legal.js).
+  const d = legalDoc(state.legal);
   if (!d) return '';
   return '<div data-act="closeLegal" style="position:fixed;inset:0;z-index:110;background:rgba(0,0,0,.35);animation:tcFade .2s ease-out"></div>' +
     '<div style="position:fixed;left:0;right:0;bottom:0;z-index:111;display:flex;justify-content:center;pointer-events:none">' +
@@ -205,13 +231,13 @@ function renderLegalSheet() {
       '<div style="width:38px;height:5px;border-radius:3px;background:var(--fill-secondary);margin:0 auto 12px"></div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px">' +
         '<h3 style="margin:0;font-size:19px;font-weight:700">' + esc(d.title) + '</h3>' +
-        '<button data-act="closeLegal" aria-label="닫기" style="border:none;cursor:pointer;width:30px;height:30px;' +
+        '<button data-act="closeLegal" aria-label="' + esc(t('a.close')) + '" style="border:none;cursor:pointer;width:30px;height:30px;' +
           'border-radius:50%;background:var(--fill-tertiary);color:var(--label-secondary);display:flex;' +
           'align-items:center;justify-content:center;padding:0">' + icon('xmark', 14) + '</button></div>' +
       '<div class="legal">' + d.body + '</div>' +
       '<div style="margin-top:22px;text-align:center">' +
         '<a href="' + state.legal + '.html" target="_blank" rel="noopener" ' +
-          'style="font-size:13px;font-weight:600">새 창에서 열기</a></div>' +
+          'style="font-size:13px;font-weight:600">' + esc(t('legal.newWindow')) + '</a></div>' +
     '</div></div>';
 }
 
@@ -235,33 +261,33 @@ function renderAuth() {
   return '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px">' +
     '<div style="width:min(400px,100%)">' +
       '<div style="text-align:center;margin-bottom:22px">' +
-        '<div style="font-size:13px;font-weight:600;color:var(--tint)">개인 할 일 캘린더</div>' +
+        '<div style="font-size:13px;font-weight:600;color:var(--tint)">' + esc(t('app.tagline')) + '</div>' +
         '<h1 style="margin:4px 0 0;font-size:28px;font-weight:700;letter-spacing:.2px">' +
-          (isLogin ? '로그인' : '회원가입 신청') + '</h1></div>' +
+          esc(t(isLogin ? 'auth.login' : 'auth.signup')) + '</h1></div>' +
       '<div class="card" style="border:.5px solid var(--separator);padding:18px 20px 24px">' +
         '<div class="seg-wrap">' +
-          tab('login', '로그인') + tab('signup', '회원가입 신청') + '</div>' +
+          tab('login', esc(t('auth.login'))) + tab('signup', esc(t('auth.signup'))) + '</div>' +
 
-        label('이름') +
-        '<input class="field" type="text" data-a="name" placeholder="이름을 입력하세요" autocomplete="off" ' +
+        label(esc(t('auth.name'))) +
+        '<input class="field" type="text" data-a="name" placeholder="' + esc(t('auth.namePh')) + '" autocomplete="off" ' +
           'value="' + esc(a.name) + '" style="padding:12px 14px;font-size:16px">' +
 
         // 이메일은 가입할 때만 받는다. 계정 복구(PIN 재설정 메일)에 쓰이고
         // 로그인 화면에는 다시 노출하지 않는다.
-        (isLogin ? '' : label('이메일') +
+        (isLogin ? '' : label(esc(t('auth.email'))) +
           '<input class="field" type="email" data-a="email" placeholder="you@example.com" ' +
             'autocomplete="email" value="' + esc(a.email) + '" style="padding:12px 14px;font-size:16px">' +
           '<div style="margin-top:6px;font-size:12px;color:var(--label-tertiary)">' +
-            'PIN을 잊었을 때 재설정 메일을 받는 주소입니다.</div>') +
+            esc(t('auth.emailHint')) + '</div>') +
 
-        label('PIN 번호' + (isLogin ? '' : ' (숫자 6자리)')) + pinField('pin', '••••••') +
-        (isLogin ? '' : label('PIN 번호 확인') + pinField('pin2', '••••••')) +
+        label(esc(t('auth.pin') + (isLogin ? '' : t('auth.pinDigits')))) + pinField('pin', '••••••') +
+        (isLogin ? '' : label(esc(t('auth.pin2'))) + pinField('pin2', '••••••')) +
 
         (isLogin ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:18px">' +
-          '<div><div style="font-size:15px;font-weight:600">자동 로그인</div>' +
-          '<div style="font-size:12px;color:var(--label-tertiary);margin-top:2px">다음에 열 때 로그인 화면을 건너뜁니다</div></div>' +
+          '<div><div style="font-size:15px;font-weight:600">' + esc(t('auth.remember')) + '</div>' +
+          '<div style="font-size:12px;color:var(--label-tertiary);margin-top:2px">' + esc(t('auth.rememberHint')) + '</div></div>' +
           '<button class="sw" role="switch" aria-checked="' + (a.remember ? 'true' : 'false') +
-            '" data-act="toggleRemember" aria-label="자동 로그인"><span></span></button></div>' : '') +
+            '" data-act="toggleRemember" aria-label="' + esc(t('auth.remember')) + '"><span></span></button></div>' : '') +
 
         (isLogin ? '' : renderAgree()) +
 
@@ -276,9 +302,22 @@ function renderAuth() {
           '<button class="btn btn-prominent btn-md" data-act="' + (isLogin ? 'login' : 'signup') + '" ' +
             'style="width:100%' + (blocked ? ';opacity:.45' : '') + '"' +
             (a.busy ? ' disabled' : '') + (blocked ? ' aria-disabled="true"' : '') + '>' +
-            (a.busy ? '잠시만요…' : isLogin ? '로그인' : '가입 신청하기') + '</button></div>' +
+            esc(a.busy ? t('auth.busy') : t(isLogin ? 'auth.login' : 'auth.submit')) + '</button></div>' +
         (isLogin ? '' : '<div style="margin-top:12px;font-size:12px;line-height:1.5;color:var(--label-tertiary);text-align:center">' +
-          '관리자가 신청을 수락하면 로그인할 수 있습니다.</div>') +
+          esc(t('auth.afterSignup')) + '</div>') +
+
+        // 언어 전환은 로그인 화면에도 있어야 한다. 설정 시트는 로그인해야 열리는데,
+        // 한국어를 못 읽는 사람은 그때까지 갈 수가 없다.
+        // 여기서 고른 값은 localStorage 에 남고, 첫 로그인 때 승격 저장된다.
+        '<div style="display:flex;align-items:center;justify-content:center;gap:4px;margin-top:18px;' +
+          'padding-top:14px;border-top:.5px solid var(--separator)">' +
+          LANG_OPTS.map((o, i) => (i ? '<span style="color:var(--label-quaternary)">·</span>' : '') +
+            '<button type="button" data-pref="lang" data-val="' + o[0] + '" lang="' + o[0] + '" ' +
+            'aria-pressed="' + (curLang() === o[0]) + '" style="border:none;background:none;cursor:pointer;' +
+            'font-family:inherit;font-size:12px;padding:4px 8px;' +
+            (curLang() === o[0] ? 'font-weight:700;color:var(--tint)' : 'font-weight:500;color:var(--label-tertiary)') +
+            '">' + esc(o[1]) + '</button>').join('') +
+        '</div>' +
       '</div></div></div>';
 }
 
@@ -294,12 +333,11 @@ function renderSettingsSheet() {
   // 탈퇴 확인: PIN 을 다시 받는다. 실수로 누른 사람은 여기서 멈춘다.
   const danger = !canDeleteSelf(u)
     ? '<div style="font-size:13px;line-height:1.6;color:var(--label-tertiary);padding:4px">' +
-        '관리자 계정은 여기에서 삭제할 수 없습니다. 다른 관리자에게 요청하거나, ' +
-        'Firebase 콘솔에서 직접 처리하세요.</div>'
+        esc(t('set.adminNoDelete')) + '</div>'
     : d
       ? '<div style="font-size:13px;line-height:1.6;color:var(--label-secondary);padding:2px 4px 10px">' +
-          '계정과 할 일이 <strong>영구 삭제</strong>되며 되돌릴 수 없습니다.<br>' +
-          '계속하려면 PIN 6자리를 다시 입력하세요.</div>' +
+          t('set.delConfirm') +   // <strong>/<br> 이 들어 있는 문자열이라 esc 하지 않는다
+          '</div>' +
         '<input class="field" type="password" data-d="pin" inputmode="numeric" autocomplete="off" ' +
           'maxlength="6" placeholder="••••••" value="' + esc(d.pin) + '" ' +
           'style="padding:12px 14px;font-size:16px;letter-spacing:.35em">' +
@@ -308,13 +346,13 @@ function renderSettingsSheet() {
           esc(d.error) + '</div>' : '') +
         '<div style="display:flex;gap:10px;margin-top:14px">' +
           '<button class="btn btn-gray btn-md" data-act="cancelDelete" style="flex:1"' +
-            (d.busy ? ' disabled' : '') + '>취소</button>' +
+            (d.busy ? ' disabled' : '') + '>' + esc(t('set.delCancel')) + '</button>' +
           '<button class="btn btn-gray btn-md" data-act="confirmDelete" style="flex:1;color:#FF3B30"' +
-            (d.busy ? ' disabled' : '') + '>' + (d.busy ? '삭제 중…' : '영구 삭제') + '</button></div>'
+            (d.busy ? ' disabled' : '') + '>' + esc(t(d.busy ? 'set.delBusy' : 'set.delGo')) + '</button></div>'
       : '<button class="btn btn-gray btn-md" data-act="askDelete" style="width:100%;color:#FF3B30">' +
-          '계정 삭제</button>' +
+          esc(t('set.delOpen')) + '</button>' +
         '<div style="font-size:12px;line-height:1.5;color:var(--label-tertiary);margin-top:8px;padding:0 4px">' +
-          '계정과 모든 할 일이 영구 삭제됩니다. 되돌릴 수 없습니다.</div>';
+          esc(t('set.delHint')) + '</div>';
 
   return '<div data-act="closeSettings" style="position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.35);animation:tcFade .2s ease-out"></div>' +
     '<div style="position:fixed;left:0;right:0;bottom:0;z-index:101;display:flex;justify-content:center;pointer-events:none">' +
@@ -323,42 +361,53 @@ function renderSettingsSheet() {
       'padding:12px 20px 30px;animation:tcSheet .3s cubic-bezier(.34,1.3,.64,1)">' +
       '<div style="width:38px;height:5px;border-radius:3px;background:var(--fill-secondary);margin:0 auto 12px"></div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
-        '<h3 style="margin:0;font-size:19px;font-weight:700">설정</h3>' +
-        '<button data-act="closeSettings" aria-label="닫기" style="border:none;cursor:pointer;width:30px;height:30px;' +
+        '<h3 style="margin:0;font-size:19px;font-weight:700">' + esc(t('set.title')) + '</h3>' +
+        '<button data-act="closeSettings" aria-label="' + esc(t('a.close')) + '" style="border:none;cursor:pointer;width:30px;height:30px;' +
           'border-radius:50%;background:var(--fill-tertiary);color:var(--label-secondary);display:flex;' +
           'align-items:center;justify-content:center;padding:0">' + icon('xmark', 14) + '</button></div>' +
 
-      '<div style="font-size:13px;font-weight:700;color:var(--label-secondary);margin:18px 4px 2px">계정</div>' +
-      row('이름', u.name) + row('이메일', u.email || '') +
-      row('권한', u.role === 'admin' ? '관리자' : '일반 회원') +
+      '<div style="font-size:13px;font-weight:700;color:var(--label-secondary);margin:18px 4px 2px">' +
+        esc(t('set.account')) + '</div>' +
+      row(t('auth.name'), u.name) + row(t('auth.email'), u.email || '') +
+      row(t('set.role'), t(u.role === 'admin' ? 'set.roleAdmin' : 'set.roleUser')) +
 
-      '<div style="font-size:13px;font-weight:700;color:#FF3B30;margin:22px 4px 8px">위험 구역</div>' +
+      // 테마·언어. users/{uid}.settings 로 저장되어 기기 간에 따라온다.
+      '<div style="font-size:13px;font-weight:700;color:var(--label-secondary);margin:22px 4px 2px">' +
+        esc(t('set.display')) + '</div>' +
+      prefRow(t('set.theme'), 'theme', THEME_OPTS()) +
+      prefRow(t('set.lang'), 'lang', LANG_OPTS) +
+
+      '<div style="font-size:13px;font-weight:700;color:#FF3B30;margin:22px 4px 8px">' +
+        esc(t('set.danger')) + '</div>' +
       danger +
 
       '<div style="font-size:12px;line-height:1.6;color:var(--label-tertiary);margin-top:22px;padding:0 4px">' +
-        '<a href="terms.html" target="_blank" rel="noopener">이용약관</a> · ' +
-        '<a href="privacy.html" target="_blank" rel="noopener">개인정보 처리방침</a></div>' +
+        '<a href="terms.html" target="_blank" rel="noopener">' + esc(t('legal.terms')) + '</a> · ' +
+        '<a href="privacy.html" target="_blank" rel="noopener">' + esc(t('legal.privacy')) + '</a></div>' +
     '</div></div>';
 }
 
 // ---------------------------------------------------------------- 관리자 시트
-const STATUS_LABEL = { pending: '승인 대기', approved: '승인됨', rejected: '거절됨' };
+const statusLabel = (s) =>
+  s === 'pending' ? t('adm.stPending') : s === 'approved' ? t('adm.stApproved') :
+  s === 'rejected' ? t('adm.stRejected') : (s || '');
 
 // 나이 구분 배지. 승인을 누르기 전에 만 14세 미만인지 보라고 붙인다.
 // 약관 도입(1.0) 전에 가입한 계정에는 agreements 가 아예 없다 — 그 계정의 로그인은
 // 그대로 되고(규칙은 create 만 검사한다) 여기서 "약관 미동의" 로 식별만 한다.
 const AGE_BADGE = {
-  over14: ['만 14세 이상', 'var(--label-secondary)'],
-  under14_guardian: ['만 14세 미만 · 보호자 동의', '#FF9500']
+  over14: ['adm.ageOver14', 'var(--label-secondary)'],
+  under14_guardian: ['adm.ageUnder14', '#FF9500']
 };
 function ageBadge(u) {
-  const b = (u.agreements && AGE_BADGE[u.agreements.age]) || ['약관 미동의', 'var(--label-tertiary)'];
+  const b = (u.agreements && AGE_BADGE[u.agreements.age]) || ['adm.ageNone', 'var(--label-tertiary)'];
   return '<span style="flex:none;font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;color:' +
-    b[1] + ';background:color-mix(in srgb, ' + b[1] + ' 14%, transparent)">' + b[0] + '</span>';
+    b[1] + ';background:color-mix(in srgb, ' + b[1] + ' 14%, transparent)">' + esc(t(b[0])) + '</span>';
 }
 
 function renderAdminSheet() {
-  const joined = (u) => (u.createdAt && u.createdAt.toDate ? fmt(u.createdAt.toDate()) + ' 신청' : '');
+  // 표시 전용이라 dateLabel(Intl)을 쓴다. fmt() 는 저장 키 전용으로 남겨 둔다.
+  const joined = (u) => (u.createdAt && u.createdAt.toDate ? t('adm.joined', dateLabel(u.createdAt.toDate())) : '');
   const heading = (t) => '<div style="font-size:13px;font-weight:700;color:var(--label-secondary);' +
     'margin:20px 4px 2px;letter-spacing:.2px">' + t + '</div>';
   const empty = (t) => '<div style="padding:28px 4px;text-align:center;font-size:15px;font-weight:600;' +
@@ -373,26 +422,30 @@ function renderAdminSheet() {
         '<span style="font-size:16px;font-weight:600">' + esc(u.name) + '</span>' + ageBadge(u) + '</div>' +
       '<div class="trunc" style="font-size:13px;color:var(--label-secondary);margin-top:1px">' +
         esc(u.email || '') + (joined(u) ? ' · ' + esc(joined(u)) : '') + '</div></div>' +
-    '<button class="btn btn-gray btn-sm" data-reject="' + esc(u.uid) + '" style="color:#FF3B30">거절</button>' +
+    '<button class="btn btn-gray btn-sm" data-reject="' + esc(u.uid) + '" style="color:#FF3B30">' +
+      esc(t('adm.reject')) + '</button>' +
     '<span data-raise="tint" style="display:inline-flex">' +
-      '<button class="btn btn-prominent btn-sm" data-approve="' + esc(u.uid) + '">수락</button></span>'
-  )).join('') : empty('대기 중인 신청이 없습니다');
+      '<button class="btn btn-prominent btn-sm" data-approve="' + esc(u.uid) + '">' +
+      esc(t('adm.approve')) + '</button></span>'
+  )).join('') : empty(esc(t('adm.noPending')));
 
   const all = state.users.slice().sort((x, y) => (x.name || '').localeCompare(y.name || ''));
   const allRows = all.length ? all.map((u, i) => row(i,
     '<div style="flex:1;min-width:0">' +
       '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
         '<span style="font-size:16px;font-weight:600">' + esc(u.name) + '</span>' +
-        (u.role === 'admin' ? '<span style="font-size:11px;font-weight:600;color:var(--tint)">관리자</span>' : '') +
+        (u.role === 'admin' ? '<span style="font-size:11px;font-weight:600;color:var(--tint)">' +
+          esc(t('hdr.admin')) + '</span>' : '') +
         ageBadge(u) + '</div>' +
       '<div class="trunc" style="font-size:13px;color:var(--label-secondary);margin-top:1px">' +
-        esc(u.email || '') + ' · ' + esc(STATUS_LABEL[u.status] || u.status || '') + '</div></div>' +
-    '<button class="btn btn-gray btn-sm" data-resetpin="' + esc(u.uid) + '">PIN 재설정 메일</button>' +
+        esc(u.email || '') + ' · ' + esc(statusLabel(u.status)) + '</div></div>' +
+    '<button class="btn btn-gray btn-sm" data-resetpin="' + esc(u.uid) + '">' +
+      esc(t('adm.resetPin')) + '</button>' +
     // 본인 계정에는 삭제 버튼을 아예 그리지 않는다.
     (u.uid === state.user.uid ? '' :
       '<button class="btn btn-gray btn-sm" data-delacct="' + esc(u.uid) + '" ' +
-        'style="color:#FF3B30">완전 삭제</button>')
-  )).join('') : empty('회원이 없습니다');
+        'style="color:#FF3B30">' + esc(t('adm.delete')) + '</button>')
+  )).join('') : empty(esc(t('adm.noUsers')));
 
   return '<div data-act="closeAdmin" style="position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.35);animation:tcFade .2s ease-out"></div>' +
     '<div style="position:fixed;left:0;right:0;bottom:0;z-index:101;display:flex;justify-content:center;pointer-events:none">' +
@@ -401,18 +454,18 @@ function renderAdminSheet() {
       'animation:tcSheet .3s cubic-bezier(.34,1.3,.64,1)">' +
       '<div style="width:38px;height:5px;border-radius:3px;background:var(--fill-secondary);margin:0 auto 12px"></div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
-        '<h3 style="margin:0;font-size:19px;font-weight:700">회원 관리</h3>' +
-        '<button data-act="closeAdmin" aria-label="닫기" style="border:none;cursor:pointer;width:30px;height:30px;' +
+        '<h3 style="margin:0;font-size:19px;font-weight:700">' + esc(t('adm.title')) + '</h3>' +
+        '<button data-act="closeAdmin" aria-label="' + esc(t('a.close')) + '" style="border:none;cursor:pointer;width:30px;height:30px;' +
           'border-radius:50%;background:var(--fill-tertiary);color:var(--label-secondary);display:flex;' +
           'align-items:center;justify-content:center;padding:0">' + icon('xmark', 14) + '</button></div>' +
 
-      heading('회원가입 신청') + pendRows +
-      heading('전체 회원') + allRows +
+      heading(esc(t('adm.pending'))) + pendRows +
+      heading(esc(t('adm.all'))) + allRows +
 
-      heading('데이터 이전') +
+      heading(esc(t('adm.migrate'))) +
       '<div style="font-size:12px;line-height:1.5;color:var(--label-tertiary);margin:6px 4px 10px">' +
-        '이 기기의 localStorage에 남아 있는 할 일을 내 계정으로 한 번 올립니다.</div>' +
+        esc(t('adm.migrateHint')) + '</div>' +
       '<button class="btn btn-gray btn-md" data-act="migrate" style="width:100%">' +
-        'localStorage → Firestore 업로드</button>' +
+        esc(t('adm.migrateBtn')) + '</button>' +
     '</div></div>';
 }

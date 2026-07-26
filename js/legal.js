@@ -10,8 +10,11 @@
 // 기록된다. 본문을 실질적으로 바꿨을 때만 올리고, 오타 수정은 그대로 둔다.
 
 const LEGAL = {
+  // 버전은 언어별로 나누지 않는다. 동의 기록은 "무엇에" 동의했는지를 남기는
+  // 것이고, 그 대상은 정본인 한국어본 하나다.
   version: '1.0',
 
+  ko: {
   terms: {
     title: '이용약관',
     body: `
@@ -68,6 +71,10 @@ const LEGAL = {
 <h2>제9조 (준거법 및 분쟁 해결)</h2>
 <p>이 약관은 대한민국 법령에 따라 해석되며, 서비스 이용과 관련하여 분쟁이 발생한 경우
 운영자와 이용자는 성실히 협의하여 해결합니다.</p>
+
+<h2>제10조 (준거 언어)</h2>
+<p><strong>본 약관은 한국어본을 정본으로 하며, 영문본은 참고용입니다.</strong>
+두 본문의 해석이 서로 다른 경우 한국어본이 우선합니다.</p>
 `
   },
 
@@ -170,11 +177,199 @@ const LEGAL = {
   <li>개인정보 분쟁조정위원회 — kopico.go.kr / 1833-6972</li>
 </ul>
 
-<h2>9. 변경 이력</h2>
+<h2>9. 준거 언어</h2>
+<p><strong>본 처리방침은 한국어본을 정본으로 하며, 영문본은 참고용입니다.</strong>
+두 본문의 해석이 서로 다른 경우 한국어본이 우선합니다.</p>
+
+<h2>10. 변경 이력</h2>
 <ul>
   <li>버전 1.0 (2026년 7월 25일) — 최초 시행</li>
 </ul>
 <p>이 방침의 내용이 변경되는 경우 시행 7일 전부터 서비스 화면에 공지합니다.</p>
 `
   }
+  },
+
+  // ------------------------------------------------------------------ English
+  // 참고용 번역이다. 한국어본이 정본 — 본문을 고칠 때는 ko 를 먼저 고치고 맞출 것.
+  en: {
+  terms: {
+    title: 'Terms of Service',
+    body: `
+<p class="meta">Effective 25 July 2026 · Version 1.0</p>
+
+<h2>1. Purpose</h2>
+<p>These terms set out the conditions of use and the rights and obligations of users and the
+operator of <strong>Todo Calendar</strong> (the "Service"), a web service run by an individual.</p>
+
+<h2>2. Accounts</h2>
+<ul>
+  <li>The Service is <strong>approval-based</strong>. After you request an account you can sign in
+      only once the operator approves it.</li>
+  <li>Signing in uses a <strong>name and a 6-digit PIN</strong>. Names must be unique across users.</li>
+  <li>You are responsible for keeping your PIN safe. If you forget it, a reset email can be sent to
+      the address you registered at sign-up.</li>
+  <li>Accounts may not be transferred to or shared with anyone else.</li>
+</ul>
+
+<h2>3. What the Service does</h2>
+<p>The Service lets you record and review to-dos and schedules and synchronise them across your
+devices. The Service is provided <strong>free of charge</strong>.</p>
+
+<h2>4. Your obligations</h2>
+<ul>
+  <li>Do not use another person's account or access the Service by improper means.</li>
+  <li>Do not store content that breaks the law or infringes the rights of others.</li>
+  <li>Do not interfere with the normal operation of the Service.</li>
+</ul>
+
+<h2>5. Changes to and suspension of the Service</h2>
+<p>The operator may change the Service or stop providing it. If the Service is discontinued, notice
+will be given in advance so far as reasonably possible, and users will be able to download their data.</p>
+
+<h2>6. Data and ending your use</h2>
+<ul>
+  <li>The to-do and schedule data you store belongs to you.</li>
+  <li>If you wish to leave, ask the operator and your account and data will be deleted.
+      Deleted data <strong>cannot be recovered.</strong></li>
+  <li>If you breach section 4, the operator may suspend or refuse the account.</li>
+</ul>
+
+<h2>7. Limitation of liability</h2>
+<p>The Service is run by an individual free of charge. The operator is not liable for loss arising
+from causes beyond the operator's control, such as natural disasters, network failures, or outages of
+external services (Google Firebase and the like).
+<strong>Please keep your own backup of anything important.</strong></p>
+
+<h2>8. Changes to these terms</h2>
+<p>These terms may change. Changes will be announced within the Service and take effect from the time
+they are announced. If you do not accept a change, you may stop using the Service and ask to close
+your account.</p>
+
+<h2>9. Governing law and disputes</h2>
+<p>These terms are interpreted under the laws of the Republic of Korea. If a dispute arises out of
+the use of the Service, the operator and the user will make a good-faith effort to resolve it.</p>
+
+<h2>10. Governing language</h2>
+<p><strong>The Korean version of these terms is the authoritative text; the English version is
+provided for reference only.</strong> If the two differ in meaning, the Korean version prevails.</p>
+`
+  },
+
+  privacy: {
+    title: 'Privacy Policy',
+    body: `
+<p class="meta">Effective 25 July 2026 · Version 1.0</p>
+<p><strong>Todo Calendar</strong> (the "Service") collects only the items below and does not use
+them for any other purpose.</p>
+
+<h2>1. What is collected and why</h2>
+<table>
+  <tr><th>Item</th><th>Purpose</th><th>Required</th></tr>
+  <tr><td>Name</td><td>Identifying you within the Service; used as your sign-in ID</td><td>Required</td></tr>
+  <tr><td>Email address</td><td>Sending PIN reset emails; contact from the operator</td><td>Required</td></tr>
+  <tr><td>PIN (6 digits)</td>
+      <td>Sign-in authentication. Stored <strong>only as a hash</strong> in Firebase Authentication;
+          neither the operator nor the Service <strong>keeps or can read the original.</strong></td>
+      <td>Required</td></tr>
+  <tr><td>To-do and schedule data<br>(title, date, time, priority, repeat, note, completion)</td>
+      <td>Providing the Service (recording, viewing, syncing across devices)</td><td>Required</td></tr>
+  <tr><td>Consent records<br>(items agreed, version, time, age bracket)</td>
+      <td>Evidence of consent; identifying users under 14</td><td>Required</td></tr>
+</table>
+<p>Your name, email and PIN are <strong>entered by you at sign-up</strong>. Nothing else is collected
+automatically — <strong>no</strong> advertising identifiers, location, contacts or photos. The Service
+shows no advertising and uses no analytics tools.</p>
+
+<h2>2. Retention period</h2>
+<ul>
+  <li>Retained: <strong>until you close your account</strong></li>
+  <li>On closure, your account information and to-do data are <strong>destroyed immediately</strong>
+      (electronic files are deleted irrecoverably).</li>
+  <li>There is no information the operator is required by law to retain separately.</li>
+</ul>
+
+<h2>3. Disclosure to third parties</h2>
+<p>The Service <strong>does not provide your personal data to third parties.</strong> It is not sold
+or rented, and it is not used for advertising.</p>
+
+<h2>4. Processing entrusted to others</h2>
+<p>To the extent needed to run the Service, processing is entrusted as follows.</p>
+<table>
+  <tr><th>Processor</th><th>Entrusted work</th><th>Data location</th></tr>
+  <tr><td>Google LLC<br>(Google Firebase)</td>
+      <td>Account authentication (Firebase Authentication),
+          data storage and synchronisation (Cloud Firestore)</td>
+      <td><strong>asia-northeast3 (Seoul, Republic of Korea)</strong></td></tr>
+</table>
+<p>The processor may not use personal data for any purpose beyond the entrusted work.</p>
+
+<h2>5. Personal data of children under 14</h2>
+<p>Children under 14 may use the Service only <strong>after obtaining the consent of a legal
+guardian</strong>. The age bracket is confirmed at sign-up, and a legal guardian may request access
+to, correction of, deletion of, or suspension of processing of the child's personal data.</p>
+
+<h2>6. Your rights and how to exercise them</h2>
+<ul>
+  <li>You may at any time request <strong>access, correction, deletion, or suspension of
+      processing</strong> of your personal data.</li>
+  <li>To-do and schedule data can be edited and deleted directly in the Service.</li>
+  <li>You can delete your account yourself under <strong>Settings → Delete account</strong>
+      in the app; it takes effect immediately.</li>
+  <li><strong>Even if your sign-up was not approved, or you have already removed the app,</strong>
+      you can request deletion at
+      <a href="mailto:ij1481534943@gmail.com">ij1481534943@gmail.com</a>. If you are pending or
+      rejected, or cannot sign in, in-app deletion is unreachable and this address is the only
+      route. See the <a href="delete-account.html">account deletion guide</a> for details.</li>
+</ul>
+
+<h2>7. Security measures</h2>
+<ul>
+  <li>All traffic is encrypted with <strong>HTTPS</strong>.</li>
+  <li>PINs are never stored in the clear — only as a Firebase Authentication hash.</li>
+  <li>Firestore security rules restrict access to <strong>your own data</strong>, enforced on the
+      server. Users cannot read each other's to-dos.</li>
+  <li>The operator (administrator) holds permission to access users' to-do data
+      <strong>in order to process account deletion</strong>. This permission is not used for any
+      other purpose.</li>
+  <li>Accounts are approval-based, which blocks unauthorised sign-ups.</li>
+</ul>
+
+<h2>8. Data protection officer and contact</h2>
+<p>This Service is <strong>run by an individual on a non-commercial basis</strong> and is not
+registered as a business. A trade name, representative, business registration number and business
+address therefore do not apply.</p>
+<table>
+  <tr><th>Data protection officer</th><td>이준호 (Lee Jun-ho)</td></tr>
+  <tr><th>Enquiries and requests</th>
+      <td><a href="mailto:ij1481534943@gmail.com">ij1481534943@gmail.com</a></td></tr>
+</table>
+<p>Send requests for access, correction, deletion or suspension of processing — and account deletion
+requests — to the address above; they are handled and answered <strong>within 7 days</strong>.</p>
+<p><strong>Even if your sign-up was not approved, or you have already removed the app, you can
+request account deletion at this address.</strong> While pending or rejected you cannot sign in, so
+in-app deletion is unavailable and this address is the only route. See the
+<a href="delete-account.html">account deletion guide</a> for details.</p>
+<p>To report or seek advice about a privacy infringement, you may contact the following bodies in
+the Republic of Korea:</p>
+<ul>
+  <li>Privacy Infringement Report Centre — privacy.kisa.or.kr / 118 (no area code)</li>
+  <li>Personal Information Dispute Mediation Committee — kopico.go.kr / 1833-6972</li>
+</ul>
+
+<h2>9. Governing language</h2>
+<p><strong>The Korean version of this policy is the authoritative text; the English version is
+provided for reference only.</strong> If the two differ in meaning, the Korean version prevails.</p>
+
+<h2>10. Revision history</h2>
+<ul>
+  <li>Version 1.0 (25 July 2026) — first release</li>
+</ul>
+<p>If this policy changes, notice will appear in the Service from 7 days before the change takes effect.</p>
+`
+  }
+  }
 };
+
+// 화면에 쓸 본문을 고른다. 영문본이 없으면 한국어로 떨어진다.
+const legalDoc = (kind) => ((LEGAL[curLang()] || LEGAL.ko)[kind] || LEGAL.ko[kind]);

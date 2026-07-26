@@ -13,6 +13,7 @@
 <!-- 이 페이지의 본문은 JS 없이도 보여야 한다. 스토어 심사와 크롤러가 그냥 받아
      읽는 URL 이라, terms/privacy 처럼 legal.js 에서 주입하지 않고 직접 적었다. -->
 <main style="max-width:720px;margin:0 auto;padding:36px 18px 80px">
+<section id="ko" lang="ko">
   <a href="index.html" style="font-size:13px;font-weight:600">← 할 일 캘린더</a>
   <h1 style="margin:12px 0 6px;font-size:28px;font-weight:700;letter-spacing:.2px">계정 삭제 요청</h1>
   <p style="margin:0 0 22px;font-size:14px;color:var(--label-tertiary)">
@@ -76,12 +77,89 @@
     <p class="meta" style="margin-top:26px;margin-bottom:0">
       자세한 처리 기준은 <a href="privacy.html">개인정보 처리방침</a>을 참고하세요.</p>
   </article>
+</section>
+
+<!-- 영문본. 한국어본이 정본이고 이쪽은 참고용이다 (privacy.html 9항).
+     두 벌을 나란히 정적으로 두는 이유는 아래 스크립트 주석 참고. -->
+<section id="en" lang="en" hidden>
+  <a href="index.html" style="font-size:13px;font-weight:600">← Todo Calendar</a>
+  <h1 style="margin:12px 0 6px;font-size:28px;font-weight:700;letter-spacing:.2px">Account deletion request</h1>
+  <p style="margin:0 0 22px;font-size:14px;color:var(--label-tertiary)">
+    App name: <strong>Todo Calendar</strong> (todo-calendar.kro.kr)</p>
+
+  <article class="legal card" style="padding:24px 22px">
+
+    <h2>Option 1. Delete it yourself in the app (immediate)</h2>
+    <p><strong>If you can sign in with an approved account</strong>, you can delete it from inside
+       the app. There is no request or waiting — it happens the moment you confirm.
+       If you cannot sign in, use <a href="#by-email">option 2</a> below.</p>
+    <ul>
+      <li>Sign in to <a href="index.html">Todo Calendar</a> with your name and PIN.</li>
+      <li>Tap <strong>Settings</strong> at the top right.</li>
+      <li>Tap <strong>Danger zone → Delete account</strong> and enter your PIN once more
+          to confirm.</li>
+    </ul>
+
+    <h2 id="by-email">Option 2. Request by email</h2>
+    <p><strong>Even if your sign-up was not approved, or you have already removed the app, you can
+       request deletion at the address below.</strong> In the following situations you cannot sign
+       in and so cannot reach option 1, which makes this address the only route.</p>
+    <ul>
+      <li>Your request is <strong>awaiting approval</strong> or was <strong>rejected</strong></li>
+      <li>You have <strong>already removed</strong> the app (or the bookmark)</li>
+      <li>You <strong>forgot your PIN</strong> and cannot sign in</li>
+    </ul>
+    <table>
+      <tr><th>Send to</th>
+          <td><a href="mailto:ij1481534943@gmail.com?subject=Account%20deletion%20request">ij1481534943@gmail.com</a></td></tr>
+      <tr><th>Data protection officer</th><td>이준호 (Lee Jun-ho)</td></tr>
+    </table>
+    <p>Please include the details below. To verify it is you, send the email
+       <strong>from the address you registered at sign-up</strong>.</p>
+    <ul>
+      <li>Subject: <strong>Account deletion request</strong></li>
+      <li>The <strong>name</strong> you used in the Service</li>
+    </ul>
+    <p>Deletion is completed and answered <strong>within 7 days</strong> of receipt. You may be
+       asked for further details to confirm your identity. <strong>Never write your PIN in the
+       email</strong> — the operator cannot see it and it is not used to verify you.</p>
+
+    <h2>What gets deleted</h2>
+    <table>
+      <tr><th>Item</th><th>Handling</th></tr>
+      <tr><td>Account information (name, email)</td><td>Deleted immediately and completely</td></tr>
+      <tr><td>Sign-in information (Firebase Authentication account, PIN hash)</td><td>Deleted immediately and completely</td></tr>
+      <tr><td>To-do and schedule data (title, date, time, priority, repeat, note, completion)</td><td>Deleted immediately and completely</td></tr>
+      <tr><td>Consent records (items agreed, version, time, age bracket)</td><td>Deleted immediately and completely</td></tr>
+    </table>
+
+    <h2>Data that is retained</h2>
+    <p><strong>None.</strong> Nothing is kept after deletion, and there is no information that must
+       be retained separately by law. No separate backup copy is made.</p>
+
+    <h2>This cannot be undone</h2>
+    <p>Deleted accounts and to-dos <strong>cannot be recovered.</strong> Move anything you need
+       somewhere else before deleting. You can sign up again with the same name afterwards, but the
+       previous data will not carry over.</p>
+
+    <p class="meta" style="margin-top:26px;margin-bottom:0">
+      For the full handling rules, see the <a href="privacy.html">Privacy Policy</a>.</p>
+  </article>
+</section>
 </main>
 
+<script src="js/i18n.js"></script>
 <script>
-  // 테마만 맞춘다. 본문은 이 스크립트가 없어도 그대로 보인다.
-  document.documentElement.setAttribute('data-theme',
-    matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  // 본문 두 벌을 정적 HTML 로 나란히 둔다. 이 페이지는 스토어 심사와 크롤러가
+  // JS 없이 받아 읽는 URL 이라, terms/privacy 처럼 legal.js 에서 주입하면 안 된다.
+  // 스크립트가 안 돌면 한국어본이 그대로 보이고 영문본은 hidden 으로 남는다.
+  // 테마는 i18n.js 가 로드되며 이미 적용했다(저장값 우선).
+  if (curLang() === 'en') {
+    document.getElementById('ko').hidden = true;
+    document.getElementById('en').hidden = false;
+    document.documentElement.lang = 'en';
+    document.title = 'Account deletion request · Todo Calendar';
+  }
 </script>
 </body>
 </html>

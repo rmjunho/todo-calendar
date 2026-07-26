@@ -5,12 +5,12 @@
 
 **최종 갱신:** 2026-07-26 · **본진:** `C:\Users\LENOVO\dev\todo-calendar` (git `main`)
 
-**배포됨:** <https://todo-calendar.kro.kr> (GitHub Pages + `CNAME`) · 커밋 `6bb4e47` 이
-`origin/main` 과 같고 워킹트리는 깨끗합니다. **보안 규칙도 배포 완료**
-(`firebase deploy --only firestore:rules`, 커밋 `147e1f9`).
+**배포됨:** <https://todo-calendar.kro.kr> (GitHub Pages + `CNAME`).
+**보안 규칙은 `settings` 분기까지 배포 완료** (`firebase deploy --only firestore:rules`).
 
 ### 2026-07-26 에 끝낸 것
 
+- **테마 + 언어 변경** — `users/{uid}.settings` 로 기기 간 동기화. 자세한 건 §7
 - **Firebase 연동** — localStorage 를 버리고 Auth + Firestore 로. 기기 간 동기화됨
 - **약관 동의 절차** — 필수/선택 동의·나이 확인·전문 모달, `users/{uid}.agreements`
   기록. 필수 동의는 규칙이 서버에서 강제
@@ -21,7 +21,7 @@
 - **`delete-account.html` 배포** — 로그인 못 하는 사용자의 유일한 창구
 - **처리방침 연락처** — 이준호 / ij1481534943@gmail.com
 - **PIN 재설정 메일 동작 확인** (이전 세션)
-- **`?selftest` 26개 통과** — Firebase 연동 후에도 유효
+- **`?selftest` 40개 통과** — 테마·언어 도입 후에도 유효 (14개 추가)
 
 ---
 
@@ -41,7 +41,12 @@ cd C:\Users\LENOVO\dev\todo-calendar && python -m http.server 5500
 버전입니다.
 
 자체 검사: <http://localhost:5500/index.html?selftest> → 콘솔에
-`selftest: all checks passed` (검사 26개).
+`selftest: all checks passed` (검사 40개).
+
+⚠️ **`index.html` 을 고쳤는데 화면이 그대로면 브라우저 캐시입니다.** `python -m
+http.server` 는 `If-Modified-Since` 에 304 를 돌려주는데, 스크립트 태그를 추가해도
+캐시된 껍데기가 뜨면 새 파일을 아예 요청하지 않습니다. `?cb=<아무 값>` 을 붙여
+한 번 받아오세요 (i18n.js 를 붙일 때 실제로 밟았습니다).
 
 **관리자 계정:** 자동 생성되지 않습니다. 일반 회원가입을 한 뒤 Firebase 콘솔에서
 `users/{uid}` 문서의 `role` 을 `admin`, `status` 를 `approved` 로 직접 고치세요.
@@ -64,9 +69,10 @@ cd C:\Users\LENOVO\dev\todo-calendar && firebase deploy --only firestore:rules
 
 ```
 dev\todo-calendar\
-├── index.html                     껍데기. <link> 3개 + <script> 4개. 로드 순서 고정.
+├── index.html                     껍데기. <link> 3개 + <script> 5개. 로드 순서 고정.
 ├── css\style.css           8.2KB  입체감 토큰 + DS 컴포넌트 CSS 포팅
-├── js\auth.js                     로그인 화면·PIN 검증·회원 관리 시트
+├── js\i18n.js                     ★ 테마·언어 설정 단일 소스 + 문자열 테이블(ko/en)
+├── js\auth.js                     로그인 화면·PIN 검증·회원 관리 시트·설정 시트
 ├── js\calendar.js                 유틸·반복 규칙·state·달력 렌더
 ├── js\todo.js                     할 일 CRUD·입력 시트·이벤트·부트스트랩
 ├── js\firebase.js                 ★ ESM 모듈. Auth·Firestore 전담. window.fb 로 노출
@@ -92,14 +98,19 @@ dev\todo-calendar\
 ### 로드 순서가 중요합니다
 
 ```
-legal.js  →  auth.js  →  calendar.js  →  todo.js   (클래식, 전역 스코프 공유)
-                      ↓  나중에
-firebase.js                                        (ESM 모듈)
+i18n.js  →  legal.js  →  auth.js  →  calendar.js  →  todo.js  (클래식, 전역 스코프 공유)
+                                  ↓  나중에
+firebase.js                                                   (ESM 모듈)
 ```
 
-`legal.js` 는 상수만 담고 아무것도 호출하지 않아서 맨 앞이면 충분합니다. `terms.html`
-과 `privacy.html` 은 이 파일 하나만 읽어 본문을 주입하므로, 약관 문구를 고칠 곳은
-`js\legal.js` 뿐입니다 — 세 군데에 복사하면 반드시 어긋납니다.
+`i18n.js` 와 `legal.js` 는 상수만 담고 아무것도 호출하지 않아서 앞쪽이면 충분합니다.
+다만 **`i18n.js` 가 `legal.js` 보다도 앞**이라야 합니다 — 로드 즉시 `applyTheme()` 을
+한 번 돌려서 첫 페인트 전에 `data-theme` 을 걸어 두기 때문입니다. 뒤로 미루면
+어두운 테마를 쓰는 사람에게 흰 화면이 한 번 번쩍입니다.
+
+`terms.html` 과 `privacy.html` 은 `i18n.js` + `legal.js` 두 개만 읽어 본문을
+주입하므로, 약관 문구를 고칠 곳은 `js\legal.js` 뿐입니다 — 세 군데에 복사하면
+반드시 어긋납니다.
 
 앞 3개는 **순서를 바꾸면 안 됩니다.** `calendar.js` 의 `state` 리터럴이
 `blankAuth()`(auth.js)를 호출하고, `todo.js` 끝에서 `render()` 가 앱을 띄웁니다.
@@ -127,6 +138,18 @@ firebase.js                                        (ESM 모듈)
 
 ## 2. 주요 함수 위치
 
+### js\i18n.js — 테마·언어 (★ 새 파일. 여기가 설정의 단일 소스)
+| 함수 | 역할 |
+|---|---|
+| **`SETTINGS`** | **`{theme, lang}` 단일 소스.** `state` 에 없다 — 정적 3페이지엔 `state` 가 없어서 |
+| `loadSettings` / `setSettings` | localStorage 읽기 · 검증 후 반영 + 저장 + `applyTheme()` |
+| **`adoptSettings`** | **로그인 시 원격 병합.** 있는 키는 서버가 이기고 빠진 키는 로컬 유지. `false` 면 승격 필요 |
+| `okTheme` / `okLang` | 값 검증. 규칙의 `validSettings()` 와 같은 집합 |
+| **`applyTheme`** | **`data-theme` 을 건다.** `system` 일 때만 `darkMQ` 를 본다 |
+| `dow` `timeLabel` `monthTitle` `dayTitle` `shortDay` `dateLabel` | **Intl. 전부 화면 표시 전용** |
+| `t(key, a, b)` | 문자열. 값이 함수면 인자로 문장을 만든다. 없으면 ko → 키 순으로 떨어짐 |
+| `STR` | `ko` / `en` 문자열 테이블 (각 ~170개) |
+
 ### js\auth.js — 계정 (화면·검증만. 실제 인증은 firebase.js)
 | 함수 | 역할 |
 |---|---|
@@ -138,7 +161,9 @@ firebase.js                                        (ESM 모듈)
 | `renderAgree` / `renderLegalSheet` | 동의 체크 UI · 약관 전문 모달 (본문은 `LEGAL`) |
 | `ageBadge` | 관리자 패널의 나이 배지. `agreements` 가 없으면 "약관 미동의" |
 | **`canDeleteSelf`** | **관리자는 스스로 탈퇴 불가.** 버튼 표시와 실행 양쪽에서 본다 |
-| `removeSelf` / `renderSettingsSheet` | 본인 탈퇴(PIN 재입력) · 설정 시트 |
+| `removeSelf` / `renderSettingsSheet` | 본인 탈퇴(PIN 재입력) · 설정 시트 (계정 / **화면** / 위험 구역) |
+| **`setPref`** | **테마·언어 변경 진입점.** 즉시 적용 → `render()` → 서버 저장. 로그인 전엔 서버 생략 |
+| `prefRow` / `THEME_OPTS` / `LANG_OPTS` | 세그먼티드 선택 줄. 기존 `.seg-wrap` 재사용 (새 CSS 없음) |
 | `removeAccount` | 관리자가 남의 계정을 지운다 (Auth 계정은 콘솔에서 수동) |
 | `renderAuth` / `renderAdminSheet` | 로그인 화면 · 회원 관리 바텀시트 |
 
@@ -151,14 +176,15 @@ firebase.js                                        (ESM 모듈)
 | `watch` | `todos` 실시간 구독. 관리자면 `users` 도 함께 |
 | `newId` / `saveTodo` / `removeTodo` / `setToggle` | 할 일 쓰기. 완료는 `arrayUnion`/`arrayRemove` |
 | `setStatus` / `resetPin` / `uploadLocal` | 관리자 기능 |
+| **`saveSettings`** | `settings` 맵만 통째로 교체. 세션이 없으면 조용히 `Promise.resolve()` |
 | `window.fb` | 클래식 3파일이 쓰는 유일한 창구 |
 
 ### js\calendar.js — 달력
 | 함수 | 위치 | 역할 |
 |---|---|---|
 | `icon` | 26 | 24×24 SVG 아이콘 |
-| `esc` `pad` `fmt` `parse` `addDays` `uid` | 33–39 | 유틸. `fmt`=`YYYY-MM-DD` |
-| `timeLabel` | 41 | `'14:30'` → `오후 2:30` |
+| `esc` `pad` `fmt` `parse` `addDays` | 36–42 | 유틸. **`fmt`=`YYYY-MM-DD` — 저장 키 전용** |
+| `priLabel` / `repLabel` | 14, 17 | `PRI` 는 색만 남기고 이름은 `t()` 로 |
 | **`occursOn`** | 53 | **반복 규칙 판정** (none/daily/weekly/monthly) |
 | **`isDone`** | 64 | 반복은 `doneDates[]`, 단발은 `done` |
 | `sortItems` / `itemsOn` | 67, 76 | 하루종일→시간→우선순위 정렬, 날짜 필터 |
@@ -239,8 +265,11 @@ firebase.js                                        (ESM 모듈)
     age: 'over14'|'under14_guardian',
     marketing: true|false                      // 선택 항목
   },
-  settings: { theme, lang }                    // ← 예정. §6-1 에서 추가된다.
-}                                              //   update 규칙의 hasOnly 도 함께 손볼 것
+  settings: {                                  // 없을 수 있음 (도입 전 계정)
+    theme: 'light'|'dark'|'system',            // 없으면 system
+    lang:  'ko'|'en'                           // 없으면 ko
+  }
+}
 ```
 
 **`agreements` 는 `create` 규칙이 강제합니다** — 필수 두 개가 `true` 가 아니거나 `age`
@@ -383,7 +412,22 @@ PIN 재인증 → todos 삭제 → users + usernames 삭제 → Auth 계정 삭�
 읽는 URL 이고, 앱을 지운 사람이 보는 마지막 창구라 JS 에 기대면 안 되기 때문입니다.
 앞의 둘도 정적으로 바꿔야 한다면 `legal.js` 를 빌드 소스로 두고 두 페이지를 생성하세요.
 
-`users` 의 `update` 는 **관리자가, `status` 한 필드만** 바꿀 수 있습니다.
+`users` 의 `update` 는 **분기가 둘**이고, 일부러 합치지 않았습니다.
+
+| 분기 | 누가 | 무엇을 |
+|---|---|---|
+| 1 | 관리자 (`isAdmin()`) | 남의 `status` **한 필드만** |
+| 2 | 본인 (`request.auth.uid == uid && approved()`) | 자기 `settings` **한 필드만** |
+
+**`hasOnly(['status','settings'])` 로 합치면 관리자가 남의 화면 설정을 바꿀 수 있게
+됩니다.** 지금은 관리자가 남의 문서를 건드릴 때 `settings` 가 diff 에 섞이는 순간
+분기 1의 `hasOnly(['status'])` 가 막고, 분기 2는 `uid` 가 달라서 시작도 못 합니다.
+관리자가 자기 설정을 바꾸는 건 분기 2로 통과합니다.
+
+`validSettings()` 가 키 목록(`theme`,`lang`)과 값 집합을 둘 다 고정합니다 —
+이걸 빼면 `users` 문서가 임의의 맵을 받는 통로가 됩니다. `js/i18n.js` 의
+`okTheme`/`okLang` 과 **같은 집합을 유지하세요.**
+
 `create` 는 `status:'pending'` + `role:'user'` 로 값을 고정해서 스스로 관리자를
 달고 태어나지 못하게 막습니다.
 
@@ -429,30 +473,17 @@ PIN 재인증 → todos 삭제 → users + usernames 삭제 → Auth 계정 삭�
 | 만 14세 미만의 법정대리인 *확인* 절차 | 지금은 본인 체크만 받음. 이용자가 늘면 보호자 연락처 확인이 필요 |
 | Auth 계정까지 자동 삭제 | Admin SDK(Cloud Function)를 띄울 때. 지금은 콘솔에서 수동 |
 | 로그인 시도 제한 | Firebase가 기본 제공하는 수준을 넘어야 할 때 |
-| 오프라인 캐시(`enableIndexedDbPersistence`) | PWA 붙일 때 같이 (§6-3) |
+| 오프라인 캐시(`enableIndexedDbPersistence`) | PWA 붙일 때 같이 (§6-2) |
+| 세 번째 언어 | `STR` 에 키를 추가하고 `LANGS`·규칙의 `validSettings` 를 함께 넓힐 것 |
+| 약관 영문본의 법적 검토 | 실사용자를 영어권에서 받을 때. 지금은 한국어본이 정본 |
 
 ---
 
 ## 6. 남은 작업
 
-인프라는 끝났습니다. **1·2번이 원래 이 앱을 만든 이유**이고, 3·4번은 그걸 폰에
-올리기 위한 포장입니다.
+**1번이 원래 이 앱을 만든 이유**이고, 2·3번은 그걸 폰에 올리기 위한 포장입니다.
 
-### 1. 테마 + 언어 변경 — 한 세션에서 함께
-
-`users/{uid}` 에 `settings: { theme, lang }` 로 저장합니다. **두 기능이 저장 경로를
-공유하므로 따로 하지 마세요** — 규칙과 설정 시트를 두 번 건드리게 됩니다.
-
-- 자리는 설정 시트(`renderSettingsSheet`, auth.js)의 "계정" 아래가 자연스럽습니다.
-- **`update` 규칙을 함께 손봐야 합니다.** 지금은
-  `affectedKeys().hasOnly(['status'])` 로 잠겨 있어 본인이 `settings` 를 못 씁니다.
-  본인이 `settings` 만 바꾸는 분기를 따로 추가하세요 — 관리자의 `status` 분기와
-  섞으면 관리자가 남의 설정을 바꿀 수 있게 됩니다.
-- 지금 `render()` 는 **매번 시스템 설정으로 `data-theme` 를 덮어씁니다**
-  (calendar.js). 저장값이 있으면 그쪽이 이기도록 고칠 것.
-- 기존 계정에는 `settings` 가 없습니다. 없으면 시스템 테마 + 한국어로 떨어뜨리세요.
-
-### 2. 캘린더 이미지 저장·공유 (월/주/일) — **폰 실기기 검증 필수**
+### 1. 캘린더 이미지 저장·공유 (월/주/일) — **폰 실기기 검증 필수**
 
 - 데스크톱에서 되는 것과 폰에서 되는 것이 다릅니다. iOS Safari 의 `navigator.share`
   파일 지원과 안드로이드 크롬의 다운로드 동작을 **실기기로** 확인하세요.
@@ -461,7 +492,7 @@ PIN 재인증 → todos 삭제 → users + usernames 삭제 → Auth 계정 삭�
   `color-mix()` 와 `backdrop-filter` 는 따라오지 않습니다 — 출력 전용 마크업을
   따로 그리는 편이 빠릅니다.
 
-### 3. PWA — 1~2일
+### 2. PWA — 1~2일
 
 스토어에 올리는 수단입니다. `manifest.json`(이름·아이콘·`display:standalone`·테마색),
 아이콘 세트(192/512 최소), 서비스 워커.
@@ -474,7 +505,7 @@ PIN 재인증 → todos 삭제 → users + usernames 삭제 → Auth 계정 삭�
 - 오프라인 캐시(`enableIndexedDbPersistence`)를 이때 같이 켤지 정하세요.
   [§5](#5-의도적으로-안-만든-것) 에서 미뤄 둔 항목입니다.
 
-### 4. PWABuilder → TWA → 삼성 갤럭시 스토어
+### 3. PWABuilder → TWA → 삼성 갤럭시 스토어
 
 PWABuilder 에 배포 URL 을 넣어 TWA 패키지를 뽑고 갤럭시 스토어에 올립니다.
 TWA 는 Digital Asset Links 검증이 필요해서 `/.well-known/assetlinks.json` 을
@@ -493,3 +524,118 @@ TWA 는 Digital Asset Links 검증이 필요해서 `/.well-known/assetlinks.json
   재동의를 받을지 정하세요. 안 정하면 "무엇에 동의했는지" 기록이 어긋납니다.
 - Google Play / App Store 로 넓힐 때: Play 는 데이터 안전 섹션, App Store 는
   Capacitor 래핑이 추가로 필요합니다. 앱 내 계정 삭제(5.1.1(v))는 이미 갖췄습니다.
+- 영문 UI 를 넣었으므로 스토어 리스팅도 영어를 넣을지 정하세요. 넣는다면
+  **약관 영문본이 참고용이라는 점**을 설명란에도 적는 편이 안전합니다.
+
+---
+
+## 7. 테마와 언어 — 어떻게 붙어 있나
+
+### 값은 한 군데서만 산다
+
+`js/i18n.js` 의 **`SETTINGS = { theme, lang }`** 이 유일한 소스입니다. `state` 에
+넣지 않은 이유는 `terms.html` / `privacy.html` / `delete-account.html` 에 `state` 가
+없기 때문입니다 — 그 셋도 같은 값을 읽어야 합니다.
+
+```
+읽기:  Firestore(로그인 후)  >  localStorage  >  기본값(system / ko)
+쓰기:  SETTINGS → localStorage(항상) → Firestore(로그인 상태일 때만)
+```
+
+`localStorage['todo-cal-settings-v1']` 은 로그인 전 임시 저장소이자 **정적 3페이지가
+설정을 알아내는 유일한 창구**입니다. Firestore 를 읽을 수 없는 페이지들이라 이게
+없으면 그 페이지들만 항상 시스템 테마·한국어로 남습니다. 로그인 후에도 계속
+미러로 씁니다.
+
+### 로그인할 때의 병합 규칙
+
+`adoptSettings(data.settings)` 가 원격과 로컬을 합칩니다. **있는 키는 Firestore 가
+이기고, 빠진 키는 로컬 값이 살아남습니다.** 빠진 키가 하나라도 있으면 `false` 를
+돌려주고, `onAuthStateChanged` 가 그 자리에서 `saveSettings()` 로 승격 저장합니다.
+
+이게 없으면 **로그인 화면에서 고른 언어가 첫 로그인 때 사라집니다.** 한국어를 못
+읽는 사람이 English 를 누르고 로그인했는데 화면이 다시 한국어로 돌아가는 상황이라,
+버그가 아니라 기능이 안 되는 것에 가깝습니다.
+
+승격 저장이 실패해도 로그인은 막지 않습니다 (`console.warn` 만). 값은 이미
+localStorage 에 있어 이 기기에서는 유효하고, 다음 로그인 때 다시 시도합니다.
+
+**`settings` 가 아예 없는 옛 계정은 그대로 동작합니다** — 기본값(system / ko)으로
+떨어지고 다음 로그인에 필드가 생깁니다. 규칙은 `update` 에만 걸리므로 읽기·할 일
+동기화에 지장이 없습니다.
+
+### 테마 — 새 CSS 가 한 줄도 없습니다
+
+`data-theme` 속성 하나가 `_ds/tokens/colors.css`·`effects.css` 와 `css/style.css` 의
+다크 블록을 한꺼번에 켭니다. 전부 이미 있던 것이라 **`applyTheme()` 이 그 속성을
+누가 정할지만 바꿉니다.**
+
+```js
+data-theme = theme === 'system' ? (darkMQ.matches ? 'dark' : 'light') : theme
+```
+
+- `applyTheme()` 은 **`i18n.js` 로드 시점에 한 번** 돕니다. 첫 페인트 전에 걸어야
+  어두운 테마 사용자에게 흰 화면이 번쩍이지 않습니다. `render()` 안에서도 다시
+  부릅니다(멱등).
+- `darkMQ` 의 `change` 리스너(todo.js)는 **`system` 일 때만 의미가 있습니다.**
+  밝은/어두운으로 고정하면 OS 를 바꿔도 흔들리지 않습니다.
+- ⚠️ 브라우저 개발도구의 "prefers-color-scheme 강제" 는 실제 `change` 이벤트를
+  안 쏠 수 있습니다. 따라오지 않는 것처럼 보여도 `applyTheme()` 을 직접 부르면
+  올바른 값이 나옵니다 — 검증 때 이걸로 한 번 헷갈렸습니다.
+
+### 언어 — Intl 은 화면에만, 데이터 키에는 절대
+
+```
+Intl (표시 전용)                     손대지 않음 (데이터 키)
+──────────────────────               ──────────────────────────
+dow() 요일 이름                      fmt()  ← 'YYYY-MM-DD' 생산자
+monthTitle() '2026년 7월'            parse() / addDays()
+dayTitle() / shortDay()              occursOn() / isDone()
+timeLabel() 오전/오후                item.date · doneDates[] · state.selected
+dateLabel() 가입일                   입력 시트의 <input type="date"> value
+```
+
+**이 경계가 이 기능에서 제일 위험한 곳입니다.** Intl 출력이 저장 경로로 새면
+타임존 경계에서 할 일이 하루씩 밀립니다. `?selftest` 가 `lang='en'` 으로 바꾼 뒤
+`fmt`·`addDays`·`occursOn`·`isDone`·정렬이 **한 글자도 안 변하는지** 검사하고,
+동시에 표시 문자열은 **반드시 변하는지**도 봅니다 (안 변하면 Intl 이 아예 안 걸린
+것이라 그것도 실패입니다).
+
+함정 두 개:
+
+- `dow()` 는 `Date.getDay()` 색인(0=일)에 맞춰 **`new Date(2024, 0, 7+i)`** 에서
+  뽑습니다. 2024-01-07 이 일요일입니다. `new Date('2024-01-07')` 은 UTC 파싱이라
+  시간대에 따라 하루 밀립니다.
+- **주 시작 요일은 로케일과 무관하게 일요일 고정**입니다. `startOffset =
+  getDay()` 가 그 전제로 짜여 있어서 바꾸면 달력 격자가 어긋납니다. Intl 은
+  이름만 줍니다.
+
+### 문자열 테이블
+
+`STR.ko` / `STR.en`, 각 ~170개. `t('키')` 로 꺼내고, 값이 함수면 `t('list.remain', 3)`
+처럼 인자를 넘겨 문장을 만듭니다. 키가 없으면 한국어로, 한국어에도 없으면 **키
+자체를** 돌려줍니다 — 화면이 비지 않고 빠진 키가 눈에 띕니다.
+
+`firebase.js` 의 `SIGNUP_ERR` 은 **값이 아니라 키**를 들고 있습니다. 문자열로
+굳혀 두면 모듈 로드 시점의 언어에 고정됩니다.
+
+### 약관 — 한국어본이 정본입니다
+
+`LEGAL.ko` / `LEGAL.en` 두 벌이고 `legalDoc(kind)` 가 현재 언어로 고릅니다.
+**두 문서 마지막 조항에 "한국어본이 정본, 영문본은 참고용" 을 적어 두었습니다** —
+영문을 고칠 때는 반드시 한국어를 먼저 고치고 맞추세요.
+
+`LEGAL.version` 은 **언어별로 나누지 않습니다.** 동의 기록은 "무엇에" 동의했는지를
+남기는 것이고 그 대상은 정본 하나입니다.
+
+`delete-account.html` 만 다릅니다 — 본문을 `legal.js` 에서 주입하지 않고 **ko/en 두
+벌을 정적 HTML 로 나란히 두고 `hidden` 으로 전환**합니다. 스토어 심사와 크롤러가
+JS 없이 받아 읽는 URL 이라, 스크립트가 안 돌면 한국어본이 그대로 보여야 합니다.
+(확인함: 소스에서 `#ko` 는 `hidden` 없이, `#en` 은 `hidden` 으로 나갑니다.)
+
+### 로그인 화면에도 언어 토글이 있습니다
+
+설정 시트는 로그인해야 열립니다. 그것만 두면 **한국어를 못 읽는 사람은 영문 UI 에
+도달할 방법이 없습니다.** 그래서 로그인 카드 하단에 `한국어 · English` 를 붙였고,
+같은 `data-pref` 핸들러를 씁니다. 언어 이름 자체는 번역하지 않습니다 — 읽을 수
+없는 언어로 적히면 고를 수가 없습니다.
