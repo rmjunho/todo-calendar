@@ -104,3 +104,17 @@ input:focus,textarea:focus{outline:2px solid var(--tint);outline-offset:-1px}
   overflow:hidden;text-overflow:ellipsis}
 .row-title{font-size:16px;font-weight:600}
 .trunc{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* --- 약관 본문. 회원가입 모달과 terms.html / privacy.html 이 같이 쓴다.
+   본문은 js/legal.js 한 곳에만 있고 이 스타일이 양쪽에 똑같이 걸린다. --- */
+.legal{font-size:15px;line-height:1.75;color:var(--label);word-break:keep-all}
+.legal h2{margin:26px 0 8px;font-size:17px;font-weight:700;letter-spacing:.2px}
+.legal h2:first-child{margin-top:0}
+.legal p{margin:0 0 10px}
+.legal ul{margin:0 0 12px;padding-left:20px}
+.legal li{margin:0 0 5px}
+.legal strong{font-weight:600}
+.legal .meta{font-size:13px;color:var(--label-tertiary);margin-bottom:18px}
+.legal table{width:100%;border-collapse:collapse;margin:0 0 12px;font-size:14px;line-height:1.6}
+.legal th,.legal td{border:.5px solid var(--separator);padding:8px 10px;text-align:left;vertical-align:top}
+.legal th{background:var(--fill-quaternary);font-weight:600}

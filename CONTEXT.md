@@ -23,9 +23,21 @@ cd C:\Users\LENOVO\dev\todo-calendar && python -m http.server 5500
 버전입니다.
 
 자체 검사: <http://localhost:5500/index.html?selftest> → 콘솔에
-`selftest: all checks passed` (검사 17개).
+`selftest: all checks passed` (검사 23개).
 
-**관리자 계정:** 이준호 / PIN `4943` (첫 실행 시 자동 생성)
+**관리자 계정:** 자동 생성되지 않습니다. 일반 회원가입을 한 뒤 Firebase 콘솔에서
+`users/{uid}` 문서의 `role` 을 `admin`, `status` 를 `approved` 로 직접 고치세요.
+(첫 관리자 부트스트랩 코드를 짜는 것보다 클릭 두 번이 쌉니다.)
+
+**Firebase 콘솔에서 해 둘 것 — 안 하면 로그인이 안 됩니다**
+
+1. Authentication → Sign-in method → **이메일/비밀번호** 사용 설정
+2. Authentication → Settings → 승인된 도메인에 **`todo-calendar.kro.kr`** 추가
+3. Firestore → 규칙에 [`firestore.rules`](firestore.rules) 붙여넣고 게시
+
+⚠️ **규칙은 코드를 배포한 뒤에 게시하세요.** `users` 의 `create` 가 약관 동의 필드를
+요구하기 때문에, 규칙을 먼저 올리면 아직 옛 코드를 받은 브라우저에서 가입이 전부
+실패합니다. 이 조건은 `create` 에만 걸리므로 **기존 계정의 로그인에는 영향이 없습니다.**
 
 ---
 
@@ -33,11 +45,17 @@ cd C:\Users\LENOVO\dev\todo-calendar && python -m http.server 5500
 
 ```
 dev\todo-calendar\
-├── index.html              714B   껍데기. <link> 3개 + <script> 3개. 로드 순서 고정.
+├── index.html                     껍데기. <link> 3개 + <script> 4개. 로드 순서 고정.
 ├── css\style.css           8.2KB  입체감 토큰 + DS 컴포넌트 CSS 포팅
-├── js\auth.js              173행  로그인·PIN·세션·관리자 승인
-├── js\calendar.js          338행  유틸·반복 규칙·state·달력 렌더
-├── js\todo.js              292행  할 일 저장·CRUD·입력 시트·이벤트·부트스트랩
+├── js\auth.js                     로그인 화면·PIN 검증·회원 관리 시트
+├── js\calendar.js                 유틸·반복 규칙·state·달력 렌더
+├── js\todo.js                     할 일 CRUD·입력 시트·이벤트·부트스트랩
+├── js\firebase.js                 ★ ESM 모듈. Auth·Firestore 전담. window.fb 로 노출
+├── js\firebase-config.js          프로젝트 설정값 (공개돼도 되는 값)
+├── js\legal.js                    약관 본문·버전 상수. 모달과 아래 두 페이지가 같이 읽음
+├── terms.html                     이용약관 단독 페이지 (스토어 제출용 URL)
+├── privacy.html                   개인정보 처리방침 단독 페이지
+├── firestore.rules                보안 규칙. 콘솔에 붙여넣어 게시할 것
 ├── _ds\ios-26-design-system-…\   디자인 토큰 (건드리지 말 것, 원본)
 │   ├── styles.css          724B   @import 4줄 매니페스트 ← file:// 에서 깨지는 원인
 │   └── tokens\             colors / typography / spacing / effects
@@ -53,16 +71,30 @@ dev\todo-calendar\
 
 ### 로드 순서가 중요합니다
 
-`index.html` 의 `<script>` 3개는 **순서를 바꾸면 안 됩니다.**
-
 ```
-auth.js  →  calendar.js  →  todo.js
+legal.js  →  auth.js  →  calendar.js  →  todo.js   (클래식, 전역 스코프 공유)
+                      ↓  나중에
+firebase.js                                        (ESM 모듈)
 ```
 
-`calendar.js:92` 가 `state` 를 만들면서 `loadUsers()`(auth.js:19)를 **파싱 시점에
-동기 호출**하고, `todo.js:252-253` 이 마지막에 `restoreSession(); render();` 로
-앱을 띄웁니다. 세 파일은 모듈이 아니라 **전역 스코프를 공유**합니다
-(`type="module"` 아님). 함수 이름 48개가 세 파일에 겹침 없이 나뉘어 있습니다.
+`legal.js` 는 상수만 담고 아무것도 호출하지 않아서 맨 앞이면 충분합니다. `terms.html`
+과 `privacy.html` 은 이 파일 하나만 읽어 본문을 주입하므로, 약관 문구를 고칠 곳은
+`js\legal.js` 뿐입니다 — 세 군데에 복사하면 반드시 어긋납니다.
+
+앞 3개는 **순서를 바꾸면 안 됩니다.** `calendar.js` 의 `state` 리터럴이
+`blankAuth()`(auth.js)를 호출하고, `todo.js` 끝에서 `render()` 가 앱을 띄웁니다.
+세 파일은 모듈이 아니라 전역 스코프를 공유합니다.
+
+`firebase.js` 만 `type="module"` 입니다. 모듈은 클래식 스크립트가 다 돈 **뒤에**
+실행되므로 순서를 신경 쓸 필요가 없고, 오히려 그 성질을 이용합니다 — 3개가 먼저
+`state.booting` 로딩 화면을 그리고, 모듈이 `onAuthStateChanged` 로 세션을 복원한
+뒤 `render()` 를 다시 부릅니다. 그래서 새로고침해도 로그인 화면이 번쩍이지
+않습니다.
+
+**세 파일에 `import`/`export` 를 붙이지 마세요.** 모듈로 바꾸는 순간 전역 공유가
+끊겨 함수 참조가 전부 깨집니다. 모듈 코드는 클래식 스크립트의 최상위
+`const`/`function` 을 그대로 읽을 수 있으므로 (전역 렉시컬 환경 공유) 반대 방향
+— 모듈 하나만 추가하고 `window.fb` 로 내보내기 — 로 붙였습니다.
 
 ### 중복 파일 정리 안내
 
@@ -75,15 +107,28 @@ auth.js  →  calendar.js  →  todo.js
 
 ## 2. 주요 함수 위치
 
-### js\auth.js — 계정
-| 함수 | 위치 | 역할 |
-|---|---|---|
-| `USERS_KEY` / `SESSION_KEY` / `ADMIN` | 5, 7, 8 | 저장 키 상수 |
-| `validPin` / `normName` / `findUser` | 15, 16, 17 | PIN 형식·이름 정규화·조회 |
-| `loadUsers` / `saveUsers` | 19, 28 | 계정 목록 · **관리자 시딩** |
-| `startSession` / `restoreSession` / `logout` | 33, 44, 50 | 세션. 자동 로그인은 opt-in |
-| `login` / `signup` / `decide` | 61, 70, 86 | 인증 · 가입 신청 · 승인/거절 |
-| `renderAuth` / `renderAdminSheet` | 94, 146 | 로그인 화면 · 승인 바텀시트 |
+### js\auth.js — 계정 (화면·검증만. 실제 인증은 firebase.js)
+| 함수 | 역할 |
+|---|---|
+| `validPin` / `validEmail` / `normName` | **PIN은 숫자 6자리 고정** · 이메일 형식 · 이름 trim |
+| `blankAuth` | 로그인 폼 초기값. `state.auth` 모양의 단일 출처 |
+| `login` / `signup` / `logout` | `fb.*` 호출 후 결과만 화면에 반영 |
+| `decide` / `resetPin` / `migrateLocal` | 승인·거절 · PIN 재설정 메일 · localStorage 업로드 |
+| **`agreeMissing`** | **필수 동의 검사.** 미충족 항목의 안내 문구를 돌려준다 |
+| `renderAgree` / `renderLegalSheet` | 동의 체크 UI · 약관 전문 모달 (본문은 `LEGAL`) |
+| `ageBadge` | 관리자 패널의 나이 배지. `agreements` 가 없으면 "약관 미동의" |
+| `renderAuth` / `renderAdminSheet` | 로그인 화면 · 회원 관리 바텀시트 |
+
+### js\firebase.js — 서버 (이 파일만 ESM)
+| 함수 | 역할 |
+|---|---|
+| `signIn` | `usernames/{name}` → email → `signInWithEmailAndPassword` |
+| `signUp` | 이름 중복 검사 → 계정 생성 → users + usernames **batch** → 로그아웃 |
+| `onAuthStateChanged` | 세션 복원. `status !== 'approved'` 면 즉시 signOut |
+| `watch` | `todos` 실시간 구독. 관리자면 `users` 도 함께 |
+| `newId` / `saveTodo` / `removeTodo` / `setToggle` | 할 일 쓰기. 완료는 `arrayUnion`/`arrayRemove` |
+| `setStatus` / `resetPin` / `uploadLocal` | 관리자 기능 |
+| `window.fb` | 클래식 3파일이 쓰는 유일한 창구 |
 
 ### js\calendar.js — 달력
 | 함수 | 위치 | 역할 |
@@ -101,17 +146,15 @@ auth.js  →  calendar.js  →  todo.js
 ### js\todo.js — 할 일
 | 함수 | 위치 | 역할 |
 |---|---|---|
-| `STORE_KEY` | 5 | `'todo-cal-v1'` (구버전 단일 사용자 키) |
-| `seed` | 7 | 샘플 6개 |
-| `itemsKey` / `load` / `save` | 20, 22, 38 | 계정별 저장. 관리자가 구데이터 승계 |
-| `blankForm` / `persist` | 42, 44 | `persist` = 상태+저장+렌더 한 번에 |
-| `toggleDone` | 46 | 반복이면 날짜 배열, 단발이면 플래그 |
-| `renderSheet` / `openForm` / `closeForm` / `saveForm` | 58, 127, 142, 149 | 입력 시트 |
-| click 위임 | **164** | 모든 버튼이 여기 하나로. `data-*` 분기 |
-| input 위임 | **226** | **입력은 uncontrolled — 타이핑 시 렌더 안 함** (캐럿 보존) |
-| keydown | 238 | Esc 닫기 · Enter 로그인 |
-| 부트스트랩 | **252-253** | `restoreSession(); render();` |
-| selftest | 258 | `?selftest` 로 17개 검사 |
+| `blankForm` | 입력 시트 초기값 |
+| **`commit`** | **낙관적 업데이트** — 상태·렌더 먼저, Firestore 쓰기는 뒤. 실패하면 알림 |
+| `toggleDone` | 반복이면 날짜 배열, 단발이면 플래그. 서버엔 `arrayUnion`/`arrayRemove` |
+| `renderSheet` / `openForm` / `closeForm` / `saveForm` | 입력 시트 |
+| click 위임 | 모든 버튼이 여기 하나로. `data-*` 분기 |
+| input 위임 | **입력은 uncontrolled — 타이핑 시 렌더 안 함** (캐럿 보존) |
+| keydown | Esc 닫기 · Enter 로그인 |
+| 부트스트랩 | `render()` + 10초 타임아웃 가드 (모듈이 안 뜨면 안내 문구) |
+| selftest | `?selftest` 로 15개 검사 |
 
 렌더 흐름은 하나뿐입니다: **상태 변경 → `render()` → `#app.innerHTML` 통째로 교체.**
 가상 DOM·프레임워크 없음.
@@ -120,16 +163,22 @@ auth.js  →  calendar.js  →  todo.js
 
 ## 3. 데이터 구조
 
-### localStorage 키
-| 키 | 값 |
+### Firestore 경로
+| 경로 | 값 |
 |---|---|
-| `todo-cal-users-v1` | 계정 배열 |
-| `todo-cal-session-v2` | 자동 로그인 **켠 경우에만** 사용자 id 문자열 |
-| `todo-cal-v1:<userId>` | 그 계정의 할 일 배열 |
-| `todo-cal-v1` | (구버전) 계정 도입 전 데이터 → 관리자가 승계 |
+| `users/{uid}` | `{ name, email, role, status, createdAt }` |
+| `usernames/{name}` | `{ uid, email }` ← **로그인 전** 이름→이메일 조회용 |
+| `users/{uid}/todos/{id}` | 할 일 문서. 구조는 아래와 동일 |
 
-`v1` 세션 키는 무시합니다. 스위치를 켠 적 없는데 자동 로그인되던 버그 때문에
-`v2` 로 올렸습니다 — **다시 내리지 마세요.**
+`usernames` 는 로그인하기 전에 읽어야 하므로 규칙에서 `get` 이 공개돼 있습니다.
+대신 `list` 를 막아 뒀습니다 — 안 막으면 전체 이름·이메일이 통째로 털립니다.
+이름 중복 검사도 이 문서의 존재 여부로 합니다.
+
+### localStorage
+이제 **저장에 쓰지 않습니다.** 남아 있는 옛 키(`todo-cal-users-v1`,
+`todo-cal-v1:<id>`, `todo-cal-v1`)는 관리자 패널의 업로드 버튼이 읽기만 합니다.
+자동 로그인은 Firebase 세션 지속성(`browserLocal` vs `browserSession`)으로
+대체됐습니다.
 
 ### 할 일 (item)
 ```js
@@ -150,17 +199,41 @@ auth.js  →  calendar.js  →  todo.js
 이 어느 쪽을 볼지 고릅니다. 이 규칙 덕분에 이번 주에 체크해도 다음 주 항목은
 미완료로 남습니다.
 
-### 계정 (user)
+`id` 는 이제 Firestore 문서 id 입니다 (`fb.newId()`). 예전 `uid()` 는 기기 간
+충돌 가능성이 있어서 지웠습니다.
+
+### 계정 (users/{uid})
 ```js
 {
-  id: 'a7x2m1',
   name: '이준호',                              // 로그인 아이디 겸용. 중복 불가
-  pin: '4943',                                 // ⚠️ 평문
+  email: 'someone@example.com',                // Firebase Auth 계정 이메일. 화면엔 안 나옴
   role: 'admin'|'user',
   status: 'pending'|'approved'|'rejected',
-  at: '2026-07-25'
+  createdAt: <Timestamp>,
+  agreements: {                                // 약관 1.0 이후 가입자만 있음
+    terms:   { agreed: true, version: '1.0', at: <Timestamp> },
+    privacy: { agreed: true, version: '1.0', at: <Timestamp> },
+    age: 'over14'|'under14_guardian',
+    marketing: true|false                      // 선택 항목
+  }
 }
 ```
+
+**`agreements` 는 `create` 규칙이 강제합니다** — 필수 두 개가 `true` 가 아니거나 `age`
+가 두 값 중 하나가 아니면 문서 자체가 만들어지지 않습니다. 화면 검사(`agreeMissing`)는
+안내용이고, 우회하면 서버가 자릅니다.
+
+**약관 도입 전에 가입한 계정에는 이 필드가 없습니다.** 규칙은 `create` 에만 걸리므로
+로그인·읽기·할 일 동기화가 전부 그대로 동작하고, 관리자 패널에서 "약관 미동의"
+배지로만 구분됩니다. 소급해서 재동의를 받는 흐름은 만들지 않았습니다.
+
+버전 문자열은 `LEGAL.version`(js\legal.js) 한 곳에서 옵니다. 본문을 실질적으로 고치면
+그 상수를 올리세요 — 이미 저장된 문서의 값은 그대로 남아 언제 무엇에 동의했는지가
+남습니다.
+
+**PIN은 어디에도 저장하지 않습니다.** Firebase Auth 비밀번호로 그대로 들어가고,
+그래서 Auth 최소 길이 6자에 맞춰 **숫자 6자리 고정**입니다. 잊었을 때는 관리자가
+회원 관리 시트에서 재설정 메일을 보냅니다.
 
 ### state (calendar.js:82)
 ```js
@@ -170,10 +243,12 @@ auth.js  →  calendar.js  →  todo.js
   selected: 'YYYY-MM-DD',
   items: [],           // 로그인한 계정의 할 일
   showForm, editingId, form, repeatOpen,   // 입력 시트
-  users: [],           // 전체 계정 (파싱 시점에 동기 로드)
-  user: null,          // 로그인한 사용자. null = 로그인 화면
-  auth: { mode, name, pin, pin2, remember, error, notice },
-  showAdmin
+  users: [],           // 관리자로 로그인했을 때만 채워지는 users 스냅샷
+  user: null,          // { uid, name, email, role, status }. null = 로그인 화면
+  auth: blankAuth(),   // mode, name, email, pin, pin2, remember, error, notice, busy
+  booting: true,       // firebase.js 가 인증 상태를 알려줄 때까지 로딩 화면
+  showAdmin,
+  legal: null          // null | 'terms' | 'privacy'. 로그인 화면 위의 약관 모달
 }
 ```
 
@@ -184,105 +259,99 @@ auth.js  →  calendar.js  →  todo.js
 
 ---
 
-## 4. Firebase 연동 시 주의사항
+## 4. Firebase — 어떻게 붙어 있나
 
-현재 코드는 **처음부터 끝까지 동기(synchronous)** 입니다. Firebase는 전부
-비동기라서, 아래 5개는 연동 전에 반드시 손봐야 합니다.
+localStorage는 더 이상 저장소가 아닙니다. 아래는 연동하면서 내린 결정과, 다음에
+손댈 때 밟기 쉬운 지뢰들입니다.
 
-### 🔴 반드시 먼저 해결
+### 인증 — 화면은 이름+PIN, 속은 이메일+비밀번호
 
-**① `state` 가 파싱 시점에 동기로 만들어집니다** — 최대 걸림돌
-
-```js
-// calendar.js:92
-users: loadUsers(),     // localStorage 라서 즉시 반환됨
+```
+이름 ─→ usernames/{이름}.email ─┐
+                                ├─→ signInWithEmailAndPassword(email, PIN)
+PIN  ───────────────────────────┘
 ```
 
-Firestore 읽기는 Promise입니다. `state` 를 이렇게 초기화할 수 없습니다.
-`state.users = []` 로 시작해서 로딩 화면을 먼저 렌더하고, 데이터가 도착하면
-`render()` 를 다시 호출하는 구조로 뒤집어야 합니다.
+이메일은 **회원가입 탭에서만** 받고 로그인 화면에는 다시 나오지 않습니다.
+익명 인증·구글 로그인은 쓰지 않습니다.
 
-**② 부트스트랩도 동기입니다**
+- **PIN은 숫자 6자리 고정**입니다. Firebase Auth 비밀번호 최소 길이가 6자라서
+  예전 4자리(`4943`)는 못 씁니다. `validPin` 을 다시 느슨하게 풀면 가입 폼은
+  통과하고 Auth가 `auth/weak-password` 로 거절합니다.
+- **로그인 실패 사유를 구분해서 알려주지 않습니다.** 이름이 없는 건지 PIN이
+  틀린 건지 나누면 이름 존재 여부가 새어 나갑니다.
+- 승인 검사는 `onAuthStateChanged` 안에서 합니다. Auth 로그인 자체는 승인 전에도
+  되기 때문에 `status !== 'approved'` 면 그 자리에서 `signOut` 합니다.
+  **이 화면 검사만 믿으면 안 됩니다** — 데이터 접근은 보안 규칙이 따로 막습니다.
+- 자동 로그인 스위치 = `setPersistence(browserLocal | browserSession)`.
 
-```js
-// todo.js:252-253
-restoreSession();       // localStorage 즉시 읽기
-render();
-```
+### 회원가입은 순서가 까다롭습니다
 
-Firebase Auth는 `onAuthStateChanged` 콜백으로 세션을 복원합니다. 이 두 줄은
-콜백 안으로 들어가야 하고, 그 전까지는 로딩 상태를 보여줘야 합니다. 안 그러면
-새로고침할 때마다 로그인 화면이 한 번 번쩍입니다.
+`createUserWithEmailAndPassword` 는 **계정을 만들면서 곧바로 로그인**시킵니다.
+그 순간 `users/{uid}` 문서는 아직 없어서 `onAuthStateChanged` 핸들러가 헛돕니다.
+그래서 `busy` 플래그로 가입 중에는 인증 상태 변화를 무시합니다.
 
-**③ ESM 전환 시 전역 스코프가 깨집니다**
+계정만 생기고 문서 생성이 실패하면 반쪽 계정이 남습니다. `catch` 에서 로그아웃해
+두면 다음 로그인 때 "계정 정보를 찾을 수 없습니다"로 걸립니다 — 조용히 넘어가지
+않게 하려는 의도이니 지우지 마세요.
 
-세 파일은 지금 전역을 공유합니다. Firebase 최신 SDK는 ESM이라
-`<script type="module">` 이 필요한데, 모듈로 바꾸는 순간 `state`·`render`·`fmt`
-같은 참조가 **전부 끊깁니다**. 둘 중 하나를 고르세요.
+### 보안 규칙에서 한 군데 일부러 느슨합니다
 
-- 쉬운 길: Firebase **compat CDN 전역 빌드** 사용 → 지금 구조 그대로
-- 제대로: 세 파일에 `export`/`import` 를 명시적으로 추가
+`users/{uid}` **본인 읽기는 승인 여부와 무관하게** 허용합니다. 승인 대기 중인
+사람이 자기 `status` 를 확인할 방법이 이것뿐이기 때문입니다. 노출되는 건 자기
+이름·이메일·상태뿐입니다. 쓰기와 `todos` 는 전부 `approved` 라야 통과합니다.
 
-**④ PIN — Firestore에 절대 그대로 올리지 마세요**
+### 계정 완전 삭제 — 관리자에게 남의 할 일 읽기 권한이 열려 있습니다
 
-지금 PIN은 평문입니다 (`auth.js:8` 에 관리자 PIN이 하드코딩). 이대로 Firestore에
-올리면 보안 규칙 한 번 잘못 쓰는 순간 전부 노출됩니다. Firebase Auth로 옮기세요.
+회원 관리 시트의 **완전 삭제**는 `users/{uid}/todos/*` → `users/{uid}` + `usernames/{name}`
+순서로 지웁니다. 계정 문서를 **마지막에** 지우는 게 중요합니다 — 먼저 지우면 목록에서
+사라져서 남은 todos 를 다시 찾아갈 방법이 없어집니다.
 
-**함정:** `validPin`(auth.js:15)은 **4~8자리**를 허용하지만 Firebase Auth 비밀번호는
-**최소 6자**입니다. 기존 `4943`(4자리) 같은 PIN은 그대로 못 씁니다. 셋 중 하나:
-- PIN을 6자리 이상으로 강제 (기존 계정 마이그레이션 필요)
-- PIN에 접두사를 붙여 내부 비밀번호 생성 (`'pin:' + pin`)
-- Cloud Functions + 커스텀 토큰으로 PIN 검증
+서브컬렉션은 부모를 지워도 남고, 클라이언트 SDK 에는 재귀 삭제가 없습니다. 문서 id 를
+알아야 지울 수 있는데 **id 조회(`list`)가 곧 내용 조회**라서, 관리자에게 `read` 없이
+`delete` 만 주는 방법이 없습니다. 그래서 `todos` 에 `allow read, delete: if isAdmin()`
+이 열려 있습니다. 막으려면 삭제를 Admin SDK(Cloud Function)로 옮겨야 합니다.
+**이 사실은 개인정보 처리방침 7항에 적어 두었습니다** — 규칙을 조이거나 풀면 그 문구도
+같이 고치세요.
 
-이름+PIN 로그인은 Firebase Auth에 그대로 매핑되지 않습니다. 이름을 합성 이메일
-(`<slug>@todo.local`)로 바꾸는 우회가 흔한 방법입니다.
+`users` 의 `delete` 는 `request.auth.uid != uid` 를 함께 봅니다. 관리자가 자기 문서를
+지우면 `isAdmin()` 이 거짓이 되어 스스로 잠기기 때문입니다. 화면에서도 본인에게는
+버튼을 안 그리지만, 규칙 쪽이 진짜 방어선입니다.
 
-**⑤ 승인 대기 흐름은 Auth만으로 안 됩니다**
+**Auth 계정은 지워지지 않습니다.** 남의 Auth 계정 삭제는 Admin SDK 가 있어야 합니다.
+삭제 후 안내창이 콘솔에서 지우라고 알려 주며, 지우지 않아도 `users` 문서가 없어서
+로그인은 막힙니다(`onAuthStateChanged` 가 "계정 정보를 찾을 수 없습니다"로 자릅니다).
 
-`status: pending|approved|rejected` 는 Firestore 문서 + **보안 규칙**으로 가야
-합니다. Auth 계정은 승인 *전에* 이미 존재하므로, 규칙에서 로그인 여부가 아니라
-`status === 'approved'` 를 검사해야 합니다. 안 하면 승인 대기 중인 사람이
-데이터를 읽습니다.
+`users` 의 `update` 는 **관리자가, `status` 한 필드만** 바꿀 수 있습니다.
+`create` 는 `status:'pending'` + `role:'user'` 로 값을 고정해서 스스로 관리자를
+달고 태어나지 못하게 막습니다.
 
-### 🟡 데이터 계층
+### 데이터 계층
 
-**`persist()` 의 조용한 실패** — `save()`(todo.js:38)는 `try{}catch(e){}` 로
-에러를 삼킵니다. localStorage에선 용량 초과 정도였지만, Firestore에선 **네트워크
-실패 = 데이터 소실**입니다. 낙관적 업데이트 + 실패 시 롤백 + 사용자 알림이
-필요합니다.
+- **`commit()`(todo.js)은 낙관적 업데이트입니다.** 화면을 먼저 바꾸고 쓰기는
+  뒤에 보냅니다. 실패하면 알리고, `onSnapshot` 이 서버 값으로 되돌립니다.
+  예전 `save()` 처럼 `try{}catch{}` 로 삼키지 마세요 — 여기선 데이터 소실입니다.
+- **완료 체크는 `arrayUnion`/`arrayRemove`** 로 보냅니다. 배열을 통째로 교체하면
+  두 기기에서 같은 날 체크했을 때 한쪽이 사라집니다(lost update).
+- **문서 id는 `fb.newId()`** (Firestore 생성). 예전 `uid()` 는 지웠습니다.
+- **날짜는 계속 `'YYYY-MM-DD'` 문자열**입니다. `Timestamp` 로 바꾸면 `occursOn`
+  의 반복 판정과 `parse()` 의 로컬 자정 가정이 깨지고 타임존 버그가 들어옵니다.
+  문자열도 Firestore에서 정렬·범위 쿼리가 정상 동작합니다. `createdAt` 만 예외.
 
-**`doneDates[]` 배열 갱신 충돌** — `toggleDone`(todo.js:46)은 배열을 통째로
-교체합니다. 두 기기에서 동시에 체크하면 한쪽이 사라집니다(lost update).
-`arrayUnion` / `arrayRemove` 를 쓰세요.
+### 렌더링 — 시트가 열려 있으면 렌더를 미룹니다
 
-**`uid()` 는 전역 유일하지 않습니다** — `Math.random().toString(36).slice(2)`
-(calendar.js:39). 기기 간 충돌 가능. Firestore `doc().id` 로 바꾸세요.
+`render()` 는 `#app` 을 통째로 다시 만듭니다. 원격 스냅샷이 올 때마다 그리면
+바텀 시트가 튀기 때문에 `if (!state.showForm) render()` 로 막아 뒀습니다.
+시트를 닫을 때의 `render()` 가 이미 갱신된 `state.items` 를 그대로 집어갑니다.
+**이 가드를 빼지 마세요.**
 
-**날짜는 문자열로 유지하는 걸 권합니다** — Firestore `Timestamp` 로 바꾸면
-`occursOn`(calendar.js:53) 의 반복 판정과 `parse()` 의 로컬 자정 가정이 전부
-깨지고 타임존 버그가 들어옵니다. `'YYYY-MM-DD'` 문자열은 Firestore에서도 정렬·
-범위 쿼리가 정상 동작합니다.
+### 기타
 
-**경로 제안:** `users/{uid}` (계정) + `users/{uid}/items/{itemId}` (할 일).
-지금의 계정별 분리(`todo-cal-v1:<id>`)와 1:1로 대응됩니다.
-
-### 🟡 렌더링
-
-**`render()` 는 `#app` 을 통째로 다시 만듭니다** (calendar.js:115). `onSnapshot`
-실시간 리스너를 붙이면 원격 변경마다 전체 재생성이 돌아 깜빡입니다.
-입력 필드는 uncontrolled라 타이핑 중 캐럿은 안전하지만(todo.js:224 주석),
-바텀 시트가 열려 있을 때 원격 스냅샷이 오면 화면이 튑니다. 시트가 열려 있는
-동안은 렌더를 미루는 가드를 넣으세요.
-
-### 🟡 기타
-
-- **selftest 17개가 깨집니다** — `todo.js:258` 이하가 `state.users` 와
-  localStorage를 동기로 읽고 "관리자 시딩됨"을 검사합니다. Firebase 전환 시
-  이 검사들을 분리하거나 목으로 대체해야 합니다. **검사를 그냥 지우지 마세요** —
-  반복 규칙 검사는 계속 유효합니다.
-- **구데이터 마이그레이션** — `todo-cal-v1` → 관리자 승계 로직(todo.js:26-30)은
-  Firebase가 소스가 되면 죽은 코드가 됩니다. 일회성 업로드 경로를 만들거나
-  기존 localStorage 데이터는 버려집니다.
+- **부트스트랩에 10초 타임아웃**이 있습니다. CDN이 막히거나 오프라인이면 모듈이
+  영영 안 뜨는데, 그때 로딩 화면에 사람을 가둬 두지 않으려는 장치입니다.
+- **관리자 패널 업로드 버튼**은 옛 localStorage 데이터를 1회 올립니다. 지금
+  로그인한 *이름* 과 맞는 옛 계정의 키를 찾아 올리므로, 다른 기기에서 누르면
+  그 기기의 오래된 사본이 덮어씁니다. 확인 창이 그래서 있습니다.
 - **`_ds/` 는 원본 그대로 두세요.** 수정하지 말고 `css/style.css` 에서 토큰을
   덮어쓰세요.
 - **CSS 함정:** 버튼 색을 바꿀 때 `background:` (단축)를 쓰면 `--tc-sheen`
@@ -294,8 +363,10 @@ Firebase Auth는 `onAuthStateChanged` 콜백으로 세션을 복원합니다. �
 
 | 생략 | 추가할 시점 |
 |---|---|
-| 서버 인증 / PIN 해싱 | **지금** — Firebase 연동이 곧 이 시점 |
-| PIN 변경 / 재설정 | PIN을 잊었을 때. 현재 복구 수단 **없음** |
-| 계정 삭제 / 목록 관리 | 승인 회원이 늘어 정리가 필요할 때 |
-| 로그인 시도 제한 | 서버 인증 이후 (클라이언트 제한은 우회됨) |
+| 사용자 본인의 PIN 변경 화면 | 지금은 관리자가 재설정 메일을 보내야 함 |
+| 옛 계정 소급 재동의 화면 | 약관 버전을 올려서 다시 받아야 할 때 |
+| 만 14세 미만의 법정대리인 *확인* 절차 | 지금은 본인 체크만 받음. 이용자가 늘면 보호자 연락처 확인이 필요 |
+| Auth 계정까지 자동 삭제 | Admin SDK(Cloud Function)를 띄울 때. 지금은 콘솔에서 수동 |
+| 로그인 시도 제한 | Firebase가 기본 제공하는 수준을 넘어야 할 때 |
+| 오프라인 캐시(`enableIndexedDbPersistence`) | 지하철에서 쓰겠다는 말이 나오면 |
 | 다크 모드 토글 UI | 원본 시안에 없음 → 시스템 설정 따름 |

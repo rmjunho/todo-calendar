@@ -36,7 +36,6 @@ const pad = (n) => String(n).padStart(2, '0');
 const fmt = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
 const parse = (s) => { const p = s.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); };
 const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate() + n); return fmt(d); };
-const uid = () => Math.random().toString(36).slice(2);
 
 function timeLabel(t) {
   if (!t) return '';
@@ -89,10 +88,14 @@ const state = {
   editingId: null,
   form: null,
   repeatOpen: false,
-  users: loadUsers(),
+  // Firestore 읽기는 전부 비동기다 — 여기서 계정을 동기로 채울 수 없다.
+  // firebase.js(모듈)가 인증 상태를 알려줄 때까지 booting 화면을 보여준다.
+  users: [],          // 관리자로 로그인했을 때만 채워지는 users 컬렉션 스냅샷
   user: null,
-  auth: { mode: 'login', name: '', pin: '', pin2: '', remember: false, error: '', notice: '' },
-  showAdmin: false
+  auth: blankAuth(),
+  booting: true,
+  showAdmin: false,
+  legal: null         // null | 'terms' | 'privacy' — 회원가입 화면의 약관 전문 모달
 };
 
 // ---------------------------------------------------------------- view model
@@ -122,7 +125,19 @@ function render() {
   document.documentElement.setAttribute('data-theme',
     window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 
-  if (!state.user) { document.getElementById('app').innerHTML = renderAuth(); return; }
+  // 인증 상태를 확인하기 전에 로그인 화면을 그리면 새로고침마다 한 번 번쩍인다.
+  if (state.booting) {
+    document.getElementById('app').innerHTML =
+      '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;' +
+      'font-size:15px;font-weight:600;color:var(--label-secondary)">불러오는 중…</div>';
+    return;
+  }
+  // 약관 모달은 로그인 화면 위에만 뜬다 — 여기서 return 하므로 아래 본문 렌더까지
+  // 내려가지 않는다. 그래서 renderAuth() 뒤에 바로 이어 붙인다.
+  if (!state.user) {
+    document.getElementById('app').innerHTML = renderAuth() + (state.legal ? renderLegalSheet() : '');
+    return;
+  }
 
   // -- header ---------------------------------------------------------------
   const monthLabel = state.view === 'month'

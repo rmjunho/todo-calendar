@@ -1,0 +1,81 @@
+rules_version = '2';
+
+// 배포: Firebase 콘솔 → Firestore Database → 규칙 에 붙여넣고 "게시".
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function me() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function approved() {
+      return signedIn() && me().status == 'approved';
+    }
+    function isAdmin() {
+      return signedIn() && me().status == 'approved' && me().role == 'admin';
+    }
+
+    // 로그인 전에 이름 → 이메일을 찾기 위한 색인.
+    // get 만 열고 list 는 막는다 — 안 그러면 전체 이름·이메일을 통째로 긁어간다.
+    match /usernames/{name} {
+      allow get: if true;
+      allow list: if false;
+      // 가입할 때 본인 것만 만든다. 이름 선점을 되돌리거나 남의 것을 가로챌 수 없다.
+      allow create: if signedIn()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.keys().hasOnly(['uid', 'email']);
+      allow update: if false;
+      // 계정 완전 삭제 때만. 이름 선점을 풀어 주는 통로이기도 하다.
+      allow delete: if isAdmin();
+    }
+
+    match /users/{uid} {
+      // 본인 문서 읽기는 승인 여부와 무관하게 허용한다. 승인 대기 중인 사람이
+      // 자기 status 를 확인할 방법이 이것뿐이다. 노출되는 건 자기 이름·이메일·
+      // 상태뿐이고 남의 정보는 없다.
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+
+      // 가입 직후엔 아직 pending 이라 approved 검사를 통과할 수 없다.
+      // 스스로 admin 이나 approved 를 달고 태어나지 못하게 값을 고정한다.
+      //
+      // 필수 동의는 여기서 강제한다 — 화면 검사는 콘솔에서 우회할 수 있어도
+      // 이건 못 한다. 조건이 깨지면 문서가 아예 생기지 않고, signUp() 의 catch 가
+      // 짝 없는 Auth 계정을 로그아웃시킨다.
+      //
+      // 이 조건은 create 에만 걸린다. 약관 도입 전에 가입한 계정은 agreements 가
+      // 없지만 get / update / todos 규칙은 그대로라서 로그인에 지장이 없다.
+      allow create: if signedIn()
+                    && request.auth.uid == uid
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.role == 'user'
+                    && request.resource.data.agreements.terms.agreed == true
+                    && request.resource.data.agreements.privacy.agreed == true
+                    && request.resource.data.agreements.age in ['over14', 'under14_guardian'];
+
+      // 관리자만, 그것도 status 한 필드만 바꿀 수 있다.
+      allow update: if isAdmin()
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+                    && request.resource.data.status in ['pending', 'approved', 'rejected'];
+      // 관리자만 계정을 완전히 지운다. 자기 자신은 못 지운다 — 관리자가 자기
+      // users 문서를 날리면 isAdmin() 이 거짓이 되어 스스로 잠긴다. 화면에서도
+      // 버튼을 감추지만, 콘솔로 우회하는 발등까지 여기서 막는다.
+      allow delete: if isAdmin() && request.auth.uid != uid;
+
+      // 할 일은 본인 것만, 승인된 뒤에만.
+      match /todos/{todoId} {
+        allow read, write: if signedIn() && request.auth.uid == uid && approved();
+        // 계정 삭제 때문에 관리자에게 열어 준다. 서브컬렉션은 부모를 지워도 남고,
+        // 클라이언트 SDK 는 문서 id 를 알아야 지울 수 있는데 id 조회(list)가 곧
+        // 내용 조회다 — 그래서 read 없이 delete 만 주는 방법이 없다.
+        //
+        // ponytail: 관리자가 남의 할 일을 읽을 수 있게 된다. 이걸 막으려면
+        // Admin SDK 를 쓰는 Cloud Function 으로 삭제를 옮겨야 한다. 관리자가
+        // 본인 한 명뿐인 지금은 함수를 띄울 값어치가 없다고 보고 열어 뒀다.
+        allow read, delete: if isAdmin();
+      }
+    }
+  }
+}

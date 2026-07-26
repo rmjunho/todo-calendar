@@ -2,56 +2,29 @@
 // 할 일 저장 · CRUD · 입력 시트 · 이벤트 바인딩. 마지막에 로드된다.
 
 // ---------------------------------------------------------------- persistence
-const STORE_KEY = 'todo-cal-v1';       // legacy single-user store, migrated to the admin on first run
-
-function seed(t) {
-  const today = fmt(t);
-  const first = fmt(new Date(t.getFullYear(), t.getMonth(), 1));
-  return [
-    { id: uid(), title: '팀 주간 회의', date: today, time: '10:00', pri: 'med', repeat: 'weekly', memo: '회의실 B · 안건 미리 준비', done: false, doneDates: [] },
-    { id: uid(), title: '운동', date: today, time: '19:30', pri: 'low', repeat: 'daily', memo: '', done: false, doneDates: [] },
-    { id: uid(), title: '약국 들르기', date: today, time: '', pri: 'low', repeat: 'none', memo: '', done: true, doneDates: [] },
-    { id: uid(), title: '장보기', date: addDays(today, 1), time: '', pri: 'low', repeat: 'none', memo: '우유 · 달걀 · 시금치', done: false, doneDates: [] },
-    { id: uid(), title: '프로젝트 제안서 마감', date: addDays(today, 3), time: '18:00', pri: 'high', repeat: 'none', memo: '최종 검토 후 제출', done: false, doneDates: [] },
-    { id: uid(), title: '월세 이체', date: first, time: '', pri: 'high', repeat: 'monthly', memo: '', done: false, doneDates: [] }
-  ];
-}
-// Each account gets its own task list — this is a personal calendar, not a shared one.
-const itemsKey = (user) => STORE_KEY + ':' + user.id;
-
-function load(user) {
-  let items = null;
-  try { items = JSON.parse(localStorage.getItem(itemsKey(user))); } catch (e) {}
-  if (!Array.isArray(items)) {
-    // First login: the admin inherits any tasks saved before accounts existed,
-    // falling back to the sample set. New members start with an empty calendar.
-    if (user.role === 'admin') {
-      try { items = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) {}
-      if (!Array.isArray(items)) items = seed(new Date());
-    } else {
-      items = [];
-    }
-    save(user, items);
-  }
-  return items;
-}
-function save(user, items) {
-  try { localStorage.setItem(itemsKey(user), JSON.stringify(items)); } catch (e) {}
-}
-
+// 할 일은 users/{uid}/todos/{id} 에 산다. 목록은 firebase.js 의 onSnapshot 이
+// state.items 로 흘려 넣는다 — 여기서는 쓰기만 한다.
 const blankForm = (date) => ({ title: '', date, hasTime: false, time: '09:00', pri: 'none', repeat: 'none', memo: '' });
 
-function persist(items) { state.items = items; save(state.user, items); render(); }
+// 낙관적 업데이트: 화면을 먼저 바꾸고 Firestore 에 쓴다. 실패하면 알리고,
+// 스냅샷이 서버 값으로 되돌려 놓는다. 예전 save() 처럼 조용히 삼키지 않는다 —
+// localStorage 에서는 용량 초과였지만 여기서는 데이터 소실이다.
+function commit(items, write) {
+  state.items = items;
+  render();
+  write().catch((e) => fb.fail('저장에 실패했습니다', e));
+}
 
 function toggleDone(id, ds) {
-  persist(state.items.map((it) => {
-    if (it.id !== id) return it;
-    if (it.repeat && it.repeat !== 'none') {
-      const dd = it.doneDates || [];
-      return Object.assign({}, it, { doneDates: dd.includes(ds) ? dd.filter((x) => x !== ds) : dd.concat(ds) });
-    }
-    return Object.assign({}, it, { done: !it.done });
-  }));
+  const it = state.items.find((x) => x.id === id);
+  if (!it) return;
+  const repeating = !!it.repeat && it.repeat !== 'none';
+  const dd = it.doneDates || [];
+  const on = repeating ? !dd.includes(ds) : !it.done;
+  const next = repeating
+    ? Object.assign({}, it, { doneDates: on ? dd.concat(ds) : dd.filter((x) => x !== ds) })
+    : Object.assign({}, it, { done: on });
+  commit(state.items.map((x) => (x.id === id ? next : x)), () => fb.setToggle(id, ds, repeating, on));
 }
 
 // ---------------------------------------------------------------- form sheet
@@ -151,14 +124,21 @@ function saveForm() {
   if (!f.title.trim()) return;
   const base = { title: f.title.trim(), date: f.date, time: f.hasTime ? f.time : '',
     pri: f.pri, repeat: f.repeat, memo: (f.memo || '').trim() };
-  const items = state.editingId
-    ? state.items.map((it) => (it.id === state.editingId ? Object.assign({}, it, base) : it))
-    : state.items.concat(Object.assign({ id: uid() }, base, { done: false, doneDates: [] }));
+  // 새 항목의 id 는 Firestore 가 만든다 — 기기 간 충돌이 없고, 쓰기를 기다리지
+  // 않고도 화면에 먼저 넣을 수 있다.
+  const editing = !!state.editingId;
+  const id = state.editingId || fb.newId();
+  const fresh = Object.assign({ id }, base, { done: false, doneDates: [] });
+  const items = editing
+    ? state.items.map((it) => (it.id === id ? Object.assign({}, it, base) : it))
+    : state.items.concat(fresh);
   state.selected = f.date;
   state.showForm = false;
   state.editingId = null;
   state.form = null;
-  persist(items);
+  commit(items, () => fb.saveTodo(id, editing ? base
+    : { title: fresh.title, date: fresh.date, time: fresh.time, pri: fresh.pri,
+        repeat: fresh.repeat, memo: fresh.memo, done: false, doneDates: [] }));
 }
 
 app.addEventListener('click', (e) => {
@@ -171,8 +151,27 @@ app.addEventListener('click', (e) => {
     state.auth.pin = state.auth.pin2 = state.auth.error = state.auth.notice = '';
     return render();
   }
+  // 약관 전문 보기. data-agree 보다 먼저 본다 — 체크 행 바로 옆에 있는 버튼이다.
+  if ((el = hit('[data-legal]'))) { state.legal = el.dataset.legal; return render(); }
+  if ((el = hit('[data-agree]'))) {
+    const g = state.auth.agree, k = el.dataset.agree;
+    if (k === 'all') {
+      // 선택 항목(marketing)까지 포함해 전부 켜고, 다시 누르면 전부 끈다.
+      const on = !(g.terms && g.privacy && g.age && g.marketing);
+      g.terms = g.privacy = g.marketing = on;
+      g.age = on ? 'over14' : '';
+    } else if (k === 'age') {
+      // 배타 선택: 같은 걸 다시 누르면 해제, 다른 걸 누르면 교체된다.
+      g.age = g.age === el.dataset.val ? '' : el.dataset.val;
+    } else {
+      g[k] = !g[k];
+    }
+    return render();
+  }
   if ((el = hit('[data-approve]'))) return decide(el.dataset.approve, 'approved');
   if ((el = hit('[data-reject]'))) return decide(el.dataset.reject, 'rejected');
+  if ((el = hit('[data-resetpin]'))) return resetPin(el.dataset.resetpin);
+  if ((el = hit('[data-delacct]'))) return removeAccount(el.dataset.delacct);
   if ((el = hit('[data-view]'))) { state.view = el.dataset.view; return render(); }
   if ((el = hit('[data-nav]'))) {
     const dir = el.dataset.nav;
@@ -205,14 +204,20 @@ app.addEventListener('click', (e) => {
       case 'signup': return signup();
       case 'logout': return logout();
       case 'toggleRemember': state.auth.remember = !state.auth.remember; return render();
+      case 'closeLegal': state.legal = null; return render();
       case 'admin': state.showAdmin = true; return render();
       case 'closeAdmin': state.showAdmin = false; return render();
+      case 'migrate': return migrateLocal();
       case 'open': return openForm(null);
       case 'close': return closeForm();
       case 'save': return saveForm();
-      case 'delete':
+      case 'delete': {
+        const id = state.editingId;
         state.showForm = false;
-        return persist(state.items.filter((it) => it.id !== state.editingId));
+        state.editingId = null;
+        state.form = null;
+        return commit(state.items.filter((it) => it.id !== id), () => fb.removeTodo(id));
+      }
       case 'toggleTime': state.form.hasTime = !state.form.hasTime; return render();
       case 'repeatToggle': state.repeatOpen = !state.repeatOpen; return render();
     }
@@ -237,6 +242,8 @@ app.addEventListener('input', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
+    // 약관 모달이 제일 위에 뜬다 — 먼저 닫는다.
+    if (state.legal) { state.legal = null; return render(); }
     if (state.showForm) return closeForm();
     if (state.showAdmin) { state.showAdmin = false; return render(); }
   }
@@ -249,8 +256,15 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', ren
 // The "now" indicator tracks a real clock, so refresh the day view each minute.
 setInterval(() => { if (state.view === 'day' && !state.showForm) render(); }, 60000);
 
-restoreSession();
+// 세션 복원은 firebase.js 의 onAuthStateChanged 가 한다. 여기서는 로딩 화면만
+// 띄우고, 모듈이 끝내 오지 않으면(오프라인·CDN 차단) 사용자를 붙잡아 두지 않는다.
 render();
+setTimeout(() => {
+  if (!state.booting) return;
+  state.booting = false;
+  state.auth.error = '서버에 연결하지 못했습니다. 네트워크를 확인하고 새로고침해 주세요.';
+  render();
+}, 10000);
 
 // ---------------------------------------------------------------- self-check
 // Run with ?selftest in the URL. Covers recurrence + per-date completion +
@@ -277,16 +291,29 @@ if (location.search.includes('selftest')) {
     'completed items are filtered out when hidden');
 
   // --- accounts ---
-  ok(validPin('4943') && validPin('12345678'), 'PINs of 4 to 8 digits are accepted');
-  ok(!validPin('123') && !validPin('123456789'), 'PINs outside 4-8 digits are rejected');
-  ok(!validPin('12a4') && !validPin('') && !validPin(null), 'non-numeric and empty PINs are rejected');
+  // 계정은 이제 Firebase 가 들고 있다. 여기서 검사할 수 있는 건 서버에 보내기
+  // 전의 입력 규칙뿐 — PIN은 Firebase Auth 비밀번호라 6자리여야 한다.
+  ok(validPin('123456'), 'a 6-digit PIN is accepted');
+  ok(!validPin('4943') && !validPin('1234567'), 'PINs shorter or longer than 6 digits are rejected');
+  ok(!validPin('12a456') && !validPin('') && !validPin(null), 'non-numeric and empty PINs are rejected');
+  ok(validEmail('a@b.co') && !validEmail('a@b') && !validEmail(''), 'signup requires a real email address');
+  ok(normName('  이준호  ') === '이준호', 'the name is trimmed before it is used as a key');
 
-  const admin = state.users.find((u) => u.role === 'admin');
-  ok(admin && admin.name === '이준호' && admin.pin === '4943' && admin.status === 'approved',
-    'the admin account is seeded and pre-approved');
-  ok(findUser(state.users, '  이준호  '), 'lookup trims surrounding whitespace in the name');
-  ok(!findUser(state.users, '이준'), 'lookup does not match a partial name');
-  ok(itemsKey({ id: 'a1' }) !== itemsKey({ id: 'a2' }), 'each account stores tasks under its own key');
+  // --- 약관 동의 ---
+  // 여기가 뚫리면 동의 없이 가입 신청이 나간다. 서버(firestore.rules)가 한 번 더
+  // 막지만, 그때는 Auth 계정만 만들어졌다 지워지는 낭비가 생긴다.
+  const ag = (o) => Object.assign(blankAuth().agree, o);
+  ok(agreeMissing(ag({ terms: true, privacy: true, age: 'over14' })) === '', 'all required consents pass');
+  ok(agreeMissing(ag({ terms: true, privacy: true, age: 'under14_guardian' })) === '',
+    'under-14 with guardian consent passes');
+  ok(agreeMissing(ag({ privacy: true, age: 'over14' })), 'missing terms consent is rejected');
+  ok(agreeMissing(ag({ terms: true, age: 'over14' })), 'missing privacy consent is rejected');
+  ok(agreeMissing(ag({ terms: true, privacy: true })), 'missing age confirmation is rejected');
+  ok(agreeMissing(ag({ terms: true, privacy: true, age: 'yes' })), 'an unknown age value is rejected');
+  ok(agreeMissing(blankAuth().agree), 'a fresh signup form has nothing agreed yet');
+  // marketing 은 선택이다 — 꺼져 있어도 통과해야 한다.
+  ok(agreeMissing(ag({ terms: true, privacy: true, age: 'over14', marketing: false })) === '',
+    'the optional marketing consent never blocks signup');
 
   console.log('selftest: all checks passed');
 }

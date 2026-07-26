@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="할 일 캘린더 개인정보 처리방침">
+<title>개인정보 처리방침 · 할 일 캘린더</title>
+<!-- index.html 과 같은 3개. _ds/styles.css 는 @import 매니페스트라 http(s) 로만
+     동작한다 — 파일을 더블클릭하면 색이 전부 빠진다. -->
+<link rel="stylesheet" href="_ds/ios-26-design-system-75cbb073-9cda-487c-ac9b-579bedbd0f5a/styles.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<main style="max-width:720px;margin:0 auto;padding:36px 18px 80px">
+  <a href="index.html" style="font-size:13px;font-weight:600">← 할 일 캘린더</a>
+  <h1 id="docTitle" style="margin:12px 0 22px;font-size:28px;font-weight:700;letter-spacing:.2px"></h1>
+  <article id="doc" class="legal card" style="padding:24px 22px"></article>
+  <p style="margin-top:22px;font-size:13px;color:var(--label-tertiary)">
+    <a href="terms.html">이용약관</a> 도 함께 확인해 주세요.</p>
+</main>
+
+<script src="js/legal.js"></script>
+<script>
+  // 단독 페이지에는 render() 가 없다 — 테마 토큰을 직접 물린다.
+  document.documentElement.setAttribute('data-theme',
+    matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  // 본문은 js/legal.js 한 곳에서 온다. 회원가입 모달이 쓰는 문자열과 같은 값이다.
+  document.getElementById('docTitle').textContent = LEGAL.privacy.title;
+  document.getElementById('doc').innerHTML = LEGAL.privacy.body;
+</script>
+</body>
+</html>
