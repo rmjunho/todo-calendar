@@ -95,7 +95,9 @@ const state = {
   auth: blankAuth(),
   booting: true,
   showAdmin: false,
-  legal: null         // null | 'terms' | 'privacy' — 회원가입 화면의 약관 전문 모달
+  legal: null,        // null | 'terms' | 'privacy' — 회원가입 화면의 약관 전문 모달
+  showSettings: false,
+  del: null           // 탈퇴 확인 { pin, error, busy }. null 이면 확인 단계 전
 };
 
 // ---------------------------------------------------------------- view model
@@ -160,6 +162,7 @@ function render() {
       (pending ? '<span style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;' +
         'padding:0 5px;margin-left:2px;border-radius:999px;background:#FF3B30;color:#fff;font-size:11px;font-weight:700">' +
         pending + '</span>' : '') + '</button>' : '') +
+    '<button class="btn btn-gray btn-sm" data-act="settings">설정</button>' +
     '<button class="btn btn-gray btn-sm" data-act="logout">로그아웃</button></div>';
 
   let html = '<div style="max-width:1024px;margin:0 auto;padding:28px 16px 130px">' + accountBar +
@@ -348,6 +351,7 @@ function render() {
   // -- form sheet -----------------------------------------------------------
   if (state.showForm) html += renderSheet();
   if (state.showAdmin && isAdmin) html += renderAdminSheet();
+  if (state.showSettings) html += renderSettingsSheet();
 
   document.getElementById('app').innerHTML = html;
 }

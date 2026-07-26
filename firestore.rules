@@ -7,14 +7,25 @@ service cloud.firestore {
     function signedIn() {
       return request.auth != null;
     }
+    // 내 계정 문서 경로. exists() 와 get() 이 반드시 같은 경로를 보도록 한 곳에 둔다.
+    function myDoc() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+    // ⚠️ get() 은 문서가 없으면 null 을 돌려주고, 거기서 .data 를 읽으면 규칙 평가가
+    // 오류로 끝난다 — false 가 아니라 오류라서 || 의 오른쪽으로 넘어가지도 않는다.
+    // 탈퇴처럼 내 계정 문서가 사라지는 흐름에서 이 차이가 드러나므로, me() 를 쓰는
+    // 함수는 전부 hasProfile() 로 존재를 먼저 확인한다.
+    function hasProfile() {
+      return signedIn() && exists(myDoc());
+    }
     function me() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return get(myDoc()).data;
     }
     function approved() {
-      return signedIn() && me().status == 'approved';
+      return hasProfile() && me().status == 'approved';
     }
     function isAdmin() {
-      return signedIn() && me().status == 'approved' && me().role == 'admin';
+      return hasProfile() && me().status == 'approved' && me().role == 'admin';
     }
 
     // 로그인 전에 이름 → 이메일을 찾기 위한 색인.
@@ -27,8 +38,12 @@ service cloud.firestore {
                     && request.resource.data.uid == request.auth.uid
                     && request.resource.data.keys().hasOnly(['uid', 'email']);
       allow update: if false;
-      // 계정 완전 삭제 때만. 이름 선점을 풀어 주는 통로이기도 하다.
-      allow delete: if isAdmin();
+      // 계정 삭제 때만. 이름 선점을 풀어 주는 통로이기도 하다.
+      //
+      // 본인 검사를 왼쪽에 둔다. || 는 왼쪽부터 평가하는데, 이쪽은 문서를 더 읽지
+      // 않고 resource 만 보므로 본인 탈퇴가 isAdmin() 을 아예 거치지 않는다.
+      // 내 users 문서가 이미 없는 고아 정리 상황에서도 이 경로는 살아 있다.
+      allow delete: if resource.data.uid == request.auth.uid || isAdmin();
     }
 
     match /users/{uid} {
@@ -62,7 +77,13 @@ service cloud.firestore {
       // 관리자만 계정을 완전히 지운다. 자기 자신은 못 지운다 — 관리자가 자기
       // users 문서를 날리면 isAdmin() 이 거짓이 되어 스스로 잠긴다. 화면에서도
       // 버튼을 감추지만, 콘솔로 우회하는 발등까지 여기서 막는다.
-      allow delete: if isAdmin() && request.auth.uid != uid;
+      // 남을 지우는 건 관리자만. 본인 탈퇴는 관리자가 아닐 때만.
+      //
+      // 관리자가 자기 문서를 지우면 isAdmin() 이 거짓이 되어 남은 회원을 아무도
+      // 관리하지 못하는 상태로 잠긴다. 화면에서도 버튼을 감추지만 진짜 방어선은
+      // 여기다 — 관리자를 넘기려면 콘솔에서 다른 계정의 role 을 먼저 올릴 것.
+      allow delete: if (request.auth.uid == uid && hasProfile() && me().role != 'admin')
+                    || (isAdmin() && request.auth.uid != uid);
 
       // 할 일은 본인 것만, 승인된 뒤에만.
       match /todos/{todoId} {

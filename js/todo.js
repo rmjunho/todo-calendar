@@ -207,6 +207,12 @@ app.addEventListener('click', (e) => {
       case 'closeLegal': state.legal = null; return render();
       case 'admin': state.showAdmin = true; return render();
       case 'closeAdmin': state.showAdmin = false; return render();
+      case 'settings': state.showSettings = true; state.del = null; return render();
+      case 'closeSettings': state.showSettings = false; state.del = null; return render();
+      // 탈퇴는 두 단계다 — 버튼 한 번으로는 절대 지워지지 않는다.
+      case 'askDelete': state.del = { pin: '', error: '', busy: false }; return render();
+      case 'cancelDelete': state.del = null; return render();
+      case 'confirmDelete': return removeSelf();
       case 'migrate': return migrateLocal();
       case 'open': return openForm(null);
       case 'close': return closeForm();
@@ -231,6 +237,9 @@ app.addEventListener('click', (e) => {
 app.addEventListener('input', (e) => {
   const auth = e.target.closest('[data-a]');
   if (auth) { state.auth[auth.dataset.a] = auth.value; return; }
+  // 탈퇴 확인 PIN. state.auth 와 섞지 않는다 — 로그인 폼과 수명이 다르다.
+  const del = e.target.closest('[data-d]');
+  if (del) { if (state.del) state.del[del.dataset.d] = del.value; return; }
   const el = e.target.closest('[data-f]');
   if (!el || !state.form) return;
   state.form[el.dataset.f] = el.value;
@@ -246,6 +255,10 @@ document.addEventListener('keydown', (e) => {
     if (state.legal) { state.legal = null; return render(); }
     if (state.showForm) return closeForm();
     if (state.showAdmin) { state.showAdmin = false; return render(); }
+    // 삭제 중에는 Esc 로 닫지 않는다 — 진행 중인 요청을 취소하지 못한다.
+    if (state.showSettings && !(state.del && state.del.busy)) {
+      state.showSettings = false; state.del = null; return render();
+    }
   }
   // Enter submits the login / signup form.
   if (e.key === 'Enter' && !state.user && e.target.closest('[data-a]')) {
@@ -314,6 +327,13 @@ if (location.search.includes('selftest')) {
   // marketing 은 선택이다 — 꺼져 있어도 통과해야 한다.
   ok(agreeMissing(ag({ terms: true, privacy: true, age: 'over14', marketing: false })) === '',
     'the optional marketing consent never blocks signup');
+
+  // --- 탈퇴 ---
+  // 관리자가 스스로 지우면 서비스가 관리자 없이 잠긴다. 보안 규칙에도 같은
+  // 조건이 있지만, 화면에서 버튼을 감추는 판정도 여기서 지킨다.
+  ok(!canDeleteSelf({ role: 'admin' }), 'an admin cannot delete their own account');
+  ok(canDeleteSelf({ role: 'user' }), 'a normal user can delete their own account');
+  ok(!canDeleteSelf(null), 'no session means there is nothing to delete');
 
   console.log('selftest: all checks passed');
 }

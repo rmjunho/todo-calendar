@@ -39,7 +39,7 @@ cd C:\Users\LENOVO\dev\todo-calendar && python -m http.server 5500
 버전입니다.
 
 자체 검사: <http://localhost:5500/index.html?selftest> → 콘솔에
-`selftest: all checks passed` (검사 23개).
+`selftest: all checks passed` (검사 26개).
 
 **관리자 계정:** 자동 생성되지 않습니다. 일반 회원가입을 한 뒤 Firebase 콘솔에서
 `users/{uid}` 문서의 `role` 을 `admin`, `status` 를 `approved` 로 직접 고치세요.
@@ -71,6 +71,7 @@ dev\todo-calendar\
 ├── js\legal.js                    약관 본문·버전 상수. 모달과 아래 두 페이지가 같이 읽음
 ├── terms.html                     이용약관 단독 페이지 (스토어 제출용 URL)
 ├── privacy.html                   개인정보 처리방침 단독 페이지
+├── delete-account.html            계정 삭제 요청 안내. ★ 본문이 정적 HTML (아래 참고)
 ├── firestore.rules                보안 규칙. 콘솔에 붙여넣어 게시할 것
 ├── _ds\ios-26-design-system-…\   디자인 토큰 (건드리지 말 것, 원본)
 │   ├── styles.css          724B   @import 4줄 매니페스트 ← file:// 에서 깨지는 원인
@@ -133,6 +134,9 @@ firebase.js                                        (ESM 모듈)
 | **`agreeMissing`** | **필수 동의 검사.** 미충족 항목의 안내 문구를 돌려준다 |
 | `renderAgree` / `renderLegalSheet` | 동의 체크 UI · 약관 전문 모달 (본문은 `LEGAL`) |
 | `ageBadge` | 관리자 패널의 나이 배지. `agreements` 가 없으면 "약관 미동의" |
+| **`canDeleteSelf`** | **관리자는 스스로 탈퇴 불가.** 버튼 표시와 실행 양쪽에서 본다 |
+| `removeSelf` / `renderSettingsSheet` | 본인 탈퇴(PIN 재입력) · 설정 시트 |
+| `removeAccount` | 관리자가 남의 계정을 지운다 (Auth 계정은 콘솔에서 수동) |
 | `renderAuth` / `renderAdminSheet` | 로그인 화면 · 회원 관리 바텀시트 |
 
 ### js\firebase.js — 서버 (이 파일만 ESM)
@@ -264,7 +268,9 @@ firebase.js                                        (ESM 모듈)
   auth: blankAuth(),   // mode, name, email, pin, pin2, remember, error, notice, busy
   booting: true,       // firebase.js 가 인증 상태를 알려줄 때까지 로딩 화면
   showAdmin,
-  legal: null          // null | 'terms' | 'privacy'. 로그인 화면 위의 약관 모달
+  legal: null,         // null | 'terms' | 'privacy'. 로그인 화면 위의 약관 모달
+  showSettings,        // 설정 시트
+  del: null            // 탈퇴 확인 { pin, error, busy }. PIN은 여기 잠깐 있다 사라진다
 }
 ```
 
@@ -337,6 +343,41 @@ PIN  ─────────────────────────
 **Auth 계정은 지워지지 않습니다.** 남의 Auth 계정 삭제는 Admin SDK 가 있어야 합니다.
 삭제 후 안내창이 콘솔에서 지우라고 알려 주며, 지우지 않아도 `users` 문서가 없어서
 로그인은 막힙니다(`onAuthStateChanged` 가 "계정 정보를 찾을 수 없습니다"로 자릅니다).
+
+### 본인 탈퇴 — 순서가 곧 안전장치입니다
+
+설정 시트의 **계정 삭제**는 관리자 삭제와 달리 **Auth 계정까지 완전히 사라집니다.**
+본인 계정은 `deleteUser()` 로 클라이언트에서 지울 수 있어서 Cloud Function 이
+필요 없습니다. `fb.deleteSelf(pin)` 이 이 순서로 움직입니다:
+
+```
+PIN 재인증 → todos 삭제 → users + usernames 삭제 → Auth 계정 삭제
+```
+
+- **PIN 재입력은 두 가지 일을 동시에 합니다.** 실수 방지 확인이자 Auth 재인증입니다.
+  Auth 는 계정 삭제 같은 민감한 작업에 최근 로그인을 요구해서(`requires-recent-login`),
+  오래 켜 둔 세션은 재인증 없이 삭제가 거부됩니다. 확인 절차를 그 자리에 물렸습니다.
+- **Auth 를 마지막에 지우는 게 핵심입니다.** 먼저 지우면 그 순간 권한을 잃어서
+  Firestore 데이터가 주인 없이 남습니다 — 아무도 읽지도 지우지도 못하는 쓰레기가
+  됩니다. 순서를 바꾸지 마세요.
+- 삭제는 **두 단계**입니다. `askDelete` 로 확인 화면을 열고 `confirmDelete` 로
+  실행합니다. 버튼 한 번에 지워지지 않습니다. 진행 중(`del.busy`)에는 Esc 로도
+  닫히지 않습니다.
+- **관리자는 스스로 탈퇴할 수 없습니다.** 자기 `users` 문서를 지우면 `isAdmin()` 이
+  거짓이 되어 남은 회원을 아무도 관리하지 못합니다. 화면(`canDeleteSelf`)과
+  보안 규칙 양쪽에서 막습니다. 관리자를 넘기려면 콘솔에서 다른 계정의 `role` 을
+  먼저 올리세요.
+
+`usernames` 의 `delete` 는 문서 안의 `uid` 로 주인을 확인합니다
+(`resource.data.uid == request.auth.uid`). 이름 선점이 탈퇴와 함께 풀립니다.
+
+### 약관 페이지 셋 중 하나만 정적입니다
+
+`terms.html` 과 `privacy.html` 은 본문을 `LEGAL`(js\legal.js)에서 주입하므로
+**JS 를 실행하지 않는 크롤러에게는 빈 페이지**입니다(확인함). 반면
+`delete-account.html` 은 본문을 HTML 에 직접 적었습니다 — 스토어 심사가 그냥 받아
+읽는 URL 이고, 앱을 지운 사람이 보는 마지막 창구라 JS 에 기대면 안 되기 때문입니다.
+앞의 둘도 정적으로 바꿔야 한다면 `legal.js` 를 빌드 소스로 두고 두 페이지를 생성하세요.
 
 `users` 의 `update` 는 **관리자가, `status` 한 필드만** 바꿀 수 있습니다.
 `create` 는 `status:'pending'` + `role:'user'` 로 값을 고정해서 스스로 관리자를
@@ -424,24 +465,18 @@ Firestore → 규칙에 [`firestore.rules`](firestore.rules) 를 통째로 붙�
 자동 검사에 걸리면 본문을 HTML 에 정적으로 박아야 합니다. 그때는 본문이 세 군데로
 갈라지므로, `legal.js` 를 빌드 소스로 두고 두 페이지를 생성하는 쪽이 낫습니다.
 
-### 3. 회원 본인 탈퇴 — 반나절 · **스토어 출시의 하드 블로커**
+### ~~3. 회원 본인 탈퇴~~ — 2026-07-26 완료
 
-지금은 **관리자만** 계정을 지울 수 있습니다. 그런데 App Store 심사 지침 5.1.1(v) 와
-Google Play 정책은 **계정을 만드는 앱이라면 앱 안에서 본인이 계정을 삭제할 수 있어야
-한다**고 요구합니다. 4·5번보다 먼저 해야 하는 이유가 이것입니다.
+설정 시트의 **계정 삭제**로 Firestore 데이터와 Auth 계정이 모두 지워집니다.
+안내 페이지 `delete-account.html` 도 함께 만들었습니다. 자세한 건
+[§4 본인 탈퇴](#본인-탈퇴--순서가-곧-안전장치입니다).
 
-이미 있는 것으로 대부분 해결됩니다:
+**단, 실제 삭제를 끝까지 돌려 보지 못했습니다.** 화면·판정·PIN 검증까지는 확인했지만
+Firestore/Auth 를 실제로 지우는 경로는 실행 검증이 안 된 상태입니다. 1번(규칙 게시)을
+마친 뒤 버릴 계정으로 한 번 해보세요. 할 일이 몇 개 있는 계정으로 하면 todos 배치
+삭제까지 함께 확인됩니다.
 
-- `fb.deleteAccount(uid, name)` 를 그대로 재사용합니다.
-- 규칙에 본인 삭제를 열어 줍니다 — `users` / `usernames` / `todos` 의 `delete` 에
-  `request.auth.uid == uid` 를 더하면 됩니다.
-- **Auth 계정까지 완전히 지워집니다.** 본인 계정은 `deleteUser(auth.currentUser)` 로
-  클라이언트에서 지울 수 있어서, 관리자 삭제와 달리 Cloud Function 이 필요 없습니다.
-  순서는 Firestore 먼저, Auth 마지막 — 반대로 하면 권한을 잃고 데이터가 남습니다.
-- 화면은 로그인 후 어딘가에 "탈퇴" 버튼 하나. 확인창 문구는 `removeAccount` 것을
-  그대로 쓰면 됩니다.
-
-### 4. PWA — 1~2일
+### 3. PWA — 1~2일
 
 스토어에 올리는 수단입니다. `manifest.json`(이름·아이콘·`display:standalone`·테마색),
 아이콘 세트(192/512 최소), 서비스 워커.
@@ -454,13 +489,14 @@ Google Play 정책은 **계정을 만드는 앱이라면 앱 안에서 본인이
 - 오프라인 캐시(`enableIndexedDbPersistence`)를 이때 같이 켤지 정하세요.
   [§5](#5-의도적으로-안-만든-것) 에서 미뤄 둔 항목입니다.
 
-### 5. 스토어 출시 — 마지막
+### 4. 스토어 출시 — 마지막
 
 - **Google Play:** PWABuilder 또는 TWA 로 패키징. 개인정보 처리방침 URL(2번 완료
   전제)과 "데이터 안전" 섹션이 필요하며, **거기 적는 수집 항목이
   `privacy.html` 과 일치해야 합니다.** 어긋나면 반려됩니다.
-- **App Store:** PWA 를 직접 올릴 수 없습니다. Capacitor 등으로 감싸야 하고,
-  3번(본인 탈퇴)이 없으면 5.1.1(v) 로 반려됩니다.
+- **App Store:** PWA 를 직접 올릴 수 없습니다. Capacitor 등으로 감싸야 합니다.
+  앱 내 계정 삭제(5.1.1(v))는 갖췄고, 심사 노트에 `delete-account.html` 주소를
+  적어 두면 심사자가 바로 확인합니다.
 - ⚠️ **만 14세 미만 가입을 허용해 두었으므로** 두 스토어 모두 아동 대상 정책
   (Play 의 Families, Apple 의 Kids) 심사가 더 까다로워집니다. 연령 등급을 어떻게
   신고할지, 아니면 아예 만 14세 이상만 받을지를 출시 전에 정하세요. 후자로 바꾸면

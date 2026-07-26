@@ -7,7 +7,8 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js';
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
-  signOut, sendPasswordResetEmail, setPersistence, browserLocalPersistence, browserSessionPersistence
+  signOut, sendPasswordResetEmail, setPersistence, browserLocalPersistence, browserSessionPersistence,
+  deleteUser, reauthenticateWithCredential, EmailAuthProvider
 } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js';
 import {
   getFirestore, doc, collection, getDoc, getDocs, setDoc, deleteDoc, updateDoc, writeBatch,
@@ -186,9 +187,18 @@ async function deleteAccount(uid, name) {
   }
   // 계정 문서는 맨 마지막에 지운다. 중간에 끊겨도 목록에 남아 있어서 다시
   // 누르면 이어서 정리된다 — 먼저 지우면 흔적 없는 고아 데이터가 된다.
+  //
+  // usernames 를 users 보다 앞에 적는다. 배치 안에서는 규칙이 커밋 전 상태로
+  // 평가되므로 이 순서가 결과를 바꾸지는 않지만, 규칙이 참조하는 문서(users)를
+  // 나중에 지우는 형태로 읽히는 편이 안전하다. 진짜 방어는 규칙 쪽의 exists()
+  // 검사와 usernames delete 의 본인-우선 조건이다.
+  //
+  // 둘을 한 배치로 묶는 건 의도적이다. 쪼개서 usernames 만 지워지고 끊기면 계정은
+  // 살아 있는데 이름 색인이 없어져 본인이 로그인조차 못 하고(signIn 이
+  // usernames/{name} 을 먼저 찾는다) 그 이름을 남이 선점할 수 있다.
   const last = writeBatch(db);
-  last.delete(doc(db, 'users', uid));
   if (name) last.delete(doc(db, 'usernames', name));
+  last.delete(doc(db, 'users', uid));
   await last.commit();
   return todos.docs.length;
 }
@@ -218,9 +228,29 @@ async function uploadLocal(name) {
   return items.length;
 }
 
+// 본인 탈퇴. 관리자 삭제와 달리 Auth 계정까지 완전히 사라진다 — 본인 계정은
+// deleteUser 로 클라이언트에서 지울 수 있어서 Cloud Function 이 필요 없다.
+async function deleteSelf(pin) {
+  const u = auth.currentUser;
+  if (!u) throw new Error('로그인이 필요합니다.');
+  // Auth 는 계정 삭제 같은 민감한 작업에 최근 인증을 요구한다(requires-recent-login).
+  // PIN 재입력을 여기에 물려서 실수 방지 확인과 재인증을 한 번에 끝낸다.
+  try {
+    await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, pin));
+  } catch (e) {
+    throw new Error('PIN이 올바르지 않습니다.');
+  }
+  // Firestore 를 먼저 지운다. Auth 를 먼저 지우면 그 순간 권한을 잃어서 데이터가
+  // 주인 없이 남는다 — 아무도 읽지도 지우지도 못하는 쓰레기가 된다.
+  const n = await deleteAccount(u.uid, state.user && state.user.name);
+  await deleteUser(u);
+  // onAuthStateChanged 가 로그아웃 화면으로 넘긴다.
+  return n;
+}
+
 // 클래식 스크립트 3개가 쓸 수 있게 전역으로 내보낸다.
 window.fb = {
   signIn, signUp, signOutNow: () => signOut(auth),
   newId, saveTodo, removeTodo, setToggle,
-  setStatus, resetPin, deleteAccount, uploadLocal, fail
+  setStatus, resetPin, deleteAccount, deleteSelf, uploadLocal, fail
 };

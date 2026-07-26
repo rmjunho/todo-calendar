@@ -87,6 +87,33 @@ function resetPin(uid) {
     .catch((e) => fb.fail('메일 발송에 실패했습니다', e));
 }
 
+// 관리자는 스스로 탈퇴할 수 없다. 자기 users 문서를 지우면 isAdmin() 이 거짓이
+// 되어 남은 회원을 아무도 관리하지 못하는 상태로 서비스가 잠긴다.
+// 보안 규칙에도 같은 조건이 들어 있다 — 화면만 믿지 않는다.
+const canDeleteSelf = (u) => !!u && u.role !== 'admin';
+
+// 본인 탈퇴. PIN 재입력이 실수 방지 확인이자 Auth 재인증을 겸한다.
+function removeSelf() {
+  const d = state.del;
+  if (!d || d.busy || !canDeleteSelf(state.user)) return;
+  if (!validPin(d.pin)) { d.error = 'PIN은 숫자 6자리입니다.'; return render(); }
+  d.busy = true; d.error = ''; render();
+  fb.deleteSelf(d.pin)
+    .then((n) => {
+      // 여기 오면 계정이 이미 없다. onAuthStateChanged 가 로그인 화면을 그리는데
+      // applyLoggedOut 은 state.auth 를 건드리지 않으므로 안내 문구가 남는다.
+      state.del = null;
+      state.showSettings = false;
+      state.auth.notice = '계정과 할 일 ' + n + '개를 모두 삭제했습니다. 그동안 감사했습니다.';
+      render();
+    })
+    .catch((e) => {
+      d.busy = false;
+      d.error = e.message || '삭제에 실패했습니다.';
+      render();
+    });
+}
+
 // 계정 완전 삭제. 버튼은 본인에게 안 보이지만 여기서 한 번 더 막는다 —
 // 관리자가 자기 users 문서를 지우면 스스로 로그인 불능이 된다.
 function removeAccount(uid) {
@@ -253,6 +280,65 @@ function renderAuth() {
         (isLogin ? '' : '<div style="margin-top:12px;font-size:12px;line-height:1.5;color:var(--label-tertiary);text-align:center">' +
           '관리자가 신청을 수락하면 로그인할 수 있습니다.</div>') +
       '</div></div></div>';
+}
+
+// ---------------------------------------------------------------- 설정 시트
+// 계정 정보 + 위험 구역(탈퇴). 관리자에게는 탈퇴 자리에 안내만 보여 준다.
+function renderSettingsSheet() {
+  const u = state.user, d = state.del;
+  const row = (k, v) => '<div style="display:flex;justify-content:space-between;gap:12px;padding:11px 4px;' +
+    'border-top:.5px solid var(--separator)">' +
+    '<span style="font-size:14px;color:var(--label-secondary)">' + k + '</span>' +
+    '<span class="trunc" style="font-size:14px;font-weight:600">' + esc(v) + '</span></div>';
+
+  // 탈퇴 확인: PIN 을 다시 받는다. 실수로 누른 사람은 여기서 멈춘다.
+  const danger = !canDeleteSelf(u)
+    ? '<div style="font-size:13px;line-height:1.6;color:var(--label-tertiary);padding:4px">' +
+        '관리자 계정은 여기에서 삭제할 수 없습니다. 다른 관리자에게 요청하거나, ' +
+        'Firebase 콘솔에서 직접 처리하세요.</div>'
+    : d
+      ? '<div style="font-size:13px;line-height:1.6;color:var(--label-secondary);padding:2px 4px 10px">' +
+          '계정과 할 일이 <strong>영구 삭제</strong>되며 되돌릴 수 없습니다.<br>' +
+          '계속하려면 PIN 6자리를 다시 입력하세요.</div>' +
+        '<input class="field" type="password" data-d="pin" inputmode="numeric" autocomplete="off" ' +
+          'maxlength="6" placeholder="••••••" value="' + esc(d.pin) + '" ' +
+          'style="padding:12px 14px;font-size:16px;letter-spacing:.35em">' +
+        (d.error ? '<div role="alert" style="margin-top:10px;font-size:13px;font-weight:600;color:#FF3B30;' +
+          'background:color-mix(in srgb, #FF3B30 12%, transparent);padding:10px 12px;border-radius:10px">' +
+          esc(d.error) + '</div>' : '') +
+        '<div style="display:flex;gap:10px;margin-top:14px">' +
+          '<button class="btn btn-gray btn-md" data-act="cancelDelete" style="flex:1"' +
+            (d.busy ? ' disabled' : '') + '>취소</button>' +
+          '<button class="btn btn-gray btn-md" data-act="confirmDelete" style="flex:1;color:#FF3B30"' +
+            (d.busy ? ' disabled' : '') + '>' + (d.busy ? '삭제 중…' : '영구 삭제') + '</button></div>'
+      : '<button class="btn btn-gray btn-md" data-act="askDelete" style="width:100%;color:#FF3B30">' +
+          '계정 삭제</button>' +
+        '<div style="font-size:12px;line-height:1.5;color:var(--label-tertiary);margin-top:8px;padding:0 4px">' +
+          '계정과 모든 할 일이 영구 삭제됩니다. 되돌릴 수 없습니다.</div>';
+
+  return '<div data-act="closeSettings" style="position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.35);animation:tcFade .2s ease-out"></div>' +
+    '<div style="position:fixed;left:0;right:0;bottom:0;z-index:101;display:flex;justify-content:center;pointer-events:none">' +
+    '<div role="dialog" aria-modal="true" aria-label="설정" style="pointer-events:auto;width:min(560px,100vw);' +
+      'max-height:88vh;overflow:auto;background:var(--bg);border-radius:20px 20px 0 0;box-shadow:var(--shadow-3);' +
+      'padding:12px 20px 30px;animation:tcSheet .3s cubic-bezier(.34,1.3,.64,1)">' +
+      '<div style="width:38px;height:5px;border-radius:3px;background:var(--fill-secondary);margin:0 auto 12px"></div>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+        '<h3 style="margin:0;font-size:19px;font-weight:700">설정</h3>' +
+        '<button data-act="closeSettings" aria-label="닫기" style="border:none;cursor:pointer;width:30px;height:30px;' +
+          'border-radius:50%;background:var(--fill-tertiary);color:var(--label-secondary);display:flex;' +
+          'align-items:center;justify-content:center;padding:0">' + icon('xmark', 14) + '</button></div>' +
+
+      '<div style="font-size:13px;font-weight:700;color:var(--label-secondary);margin:18px 4px 2px">계정</div>' +
+      row('이름', u.name) + row('이메일', u.email || '') +
+      row('권한', u.role === 'admin' ? '관리자' : '일반 회원') +
+
+      '<div style="font-size:13px;font-weight:700;color:#FF3B30;margin:22px 4px 8px">위험 구역</div>' +
+      danger +
+
+      '<div style="font-size:12px;line-height:1.6;color:var(--label-tertiary);margin-top:22px;padding:0 4px">' +
+        '<a href="terms.html" target="_blank" rel="noopener">이용약관</a> · ' +
+        '<a href="privacy.html" target="_blank" rel="noopener">개인정보 처리방침</a></div>' +
+    '</div></div>';
 }
 
 // ---------------------------------------------------------------- 관리자 시트
