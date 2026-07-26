@@ -5,21 +5,23 @@
 
 **최종 갱신:** 2026-07-26 · **본진:** `C:\Users\LENOVO\dev\todo-calendar` (git `main`)
 
-**배포됨:** <https://todo-calendar.kro.kr> (GitHub Pages + `CNAME`).
-커밋 `b691b7f` 가 `origin/main` 과 같고 워킹트리는 깨끗합니다. 코드는 다 올라갔지만
-**Firebase 콘솔 설정은 코드가 아니라 따로 해야 합니다** — [§6 남은 작업](#6-남은-작업)
-1번을 먼저 보세요.
+**배포됨:** <https://todo-calendar.kro.kr> (GitHub Pages + `CNAME`) · 커밋 `6bb4e47` 이
+`origin/main` 과 같고 워킹트리는 깨끗합니다. **보안 규칙도 배포 완료**
+(`firebase deploy --only firestore:rules`, 커밋 `147e1f9`).
 
-### 2026-07-26 에 한 일
+### 2026-07-26 에 끝낸 것
 
-1. **Firebase 연동** — localStorage 를 버리고 Auth + Firestore 로 옮겼습니다.
-   기기 간 동기화가 됩니다. 자세한 건 [§4](#4-firebase--어떻게-붙어-있나).
-2. **약관 동의 절차** — 회원가입에 필수/선택 동의, 나이 확인, 약관 전문 모달을
-   붙이고 `users/{uid}.agreements` 에 기록합니다. 필수 동의는 보안 규칙이 서버에서
-   강제합니다. 약관 본문은 [`js\legal.js`](js/legal.js) 한 곳에 있고
-   `terms.html` / `privacy.html` 이 같이 씁니다.
-3. **계정 완전 삭제** — 회원 관리 시트에서 계정·할 일·이름 색인을 지웁니다.
-   Auth 계정만 콘솔에서 수동으로 지워야 합니다.
+- **Firebase 연동** — localStorage 를 버리고 Auth + Firestore 로. 기기 간 동기화됨
+- **약관 동의 절차** — 필수/선택 동의·나이 확인·전문 모달, `users/{uid}.agreements`
+  기록. 필수 동의는 규칙이 서버에서 강제
+- **보안 규칙 배포** — `exists()` 가드 포함. 콘솔 게시까지 완료
+- **계정 완전 삭제(관리자)** — Auth 계정만 콘솔에서 수동
+- **회원 본인 탈퇴 — 실경로 검증 완료.** 탈퇴테스트 계정 + 할 일 4개로
+  Auth / `users` / `usernames` 세 곳 모두 삭제되는 것을 확인
+- **`delete-account.html` 배포** — 로그인 못 하는 사용자의 유일한 창구
+- **처리방침 연락처** — 이준호 / ij1481534943@gmail.com
+- **PIN 재설정 메일 동작 확인** (이전 세션)
+- **`?selftest` 26개 통과** — Firebase 연동 후에도 유효
 
 ---
 
@@ -45,15 +47,16 @@ cd C:\Users\LENOVO\dev\todo-calendar && python -m http.server 5500
 `users/{uid}` 문서의 `role` 을 `admin`, `status` 를 `approved` 로 직접 고치세요.
 (첫 관리자 부트스트랩 코드를 짜는 것보다 클릭 두 번이 쌉니다.)
 
-**Firebase 콘솔에서 해 둘 것 — 안 하면 로그인이 안 됩니다**
+**Firebase 콘솔 설정은 끝나 있습니다** (이메일/비밀번호 로그인, 승인된 도메인,
+보안 규칙). 규칙을 고쳤을 때만 다시 올리면 됩니다:
 
-1. Authentication → Sign-in method → **이메일/비밀번호** 사용 설정
-2. Authentication → Settings → 승인된 도메인에 **`todo-calendar.kro.kr`** 추가
-3. Firestore → 규칙에 [`firestore.rules`](firestore.rules) 붙여넣고 게시
+```bash
+cd C:\Users\LENOVO\dev\todo-calendar && firebase deploy --only firestore:rules
+```
 
-⚠️ **규칙은 코드를 배포한 뒤에 게시하세요.** `users` 의 `create` 가 약관 동의 필드를
-요구하기 때문에, 규칙을 먼저 올리면 아직 옛 코드를 받은 브라우저에서 가입이 전부
-실패합니다. 이 조건은 `create` 에만 걸리므로 **기존 계정의 로그인에는 영향이 없습니다.**
+⚠️ **규칙은 항상 코드를 배포한 뒤에 올리세요.** `users` 의 `create` 가 약관 동의
+필드를 요구해서, 규칙이 앞서면 아직 옛 코드를 받은 브라우저의 가입이 전부 실패합니다.
+(에뮬레이터로 미리 시험하려면 Java 가 필요한데 지금 이 PC 에는 없습니다.)
 
 ---
 
@@ -235,8 +238,9 @@ firebase.js                                        (ESM 모듈)
     privacy: { agreed: true, version: '1.0', at: <Timestamp> },
     age: 'over14'|'under14_guardian',
     marketing: true|false                      // 선택 항목
-  }
-}
+  },
+  settings: { theme, lang }                    // ← 예정. §6-1 에서 추가된다.
+}                                              //   update 규칙의 hasOnly 도 함께 손볼 것
 ```
 
 **`agreements` 는 `create` 규칙이 강제합니다** — 필수 두 개가 `true` 가 아니거나 `age`
@@ -425,63 +429,39 @@ PIN 재인증 → todos 삭제 → users + usernames 삭제 → Auth 계정 삭�
 | 만 14세 미만의 법정대리인 *확인* 절차 | 지금은 본인 체크만 받음. 이용자가 늘면 보호자 연락처 확인이 필요 |
 | Auth 계정까지 자동 삭제 | Admin SDK(Cloud Function)를 띄울 때. 지금은 콘솔에서 수동 |
 | 로그인 시도 제한 | Firebase가 기본 제공하는 수준을 넘어야 할 때 |
-| 오프라인 캐시(`enableIndexedDbPersistence`) | 지하철에서 쓰겠다는 말이 나오면 |
-| 다크 모드 토글 UI | 원본 시안에 없음 → 시스템 설정 따름 |
+| 오프라인 캐시(`enableIndexedDbPersistence`) | PWA 붙일 때 같이 (§6-3) |
 
 ---
 
 ## 6. 남은 작업
 
-위에서부터 하세요. 순서에 이유가 있습니다 — 뒤의 것이 앞의 것에 막혀 있습니다.
+인프라는 끝났습니다. **1·2번이 원래 이 앱을 만든 이유**이고, 3·4번은 그걸 폰에
+올리기 위한 포장입니다.
 
-### 1. `firestore.rules` 게시 — 지금 당장 (5분)
+### 1. 테마 + 언어 변경 — 한 세션에서 함께
 
-**코드는 배포됐는데 규칙이 안 올라가 있으면 세 가지가 조용히 깨져 있습니다.**
+`users/{uid}` 에 `settings: { theme, lang }` 로 저장합니다. **두 기능이 저장 경로를
+공유하므로 따로 하지 마세요** — 규칙과 설정 시트를 두 번 건드리게 됩니다.
 
-- 필수 약관 동의의 **서버 강제가 없습니다.** 화면 검사는 개발자 도구로 우회되므로,
-  지금은 동의 없이도 계정 문서가 만들어질 수 있습니다.
-- **완전 삭제 버튼이 `permission-denied` 로 실패합니다.** `users` / `usernames` /
-  `todos` 의 `delete` 가 옛 규칙에서는 전부 막혀 있습니다.
-- 삭제가 안 되니 **이름 선점도 안 풀립니다.**
+- 자리는 설정 시트(`renderSettingsSheet`, auth.js)의 "계정" 아래가 자연스럽습니다.
+- **`update` 규칙을 함께 손봐야 합니다.** 지금은
+  `affectedKeys().hasOnly(['status'])` 로 잠겨 있어 본인이 `settings` 를 못 씁니다.
+  본인이 `settings` 만 바꾸는 분기를 따로 추가하세요 — 관리자의 `status` 분기와
+  섞으면 관리자가 남의 설정을 바꿀 수 있게 됩니다.
+- 지금 `render()` 는 **매번 시스템 설정으로 `data-theme` 를 덮어씁니다**
+  (calendar.js). 저장값이 있으면 그쪽이 이기도록 고칠 것.
+- 기존 계정에는 `settings` 가 없습니다. 없으면 시스템 테마 + 한국어로 떨어뜨리세요.
 
-"코드 먼저, 규칙 나중" 순서 조건은 이미 충족됐습니다(코드가 배포 완료). 콘솔 →
-Firestore → 규칙에 [`firestore.rules`](firestore.rules) 를 통째로 붙여넣고 게시하세요.
-같은 화면에서 Authentication → Settings → 승인된 도메인에 `todo-calendar.kro.kr` 이
-있는지도 확인하세요. 없으면 배포된 사이트에서 로그인이 아예 안 됩니다.
+### 2. 캘린더 이미지 저장·공유 (월/주/일) — **폰 실기기 검증 필수**
 
-**확인법:** 관리자로 로그인 → 회원 관리 → 지난 세션의 테스트 계정
-`약관테스트_삭제요망` 을 완전 삭제. 성공하면 규칙이 살아 있는 것입니다.
-(Auth 계정 `agree-test-20260725@example.com` 은 콘솔에서 따로 지우세요.)
+- 데스크톱에서 되는 것과 폰에서 되는 것이 다릅니다. iOS Safari 의 `navigator.share`
+  파일 지원과 안드로이드 크롬의 다운로드 동작을 **실기기로** 확인하세요.
+  데스크톱만 보고 끝내면 반드시 새어 나갑니다.
+- 화면이 CSS 변수와 `_ds` 토큰에 전부 기대고 있습니다. 캔버스로 옮길 때
+  `color-mix()` 와 `backdrop-filter` 는 따라오지 않습니다 — 출력 전용 마크업을
+  따로 그리는 편이 빠릅니다.
 
-### ~~2. 연락처 채우기~~ — 2026-07-26 완료
-
-개인정보 보호책임자 **이준호**, 문의 **ij1481534943@gmail.com**. 개인 비영리 운영이라
-상호·사업자등록번호는 "해당 없음"으로 명시했습니다. 값은 [`js\legal.js`](js/legal.js)
-한 곳에 있고 `privacy.html` 이 주입해 갑니다. `delete-account.html` 은 정적이라 같은
-주소를 직접 적어 두었습니다 — **바꿀 때 두 곳을 함께 고치세요.**
-
-**로그인이 막힌 사용자에게는 이 이메일이 유일한 창구입니다.** 승인 대기·거절
-상태에서는 `onAuthStateChanged` 가 곧바로 `signOut` 해서 설정 시트에 닿을 수 없고,
-PIN 을 잊은 경우도 마찬가지입니다. 두 페이지 모두 이 경우를 명시적으로 안내합니다
-(스토어 심사에서 보는 지점이니 문구를 지우지 마세요).
-
-**약관 페이지가 JS 없이는 빈 페이지라는 점은 그대로입니다.** `terms.html` 과
-`privacy.html` 은 본문을 `LEGAL` 에서 주입하므로 JS 를 실행하지 않는 크롤러에게는
-껍데기만 갑니다(확인함). `delete-account.html` 만 정적입니다. 자동 검사에 걸리면
-`legal.js` 를 빌드 소스로 두고 두 페이지를 생성하세요.
-
-### ~~3. 회원 본인 탈퇴~~ — 2026-07-26 완료
-
-설정 시트의 **계정 삭제**로 Firestore 데이터와 Auth 계정이 모두 지워집니다.
-안내 페이지 `delete-account.html` 도 함께 만들었습니다. 자세한 건
-[§4 본인 탈퇴](#본인-탈퇴--순서가-곧-안전장치입니다).
-
-**단, 실제 삭제를 끝까지 돌려 보지 못했습니다.** 화면·판정·PIN 검증까지는 확인했지만
-Firestore/Auth 를 실제로 지우는 경로는 실행 검증이 안 된 상태입니다. 1번(규칙 게시)을
-마친 뒤 버릴 계정으로 한 번 해보세요. 할 일이 몇 개 있는 계정으로 하면 todos 배치
-삭제까지 함께 확인됩니다.
-
-### 2. PWA — 1~2일
+### 3. PWA — 1~2일
 
 스토어에 올리는 수단입니다. `manifest.json`(이름·아이콘·`display:standalone`·테마색),
 아이콘 세트(192/512 최소), 서비스 워커.
@@ -494,16 +474,22 @@ Firestore/Auth 를 실제로 지우는 경로는 실행 검증이 안 된 상태
 - 오프라인 캐시(`enableIndexedDbPersistence`)를 이때 같이 켤지 정하세요.
   [§5](#5-의도적으로-안-만든-것) 에서 미뤄 둔 항목입니다.
 
-### 3. 스토어 출시 — 마지막
+### 4. PWABuilder → TWA → 삼성 갤럭시 스토어
 
-- **Google Play:** PWABuilder 또는 TWA 로 패키징. 개인정보 처리방침 URL 과
-  "데이터 안전" 섹션이 필요하며, **거기 적는 수집 항목이 `privacy.html` 과
-  일치해야 합니다.** 어긋나면 반려됩니다. 계정 삭제 URL 칸에는
-  `https://todo-calendar.kro.kr/delete-account.html` 을 넣으세요.
-- **App Store:** PWA 를 직접 올릴 수 없습니다. Capacitor 등으로 감싸야 합니다.
-  앱 내 계정 삭제(5.1.1(v))는 갖췄고, 심사 노트에 `delete-account.html` 주소를
-  적어 두면 심사자가 바로 확인합니다.
-- ⚠️ **만 14세 미만 가입을 허용해 두었으므로** 두 스토어 모두 아동 대상 정책
-  (Play 의 Families, Apple 의 Kids) 심사가 더 까다로워집니다. 연령 등급을 어떻게
-  신고할지, 아니면 아예 만 14세 이상만 받을지를 출시 전에 정하세요. 후자로 바꾸면
-  가입 화면의 나이 선택지와 `agreements.age` 값이 함께 바뀝니다.
+PWABuilder 에 배포 URL 을 넣어 TWA 패키지를 뽑고 갤럭시 스토어에 올립니다.
+TWA 는 Digital Asset Links 검증이 필요해서 `/.well-known/assetlinks.json` 을
+루트에 올려야 합니다 — GitHub Pages 라 그냥 파일로 두면 됩니다.
+
+**출시 전 점검**
+
+- 처리방침 URL `…/privacy.html`, 계정 삭제 URL `…/delete-account.html`
+- 스토어에 신고하는 **수집 항목이 `privacy.html` 과 정확히 일치**해야 합니다
+- ⚠️ **만 14세 미만 가입을 허용해 두어** 아동 대상 정책 심사가 까다로워집니다.
+  연령 등급 신고 방식을 정하거나, 아예 만 14세 이상만 받도록 바꾸세요.
+  후자면 가입 화면 선택지와 `agreements.age` 값이 함께 바뀝니다.
+- ⚠️ **`LEGAL.version` 이 아직 `"1.0"` 입니다.** 처리방침 본문은 2026-07-26 에 세 번
+  바뀌었는데(관리자 접근 조항 · 탈퇴 경로 · 연락처) 버전은 그대로입니다. 지금은
+  동의 기록이 테스트 계정뿐이라 무해하지만, **실사용자를 받기 전에** 버전을 올릴지
+  재동의를 받을지 정하세요. 안 정하면 "무엇에 동의했는지" 기록이 어긋납니다.
+- Google Play / App Store 로 넓힐 때: Play 는 데이터 안전 섹션, App Store 는
+  Capacitor 래핑이 추가로 필요합니다. 앱 내 계정 삭제(5.1.1(v))는 이미 갖췄습니다.
