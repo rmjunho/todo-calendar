@@ -96,8 +96,14 @@ const state = {
   showAdmin: false,
   legal: null,        // null | 'terms' | 'privacy' — 회원가입 화면의 약관 전문 모달
   showSettings: false,
-  del: null           // 탈퇴 확인 { pin, error, busy }. null 이면 확인 단계 전
+  del: null,          // 탈퇴 확인 { pin, error, busy }. null 이면 확인 단계 전
+  exp: null           // 이미지 미리보기 { memo, busy, url, file, canShare, err }
 };
+
+// 시트가 열려 있으면 원격 스냅샷 렌더를 미룬다 — render() 가 #app 을 통째로
+// 갈아엎어서 시트가 튀기 때문이다. 미리보기 시트도 같은 보호가 필요하다.
+// 미룬 변경은 closeForm()/closeExport() 의 render() 가 한 번에 반영한다.
+const sheetBusy = () => state.showForm || !!state.exp;
 
 // ---------------------------------------------------------------- view model
 function pill(it, ds) {
@@ -178,6 +184,9 @@ function render() {
           '<button class="btn btn-glass btn-sm btn-icon" data-nav="prev" aria-label="' + esc(t('nav.prev')) + '">' + icon('chevron.left', 15) + '</button>' +
           '<button class="btn btn-glass btn-sm" data-nav="today">' + esc(t('nav.today')) + '</button>' +
           '<button class="btn btn-glass btn-sm btn-icon" data-nav="next" aria-label="' + esc(t('nav.next')) + '">' + icon('chevron.right', 15) + '</button>' +
+          // 현재 뷰(월/주/일)를 그대로 이미지로 내보낸다. 버튼 하나가 세 뷰를 다 맡는다.
+          '<button class="btn btn-glass btn-sm" data-act="export" aria-label="' + esc(t('exp.title')) + '">' +
+            esc(t('exp.btn')) + '</button>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -355,6 +364,7 @@ function render() {
   if (state.showForm) html += renderSheet();
   if (state.showAdmin && isAdmin) html += renderAdminSheet();
   if (state.showSettings) html += renderSettingsSheet();
+  if (state.exp) html += renderExportSheet();
 
   document.getElementById('app').innerHTML = html;
 }

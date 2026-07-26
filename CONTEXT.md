@@ -7,8 +7,9 @@
 **최종 갱신:** 2026-07-26 · **본진:** `C:\Users\LENOVO\dev\todo-calendar` (git `main`)
 **배포됨:** <https://todo-calendar.kro.kr> (GitHub Pages + `CNAME`) · 보안 규칙도 배포 완료
 
-기능은 다 붙었습니다 — 계정·승인·약관 동의·기기 간 동기화·본인 탈퇴·테마 3종·언어 2종.
-남은 것은 §6 세 개(이미지 공유 / PWA / 스토어)뿐입니다. `?selftest` 40개 통과.
+기능은 다 붙었습니다 — 계정·승인·약관 동의·기기 간 동기화·본인 탈퇴·테마 3종·언어 2종·
+캘린더 이미지 내보내기. 남은 것은 §6 두 개(PWA / 스토어)와 **이미지 공유의 실기기 검증**
+입니다. `?selftest` 67개 통과.
 
 ---
 
@@ -64,12 +65,13 @@ firebase deploy --only firestore:rules
 
 ```
 dev\todo-calendar\
-├── index.html                     껍데기. <link> 3개 + <script> 5개. 로드 순서 고정.
+├── index.html                     껍데기. <link> 3개 + <script> 6개. 로드 순서 고정.
 ├── css\style.css                  입체감 토큰 + DS 컴포넌트 CSS 포팅
 ├── js\i18n.js                     ★ 테마·언어 설정 단일 소스 + 문자열 테이블(ko/en)
 ├── js\legal.js                    약관 본문(ko/en)·버전 상수
 ├── js\auth.js                     로그인 화면·PIN 검증·회원 관리·설정 시트
 ├── js\calendar.js                 유틸·반복 규칙·state·달력 렌더
+├── js\export.js                   ★ Canvas 2D 이미지 내보내기·미리보기 시트 (외부 lib 0)
 ├── js\todo.js                     할 일 CRUD·입력 시트·이벤트·부트스트랩·selftest
 ├── js\firebase.js                 ★ ESM 모듈. Auth·Firestore 전담. window.fb 로 노출
 ├── js\firebase-config.js          프로젝트 설정값 (공개돼도 되는 값)
@@ -89,17 +91,20 @@ dev\todo-calendar\
 ### 로드 순서 — 바꾸면 깨집니다
 
 ```
-i18n.js → legal.js → auth.js → calendar.js → todo.js   (클래식, 전역 스코프 공유)
-                                          ↓ 나중에
-firebase.js                                            (ESM 모듈)
+i18n.js → legal.js → auth.js → calendar.js → export.js → todo.js   (클래식, 전역 공유)
+                                                      ↓ 나중에
+firebase.js                                                        (ESM 모듈)
 ```
 
 - **`i18n.js` 가 맨 앞**이라야 합니다. 로드 즉시 `applyTheme()` 을 돌려 첫 페인트 전에
   `data-theme` 을 겁니다. 뒤로 밀면 어두운 테마에서 흰 화면이 한 번 번쩍입니다.
-- `i18n.js`·`legal.js` 는 상수만 담아 호출이 없고, 뒤 3개는 서로 의존합니다 —
+- `i18n.js`·`legal.js` 는 상수만 담아 호출이 없고, 뒤 4개는 서로 의존합니다 —
   `calendar.js` 의 `state` 리터럴이 `blankAuth()`(auth.js)를 부르고, `todo.js` 끝에서
   `render()` 가 앱을 띄웁니다.
-- **이 5개에 `import`/`export` 를 붙이지 마세요.** 모듈이 되는 순간 전역 공유가 끊겨
+- **`export.js` 는 `calendar.js` 뒤 · `todo.js` 앞**입니다. 앞쪽에서 `state`·`fmt`·
+  `itemsOn`·`PRI` 를 받아 쓰고, `todo.js` 끝의 첫 `render()` 보다 `renderExportSheet` 가
+  먼저 있어야 합니다.
+- **이 6개에 `import`/`export` 를 붙이지 마세요.** 모듈이 되는 순간 전역 공유가 끊겨
   함수 참조가 전부 깨집니다. 모듈은 반대 방향으로만 붙였습니다 — `firebase.js` 하나만
   ESM 이고 `window.fb` 로 내보냅니다. 모듈에서 클래식의 최상위 `const`/`function` 은
   그대로 읽힙니다(전역 렉시컬 환경 공유).
@@ -162,7 +167,23 @@ firebase.js                                            (ESM 모듈)
 | **`isDone`** | 반복은 `doneDates[]`, 단발은 `done` |
 | `sortItems` / `itemsOn` | 하루종일→시간→우선순위 정렬, 날짜 필터 |
 | **`state`** | **전역 상태 객체 (단일 소스)** |
+| **`sheetBusy`** | **시트가 열려 있나.** 원격 스냅샷 렌더를 미룰지 판정 (`showForm \|\| exp`) |
 | **`render`** | **`#app` 전체 innerHTML 재생성** |
+
+### js\export.js — 이미지 내보내기 (Canvas 2D. 외부 라이브러리 0)
+| 함수 | 역할 |
+|---|---|
+| **`EX_COLORS` / `exColors`** | **캔버스용 색 상수 테이블.** `data-theme` 으로 고른다 — getComputedStyle 을 쓰지 않는 이유는 §5 |
+| **`exWrap` / `exEllipsize`** | **`measure` 를 인자로 받는 순수 함수.** 한글은 글자 단위, 영문은 공백에서 끊는다 |
+| **`exMonthLayout`** | 5주/6주에 따라 **높이가 변한다** (`270 + 176×주수`) |
+| `exWeekLayout` / `exDayLayout` | 데이터가 높이를 정하므로 **위아래를 클램프**한다 (주 1000~1700, 일 700~1800) |
+| **`exportFilename`** | `todo-calendar-{month\|week\|day}-…png`. **주는 그 주 일요일** (ISO 주차 아님) |
+| **`exportModel`** | 그리기 전 데이터 모델. **`includeMemo` 가 false 면 `memo` 키를 안 만든다** |
+| `drawExport` / `exDrawMonth·Week·Day` | 모델 → 캔버스. 페이지 색으로 먼저 덮어 **PNG 를 불투명**하게 만든다 |
+| **`openExport` / `buildExport`** | **1단.** `await document.fonts.ready` → 그리기 → `toBlob` → `canShare` 검사 |
+| **`shareImage` / `saveImage`** | **2단.** `share()` 는 **핸들러 안에서 await 없이** 호출. 저장은 `a[download]` |
+| `toggleExportMemo` / `closeExport` | 옛 objectURL revoke 후 재빌드 · 닫으며 **반드시 `render()`** |
+| `renderExportSheet` | 미리보기 시트. 기존 바텀 시트 4개와 같은 구조(`.card` 아님) |
 
 ### js\todo.js — 할 일
 | 함수 | 역할 |
@@ -171,7 +192,7 @@ firebase.js                                            (ESM 모듈)
 | `toggleDone` | 반복이면 날짜 배열, 단발이면 플래그 |
 | `renderSheet` / `openForm` / `saveForm` | 입력 시트 |
 | click / input / keydown 위임 | 모든 버튼이 여기 하나로. **입력은 uncontrolled**(캐럿 보존) |
-| 부트스트랩 · selftest | `render()` + 10초 타임아웃 가드 · `?selftest` 40개 |
+| 부트스트랩 · selftest | `render()` + 10초 타임아웃 가드 · `?selftest` 67개 |
 
 렌더 흐름은 하나뿐입니다: **상태 변경 → `render()` → `#app.innerHTML` 통째 교체.**
 가상 DOM·프레임워크 없음.
@@ -253,7 +274,8 @@ firebase.js                                            (ESM 모듈)
   booting: true,       // firebase.js 가 인증 상태를 알려줄 때까지 로딩 화면
   showAdmin, showSettings,
   legal: null,         // null | 'terms' | 'privacy'
-  del: null            // 탈퇴 확인 { pin, error, busy }
+  del: null,           // 탈퇴 확인 { pin, error, busy }
+  exp: null            // 이미지 미리보기 { memo, busy, url, file, canShare, err }
 }
 ```
 설정(`theme`/`lang`)은 여기 없습니다 — `SETTINGS`(i18n.js)에 있습니다.
@@ -348,7 +370,10 @@ PIN 재인증 → todos 삭제 → users + usernames 삭제 → Auth 계정 삭�
 ### 렌더링 — 시트가 열려 있으면 렌더를 미룹니다
 
 `render()` 는 `#app` 을 통째로 다시 만듭니다. 원격 스냅샷마다 그리면 바텀 시트가 튀어서
-`if (!state.showForm) render()` 로 막아 뒀습니다. **이 가드를 빼지 마세요.**
+`if (!sheetBusy()) render()` 로 막아 뒀습니다(입력 시트 + 이미지 미리보기). **이 가드를
+빼지 마세요.** 대신 **시트를 닫는 쪽이 반드시 `render()` 를 불러야** 합니다 —
+`closeForm()`·`closeExport()` 가 그때 밀린 원격 변경을 한 번에 반영합니다. 안 부르면 다른
+기기에서 추가한 할 일이 화면에 영영 안 나타납니다.
 
 ### CSS 함정
 
@@ -368,8 +393,8 @@ PIN 재인증 → todos 삭제 → users + usernames 삭제 → Auth 계정 삭�
    `#F2F2F7` 라 흰 하이라이트는 아예 안 보이고 옅은 상단 음영만 읽힙니다.
 4. **`.card` 를 쓰는 곳은 9군데**입니다: 로그인 카드, 월/주/일 뷰, 할 일 리스트,
    `terms.html`, `privacy.html`, `delete-account.html` **×2(ko·en)**. 한 군데만 고치면
-   나머지가 남으니 **토큰으로 고치세요.** 바텀 시트 4개(입력·설정·회원 관리·약관)는
-   `.card` 가 아니라 `background:var(--bg)` 단색이라 sheen 이 없습니다.
+   나머지가 남으니 **토큰으로 고치세요.** 바텀 시트 5개(입력·설정·회원 관리·약관·
+   이미지 미리보기)는 `.card` 가 아니라 `var(--bg)` 단색이라 sheen 이 없습니다.
 5. **월간 뷰 요일 헤더 아래 실선과 일간 뷰 시간선은 sheen 이 아닙니다.**
    `border-top:.5px solid var(--separator)` 헤어라인이고 **의도된 것**입니다. 위치도
    다릅니다 — 월간 뷰 헤더는 35px, sheen 은 96px 에서 끝납니다. 같이 지우지 마세요.
@@ -420,6 +445,23 @@ data-theme = theme === 'system' ? (darkMQ.matches ? 'dark' : 'light') : theme
 - ⚠️ 개발도구의 "prefers-color-scheme 강제"는 실제 `change` 이벤트를 안 쏠 수 있습니다.
   안 따라오는 것처럼 보여도 `applyTheme()` 을 직접 부르면 맞는 값이 나옵니다.
 
+### 캔버스는 CSS 변수를 안 읽습니다 — 색 테이블이 따로 있습니다
+
+`js/export.js` 의 `EX_COLORS` 가 light/dark 두 벌을 들고 있고, `applyTheme()` 이 걸어 둔
+`data-theme` 으로 고릅니다(그래서 `system` 분기가 공짜입니다). `getComputedStyle` 로 토큰을
+읽지 않는 이유는 셋입니다:
+
+1. **캔버스는 파싱 못 하는 `fillStyle` 을 예외 없이 무시합니다.** 토큰이 언젠가
+   `color-mix()`/`oklch()` 로 바뀌면 에러 하나 없이 색만 틀린 이미지가 나갑니다.
+2. **어차피 화면에 없는 색이 필요합니다** — 화면 pill 은 `color-mix(… 16%, transparent)`
+   인데 캔버스는 불투명 카드 위에 `rgba` 로 직접 합성합니다. 읽어 와도 델타 테이블은 남아
+   소스가 둘이 됩니다.
+3. **출력물은 화면이 아닙니다.** 남의 메신저에서 축소돼 읽히니 UI 보다 대비가 조금 높아야
+   맞고, 그건 일부러 달라야 합니다.
+
+**`_ds/…/tokens/colors.css` 를 고치면 `EX_COLORS` 도 같이 고치세요.** 그 대가로 고정한
+것입니다.
+
 ### 언어 — Intl 은 화면에만, 데이터 키에는 절대
 
 ```
@@ -468,14 +510,39 @@ JS 를 안 돌리는 크롤러에게 **빈 페이지**입니다(확인함). 이 
 
 ## 6. 남은 작업
 
-**1번이 원래 이 앱을 만든 이유**이고, 2·3번은 그걸 폰에 올리기 위한 포장입니다.
+2·3번은 이 앱을 폰에 올리기 위한 포장입니다.
 
-### 1. 캘린더 이미지 저장·공유 (월/주/일) — **폰 실기기 검증 필수**
+### 1. 캘린더 이미지 저장·공유 — **코드 완료 · 갤럭시 실기기 검증만 남음**
 
-- 데스크톱과 폰의 동작이 다릅니다. iOS Safari 의 `navigator.share` 파일 지원과 안드로이드
-  크롬의 다운로드를 **실기기로** 확인하세요. 데스크톱만 보고 끝내면 샙니다.
-- 화면이 CSS 변수와 `_ds` 토큰에 전부 기대고 있습니다. 캔버스로 옮길 때 `color-mix()` 와
-  `backdrop-filter` 는 안 따라옵니다 — 출력 전용 마크업을 따로 그리는 편이 빠릅니다.
+`js/export.js` 로 구현했습니다. `_ds` 토큰이 `color-mix()` 를 쓰는 탓에 html2canvas 는
+예외를 던지므로 **Canvas 2D 로 직접** 그립니다(CDN 의존 0 — PWA 캐시 목록이 안 늘고
+오프라인에서도 동작합니다). 화면을 캡처하지 않고 **출력 전용 1080px 레이아웃**을 따로
+그립니다. 일간 뷰는 화면의 시간축을 옮기지 않고 아젠다 리스트로 그립니다 — 6시~24시 눈금은
+900px 을 먹고 정보가 0입니다.
+
+| 뷰 | 크기 | 넘칠 때 |
+|---|---|---|
+| 월 | 1080 × (270 + 176×주수) → 5주 1150 / 6주 1326 | pill 3개 + `+N개` (화면과 같은 규칙) |
+| 주 | 1080 × clamp(1000, 260+가장 긴 칸, 1700) | 칸이 허용하는 만큼 + `+N개` |
+| 일 | 1080 × clamp(700, 214+행 합, 1800) | 최대 높이까지 + `+N개` |
+
+⚠️ **`navigator.share()` 는 사용자 제스처 처리 중에만 허용됩니다.** `canvas.toBlob()` 이
+비동기라 클릭→그리기→`await`→`share()` 로 짜면 활성화가 만료돼 **폰에서만**
+`NotAllowedError` 로 죽습니다(데스크톱 크롬은 빨라서 통과하므로 여기서 잡히지 않습니다).
+그래서 **2단**입니다 — 시트를 여는 동안 Blob 까지 다 만들고, 시트 안의 [공유]/[저장]이
+**새 제스처**가 됩니다. `shareImage()` 안에서 `await` 하지 마세요.
+
+- 지원 검사는 **실제 `File` 로** `navigator.canShare({ files:[file] })`. `navigator.share`
+  존재 여부로 판단하지 말고, 넘기는 객체에 `title`/`text`/`url` 을 섞지 마세요.
+  false 면 [공유] 버튼을 아예 안 그리고 저장(`a[download]`)만 남깁니다.
+- **objectURL 은 미리보기 `<img>` 와 다운로드가 함께 씁니다.** 저장 직후 revoke 하면
+  미리보기가 깨집니다 — `closeExport()`/`toggleExportMemo()` 가 revoke 를 책임집니다.
+- `await document.fonts.ready` 를 매번 겁니다. 안 걸면 **첫 내보내기만** 시스템 폰트입니다.
+- [메모 포함] 토글은 개인정보 장치입니다. 끄면 `exportModel()` 이 `memo` **키 자체를 안
+  만듭니다** — 빈 문자열로 두면 `row.memo != null` 검사에서 새어 나갑니다.
+
+**★ 남은 일: 갤럭시 실기기에서 공유·저장 직접 확인.** 데스크톱 크롬 통과는 위 제스처
+만료를 재현하지 못하므로 근거가 되지 않습니다. TWA 패키징(§6-3) 후에도 한 번 더 보세요.
 
 ### 2. PWA — 1~2일
 

@@ -152,16 +152,16 @@ function watch(user) {
   stopWatch();
   unsubTodos = onSnapshot(todosCol(), (snap) => {
     state.items = snap.docs.map((d) => Object.assign({ id: d.id }, d.data()));
-    // 입력 시트가 열려 있는 동안은 렌더를 미룬다 — render() 는 #app 을 통째로
-    // 다시 만들기 때문에 원격 변경이 올 때마다 시트가 튄다. 시트를 닫을 때의
-    // render() 가 이미 갱신된 state.items 를 그대로 집어간다.
-    if (!state.showForm) render();
+    // 시트(입력·이미지 미리보기)가 열려 있는 동안은 렌더를 미룬다 — render() 는
+    // #app 을 통째로 다시 만들기 때문에 원격 변경이 올 때마다 시트가 튄다.
+    // 시트를 닫을 때의 render() 가 이미 갱신된 state.items 를 그대로 집어간다.
+    if (!sheetBusy()) render();
   }, (e) => fail(t('err.loadTodos'), e));
 
   if (user.role !== 'admin') return;
   unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
     state.users = snap.docs.map((d) => Object.assign({ uid: d.id }, d.data()));
-    if (!state.showForm) render();
+    if (!sheetBusy()) render();
   }, (e) => fail(t('err.loadUsers'), e));
 }
 

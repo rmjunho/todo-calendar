@@ -142,6 +142,19 @@ const STR = {
     'item.allDay': '하루 종일',
     'item.add': '할 일 추가',
 
+    // 이미지 내보내기
+    'exp.btn': '이미지',
+    'exp.title': '이미지로 내보내기',
+    'exp.memo': '메모 포함',
+    'exp.hint': '메모에 개인적인 내용이 있으면 끄고 내보내세요',
+    'exp.share': '공유',
+    'exp.save': '저장',
+    'exp.building': '이미지 만드는 중…',
+    'exp.fail': '이미지를 만들지 못했습니다',
+    'exp.shareFail': '공유하지 못했습니다',
+    'exp.alt': '내보낼 캘린더 이미지 미리보기',
+    'exp.brand': '할 일 캘린더',
+
     'pri.high': '높음', 'pri.med': '보통', 'pri.low': '낮음', 'pri.none': '없음',
     'rep.none': '반복 안 함', 'rep.daily': '매일', 'rep.weekly': '매주', 'rep.monthly': '매월',
 
@@ -307,6 +320,18 @@ const STR = {
     'list.check': 'Mark complete',
     'item.allDay': 'All day',
     'item.add': 'Add a to-do',
+
+    'exp.btn': 'Image',
+    'exp.title': 'Export as image',
+    'exp.memo': 'Include notes',
+    'exp.hint': 'Turn this off if your notes are private',
+    'exp.share': 'Share',
+    'exp.save': 'Save',
+    'exp.building': 'Preparing image…',
+    'exp.fail': 'Could not create the image',
+    'exp.shareFail': 'Could not share',
+    'exp.alt': 'Preview of the calendar image',
+    'exp.brand': 'Todo Calendar',
 
     'pri.high': 'High', 'pri.med': 'Medium', 'pri.low': 'Low', 'pri.none': 'None',
     'rep.none': 'Does not repeat', 'rep.daily': 'Daily', 'rep.weekly': 'Weekly', 'rep.monthly': 'Monthly',
