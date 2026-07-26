@@ -180,6 +180,9 @@ app.addEventListener('click', (e) => {
   if ((el = hit('[data-reject]'))) return decide(el.dataset.reject, 'rejected');
   if ((el = hit('[data-resetpin]'))) return resetPin(el.dataset.resetpin);
   if ((el = hit('[data-delacct]'))) return removeAccount(el.dataset.delacct);
+  // 년·월 점프. 년은 고르기만 하고, 월을 누르는 순간 확정된다.
+  if ((el = hit('[data-jy]'))) { state.jump.y = Number(el.dataset.jy); return render(); }
+  if ((el = hit('[data-jm]'))) return applyJump(Number(el.dataset.jm));
   if ((el = hit('[data-view]'))) { state.view = el.dataset.view; return render(); }
   if ((el = hit('[data-nav]'))) {
     const dir = el.dataset.nav;
@@ -227,6 +230,9 @@ app.addEventListener('click', (e) => {
       case 'export': return openExport();
       case 'closeExport': return closeExport();
       case 'expMemo': return toggleExportMemo();
+      case 'expDetail': return toggleExportDetail();
+      case 'jump': return openJump();
+      case 'closeJump': return closeJump();
       case 'expShare': return shareImage();
       case 'expSave': return saveImage();
       case 'open': return openForm(null);
@@ -269,8 +275,9 @@ document.addEventListener('keydown', (e) => {
     // 약관 모달이 제일 위에 뜬다 — 먼저 닫는다.
     if (state.legal) { state.legal = null; return render(); }
     if (state.showForm) return closeForm();
-    // 이미지 미리보기는 다른 시트 위에 뜨지 않는다 — 본문 위에서만 열린다.
+    // 이미지 미리보기·점프는 다른 시트 위에 뜨지 않는다 — 본문 위에서만 열린다.
     if (state.exp) return closeExport();
+    if (state.jump) return closeJump();
     if (state.showAdmin) { state.showAdmin = false; return render(); }
     // 삭제 중에는 Esc 로 닫지 않는다 — 진행 중인 요청을 취소하지 못한다.
     if (state.showSettings && !(state.del && state.del.busy)) {
@@ -424,13 +431,18 @@ if (location.search.includes('selftest')) {
   ok(Math.abs(jul.cellW * 7 - 1020) < 1e-9, 'the seven columns fill the grid exactly');
 
   // 주·일은 데이터가 높이를 정하므로 위아래를 클램프한다.
-  ok(exWeekLayout(0).h === 1000 && exWeekLayout(0).fit >= 1, 'an empty week does not collapse');
+  // 하한은 데이터가 적으면 이미지도 짧아야 해서 낮췄다 (총 598px = 요일 줄 + 3칸).
+  ok(exWeekLayout(0).h === 598 && exWeekLayout(0).fit >= 1, 'a sparse week produces a short image');
+  ok(exWeekLayout(3).h === 598, 'the week floor covers three slots exactly');
+  ok(exWeekLayout(4).h > 598, 'past the floor the week grows with the data');
   ok(exWeekLayout(99).h === 1700, 'a packed week is clamped instead of growing forever');
   ok(exWeekLayout(99).fit < 99, 'a packed week hides the overflow behind a +N line');
   ok(exDayLayout([]).h === 700 && exDayLayout([]).shown === 0, 'an empty day still renders a card');
-  const many = exDayLayout(new Array(40).fill(110));
-  ok(many.h === 1800 && many.hidden > 0 && many.shown + many.hidden === 40,
+  const many = exDayLayout(new Array(120).fill(110));
+  ok(many.h <= EX_MAX_H && many.hidden > 0 && many.shown + many.hidden === 120,
     'a day with too many rows is clamped and reports what it hid');
+  ok(exDayLayout(new Array(40).fill(110)).hidden === 0,
+    '40 rows now fit — the day ceiling was raised from 1800 to the shared 8000 cap');
 
   // 파일명. 주는 ISO 주차가 아니라 **그 주 일요일**로 적는다 — 이 앱의 주는
   // 일요일 시작이고 ISO 는 월요일 시작이라 섞으면 반드시 어긋난다.
@@ -457,6 +469,79 @@ if (location.search.includes('selftest')) {
     'the month model drops the note too');
   ok(mNo.days.length === 35 && mNo.days.filter((d) => d.inMonth).length === 31,
     'the month model covers 5 weeks and 31 days of July 2026');
+
+  // --- 상세 목록 (월·주 격자 아래) ---
+  // 셀 폭 154px 에서 잘리는 제목을 폭 1080 으로 다시 싣는 영역이다.
+  const g1 = [{ ds: '2026-07-26', rows: [{ title: '가', done: false }] }];
+  ok(exDetailLayout([], 5000).h === 0, 'no days with to-dos means no detail section at all');
+  ok(exDetailLayout(g1, 5000).h === 56 + 110 + 20,
+    'one day with one row is a date header plus a row plus the gap');
+  ok(exDetailLayout(g1, 5000).hidden === 0 && exDetailLayout(g1, 5000).shown === 1,
+    'nothing is hidden when it fits');
+  ok(exDetailLayout([{ ds: 'x', rows: [{ title: 'a' }, { title: 'b', memo: 'm' }] }], 5000).h
+     === 56 + 110 + (110 + 62) + 20, 'a row carrying a note reserves two extra lines');
+  const gMany = [];
+  for (let i = 0; i < 60; i++) gMany.push({ ds: '2026-07-' + pad((i % 28) + 1), rows: [{ title: 'a' }] });
+  const dm = exDetailLayout(gMany, 1000);
+  ok(dm.hidden > 0 && dm.shown + dm.hidden === 60, 'an over-budget detail list reports what it cut');
+  ok(dm.h <= 1000, 'the +N line is counted inside the budget, not added on top of it');
+
+  // 상세를 끄면 월 이미지는 지금과 바이트 동일해야 한다 — 높이가 안 변해야 성립한다.
+  const busy = [];
+  for (let d = 1; d <= 28; d++) {
+    busy.push({ id: 'x' + d, title: '항목 ' + d, date: '2026-07-' + pad(d), time: '',
+      pri: 'none', repeat: 'none', memo: '메모 ' + d, done: false });
+  }
+  const off = exportModel('month', busy, '2026-07-26', 2026, 6, true, false);
+  const on = exportModel('month', busy, '2026-07-26', 2026, 6, true, true);
+  ok(off.layout.h === 1150 && !off.layout.detail,
+    'with the detail list off the month image keeps its exact old height');
+  ok(on.layout.h > off.layout.h && on.layout.detail.shown === 28,
+    'with it on the image grows and every day that has to-dos gets a header');
+  ok(on.layout.h <= EX_MAX_H, 'the detail list never pushes the image past the canvas ceiling');
+  // 앞뒤 달에서 넘어온 칸은 격자에만 있고 상세에는 안 실린다.
+  ok(on.layout.detail.groups.every((g) => g.ds.slice(0, 7) === '2026-07'),
+    'the month detail lists only days belonging to that month');
+
+  // ★ 두 토글의 상호작용: 상세는 나오되 메모 줄은 없어야 한다.
+  const dOnMOff = exportModel('month', busy, '2026-07-26', 2026, 6, false, true);
+  ok(dOnMOff.layout.detail.shown === 28, 'detail=true still produces the list when memo=false');
+  ok(dOnMOff.layout.detail.groups.every((g) => g.rows.every((r) => !('memo' in r))),
+    'detail=true + memo=false leaves no note on any detail row');
+  ok(JSON.stringify(dOnMOff).indexOf('메모 ') === -1,
+    'no note text survives anywhere in the model when memo is off');
+  ok(dOnMOff.layout.h < on.layout.h, 'dropping the notes makes the detail list shorter');
+
+  // --- 년·월 점프 ---
+  const ys = jumpYears(2026, 2026);
+  ok(ys.length === 21 && ys[0] === 2016 && ys[20] === 2036, 'the year range is today ±10');
+  ok(jumpYears(2026, 2040).indexOf(2040) >= 0 && jumpYears(2026, 2040).length === 22,
+    'a year outside the range is added so the current view is always selectable');
+  ok(jumpYears(2026, 2016).length === 21, 'a year already at the boundary is not duplicated');
+
+  // 말일 클램프 — 없는 날을 고르면 그 달 마지막 날로 내려앉는다.
+  ok(clampDay(2026, 1, 31) === '2026-02-28', 'Jan 31 → February lands on the 28th');
+  ok(clampDay(2028, 1, 31) === '2028-02-29', 'a leap year keeps the 29th');
+  ok(clampDay(2026, 3, 31) === '2026-04-30', '31st → a 30-day month lands on the 30th');
+  ok(clampDay(2026, 6, 15) === '2026-07-15', 'a day that exists is left alone');
+
+  // ★ 점프는 cy/cm/selected 를 함께 쓴다. `<` `>` 는 축이 갈리지만(월간은 cy/cm 만),
+  //   점프는 [data-day]·[today] 계열이다 — 안 그러면 하단 리스트가 이전 달을 가리킨다.
+  const jm = jumpTo('month', 2026, 1, '2026-07-26');
+  ok(jm.cy === 2026 && jm.cm === 1 && jm.selected === '2026-02-01',
+    'jumping in month view moves the selection to the 1st of the target month');
+  ok(jumpTo('week', 2027, 11, '2026-07-26').selected === '2027-12-01',
+    'week view jumps to the 1st as well');
+  ok(jumpTo('day', 2026, 1, '2026-01-31').selected === '2026-02-28',
+    'day view keeps the day-of-month and clamps it to the last day');
+  ok(jumpTo('day', 2026, 1, '2026-01-15').selected === '2026-02-15',
+    'day view keeps the day-of-month when it exists');
+  // 어느 뷰든 선택된 날은 반드시 점프한 달 안에 있어야 한다.
+  ['month', 'week', 'day'].forEach((v) => {
+    const r = jumpTo(v, 2026, 1, '2026-07-31');
+    ok(r.selected.slice(0, 7) === '2026-02' && parse(r.selected).getMonth() === r.cm,
+      'the selected date always lands inside the month that was jumped to (' + v + ')');
+  });
 
   console.log('selftest: all checks passed');
 }

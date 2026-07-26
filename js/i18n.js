@@ -108,6 +108,11 @@ const shortDay = (d) =>
   dtf({ month: 'short', day: 'numeric' }).format(d) + ' (' + dtf({ weekday: 'short' }).format(d) + ')';
 // 가입일 같은 순수 날짜. 표시 전용이라 fmt() 를 쓰지 않는다.
 const dateLabel = (d) => dtf({ year: 'numeric', month: 'short', day: 'numeric' }).format(d);
+// 년·월 점프 피커용. ko '7월' · '2026년' / en 'Jul' · '2026'.
+// 월 번호는 0-11 이고, 돌려주는 문자열은 화면에만 들어간다 — 고르고 나면
+// calendar.js 의 jumpTo() 가 숫자와 fmt() 문자열로만 상태를 바꾼다.
+const monthShort = (m) => dtf({ month: 'short' }).format(new Date(2024, m, 1));
+const yearLabel = (y) => dtf({ year: 'numeric' }).format(new Date(y, 0, 1));
 
 // ---------------------------------------------------------------- 문자열
 // 값이 함수면 인자를 받아 문장을 만든다 (개수·이름 같은 자리 채우기).
@@ -154,6 +159,13 @@ const STR = {
     'exp.shareFail': '공유하지 못했습니다',
     'exp.alt': '내보낼 캘린더 이미지 미리보기',
     'exp.brand': '할 일 캘린더',
+    'exp.detail': '상세 목록 포함',
+    'exp.detailHint': '격자 아래에 제목이 안 잘린 목록을 붙입니다',
+
+    // 년·월 점프
+    'jump.title': '날짜 이동',
+    'jump.year': '년',
+    'jump.month': '월',
 
     'pri.high': '높음', 'pri.med': '보통', 'pri.low': '낮음', 'pri.none': '없음',
     'rep.none': '반복 안 함', 'rep.daily': '매일', 'rep.weekly': '매주', 'rep.monthly': '매월',
@@ -332,6 +344,12 @@ const STR = {
     'exp.shareFail': 'Could not share',
     'exp.alt': 'Preview of the calendar image',
     'exp.brand': 'Todo Calendar',
+    'exp.detail': 'Include detail list',
+    'exp.detailHint': 'Adds a full-width list below the grid',
+
+    'jump.title': 'Jump to date',
+    'jump.year': 'Year',
+    'jump.month': 'Month',
 
     'pri.high': 'High', 'pri.med': 'Medium', 'pri.low': 'Low', 'pri.none': 'None',
     'rep.none': 'Does not repeat', 'rep.daily': 'Daily', 'rep.weekly': 'Weekly', 'rep.monthly': 'Monthly',

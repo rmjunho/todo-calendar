@@ -8,8 +8,8 @@
 **배포됨:** <https://todo-calendar.kro.kr> (GitHub Pages + `CNAME`) · 보안 규칙도 배포 완료
 
 기능은 다 붙었습니다 — 계정·승인·약관 동의·기기 간 동기화·본인 탈퇴·테마 3종·언어 2종·
-캘린더 이미지 내보내기. 남은 것은 §6 두 개(PWA / 스토어)와 **이미지 공유의 실기기 검증**
-입니다. `?selftest` 67개 통과.
+캘린더 이미지 내보내기(상세 목록 포함)·년월 점프. 남은 것은 §6 두 개(PWA / 스토어)와
+**이미지 공유의 실기기 검증**입니다. `?selftest` 96개 통과.
 
 ---
 
@@ -127,7 +127,7 @@ firebase.js                                                        (ESM 모듈)
 | **`adoptSettings`** | **로그인 시 병합.** 있는 키는 서버가 이기고 빠진 키는 로컬 유지. `false` 면 승격 필요 |
 | `okTheme` / `okLang` | 값 검증. 규칙의 `validSettings()` 와 **같은 집합을 유지할 것** |
 | **`applyTheme`** | **`data-theme` 을 건다.** `system` 일 때만 `darkMQ` 를 본다 |
-| `dow` `timeLabel` `monthTitle` `dayTitle` `shortDay` `dateLabel` | **Intl. 전부 화면 표시 전용** |
+| `dow` `timeLabel` `monthTitle` `dayTitle` `shortDay` `dateLabel` `monthShort` `yearLabel` | **Intl. 전부 화면 표시 전용** |
 | `t(key, a, b)` / `STR` | 문자열. 값이 함수면 인자로 문장을 만든다. ko / en 각 ~170개 |
 
 ### js\auth.js — 계정 (화면·검증만. 실제 인증은 firebase.js)
@@ -167,8 +167,12 @@ firebase.js                                                        (ESM 모듈)
 | **`isDone`** | 반복은 `doneDates[]`, 단발은 `done` |
 | `sortItems` / `itemsOn` | 하루종일→시간→우선순위 정렬, 날짜 필터 |
 | **`state`** | **전역 상태 객체 (단일 소스)** |
-| **`sheetBusy`** | **시트가 열려 있나.** 원격 스냅샷 렌더를 미룰지 판정 (`showForm \|\| exp`) |
+| **`sheetBusy`** | **시트가 열려 있나.** 원격 스냅샷 렌더를 미룰지 판정 (`showForm \|\| exp \|\| jump`) |
 | **`render`** | **`#app` 전체 innerHTML 재생성** |
+| **`clampDay`** | **말일 클램프.** 없는 날이면 그 달 마지막 날 (1/31 → 2월 = 2/28) |
+| `jumpYears` | 오늘 ±10년(21개). 보고 있는 해가 밖이면 합쳐 넣는다 |
+| **`jumpTo`** | **`cy`·`cm`·`selected` 를 함께 돌려준다.** `[data-day]` 계열 — 아래 지뢰 참고 |
+| `openJump` / `applyJump` / `closeJump` / `renderJumpSheet` | 년월 점프 시트. 닫으며 **반드시 `render()`** |
 
 ### js\export.js — 이미지 내보내기 (Canvas 2D. 외부 라이브러리 0)
 | 함수 | 역할 |
@@ -176,14 +180,16 @@ firebase.js                                                        (ESM 모듈)
 | **`EX_COLORS` / `exColors`** | **캔버스용 색 상수 테이블.** `data-theme` 으로 고른다 — getComputedStyle 을 쓰지 않는 이유는 §5 |
 | **`exWrap` / `exEllipsize`** | **`measure` 를 인자로 받는 순수 함수.** 한글은 글자 단위, 영문은 공백에서 끊는다 |
 | **`exMonthLayout`** | 5주/6주에 따라 **높이가 변한다** (`270 + 176×주수`) |
-| `exWeekLayout` / `exDayLayout` | 데이터가 높이를 정하므로 **위아래를 클램프**한다 (주 1000~1700, 일 700~1800) |
+| `exWeekLayout` / `exDayLayout` | 데이터가 높이를 정하므로 **위아래를 클램프**한다 (주 598~1700, 일 700~8000) |
+| **`exDetailLayout`** | **격자 아래 상세 목록.** 할 일이 **있는 날만** 헤더를 그린다. `hidden` 은 항목 수 |
 | **`exportFilename`** | `todo-calendar-{month\|week\|day}-…png`. **주는 그 주 일요일** (ISO 주차 아님) |
-| **`exportModel`** | 그리기 전 데이터 모델. **`includeMemo` 가 false 면 `memo` 키를 안 만든다** |
+| **`exportModel` / `exAttachDetail`** | 그리기 전 데이터 모델. **`includeMemo` 가 false 면 `memo` 키를 안 만든다** |
 | `drawExport` / `exDrawMonth·Week·Day` | 모델 → 캔버스. 페이지 색으로 먼저 덮어 **PNG 를 불투명**하게 만든다 |
+| **`exDrawRow` / `exDrawDetail`** | **아젠다 한 줄 렌더러.** 일간 뷰와 월·주 상세가 **같은 것**을 쓴다 |
 | **`openExport` / `buildExport`** | **1단.** `await document.fonts.ready` → 그리기 → `toBlob` → `canShare` 검사 |
 | **`shareImage` / `saveImage`** | **2단.** `share()` 는 **핸들러 안에서 await 없이** 호출. 저장은 `a[download]` |
-| `toggleExportMemo` / `closeExport` | 옛 objectURL revoke 후 재빌드 · 닫으며 **반드시 `render()`** |
-| `renderExportSheet` | 미리보기 시트. 기존 바텀 시트 4개와 같은 구조(`.card` 아님) |
+| `toggleExportOpt` (`…Memo`/`…Detail`) / `closeExport` | 옛 objectURL revoke 후 재빌드 · 닫으며 **반드시 `render()`** |
+| `renderExportSheet` | 미리보기 시트. 기존 바텀 시트와 같은 구조(`.card` 아님) |
 
 ### js\todo.js — 할 일
 | 함수 | 역할 |
@@ -192,7 +198,7 @@ firebase.js                                                        (ESM 모듈)
 | `toggleDone` | 반복이면 날짜 배열, 단발이면 플래그 |
 | `renderSheet` / `openForm` / `saveForm` | 입력 시트 |
 | click / input / keydown 위임 | 모든 버튼이 여기 하나로. **입력은 uncontrolled**(캐럿 보존) |
-| 부트스트랩 · selftest | `render()` + 10초 타임아웃 가드 · `?selftest` 67개 |
+| 부트스트랩 · selftest | `render()` + 10초 타임아웃 가드 · `?selftest` 96개 |
 
 렌더 흐름은 하나뿐입니다: **상태 변경 → `render()` → `#app.innerHTML` 통째 교체.**
 가상 DOM·프레임워크 없음.
@@ -275,7 +281,8 @@ firebase.js                                                        (ESM 모듈)
   showAdmin, showSettings,
   legal: null,         // null | 'terms' | 'privacy'
   del: null,           // 탈퇴 확인 { pin, error, busy }
-  exp: null            // 이미지 미리보기 { memo, busy, url, file, canShare, err }
+  exp: null,           // 이미지 미리보기 { memo, detail, busy, url, file, canShare, err }
+  jump: null           // 년월 점프 { y } — 월을 누르면 확정
 }
 ```
 설정(`theme`/`lang`)은 여기 없습니다 — `SETTINGS`(i18n.js)에 있습니다.
@@ -372,8 +379,37 @@ PIN 재인증 → todos 삭제 → users + usernames 삭제 → Auth 계정 삭�
 `render()` 는 `#app` 을 통째로 다시 만듭니다. 원격 스냅샷마다 그리면 바텀 시트가 튀어서
 `if (!sheetBusy()) render()` 로 막아 뒀습니다(입력 시트 + 이미지 미리보기). **이 가드를
 빼지 마세요.** 대신 **시트를 닫는 쪽이 반드시 `render()` 를 불러야** 합니다 —
-`closeForm()`·`closeExport()` 가 그때 밀린 원격 변경을 한 번에 반영합니다. 안 부르면 다른
-기기에서 추가한 할 일이 화면에 영영 안 나타납니다.
+`closeForm()`·`closeExport()`·`closeJump()` 가 그때 밀린 원격 변경을 한 번에 반영합니다.
+안 부르면 다른 기기에서 추가한 할 일이 화면에 영영 안 나타납니다.
+
+### ⚠️ 캔버스 상한 8000 — 올리지 마세요
+
+`EX_MAX_H = 8000`(export.js)은 취향이 아니라 **한계선**입니다. **캔버스는 최대 크기를
+넘으면 예외 없이 빈 이미지를 냅니다** — 에러도 로그도 없이 흰 PNG 가 공유됩니다.
+
+- **iOS Safari 의 최대 면적이 16,777,216px²** 이고, 1080 폭이면 높이 15,534 에 해당합니다.
+  8000 은 **그 절반**이라 브라우저 자체 할당분의 여유가 남습니다. 상한에 붙이면 기기와
+  메모리 상황에 따라 넘어갑니다.
+- 비트맵 RAM 은 `1080×8000×4` = **34.6MB**, PNG 인코딩 피크가 그 두 배입니다. 12000 이면
+  피크가 100MB 를 넘어 저사양 기기의 탭이 죽습니다.
+- 1:7.4 가 실용 한계입니다. 메신저가 썸네일로 줄이므로 더 길면 읽을 수 없는 띠가 됩니다.
+
+넘치는 만큼은 `+N개` 로 자릅니다. **"잘리니까 올리자"가 아니라 그 자름이 안전장치입니다.**
+
+### ★ 남은 버그 — `< >` 가 `selected` 를 안 바꿉니다
+
+`todo.js` 의 `[data-nav]` 는 축이 갈립니다. **월간에서 `< >` 로 달을 넘겨도 `selected` 가
+그대로라 하단 리스트가 이전 달 날짜를 계속 보여줍니다.**
+
+| 조작 | `cy`/`cm` | `selected` |
+|---|---|---|
+| `< >` (월간) | 바꿈 | **안 바꿈** ← 버그 |
+| `< >` (주·일간) | 안 바꿈 | 바꿈 |
+| `[data-day]` 셀 클릭 · `today` · **년월 점프** | 바꿈 | 바꿈 |
+
+**이미지 내보내기·년월 점프 이전부터 있던 것**이고, 점프는 `[data-day]` 계열(`jumpTo()`)을
+따르므로 영향을 안 받습니다. 고칠 때는 월간 `< >` 에서 `selected` 를 그 달 1일로 옮기면
+되는데, "달을 훑어보는 동안 선택은 유지"를 의도한 것일 수도 있어 **판단이 필요합니다.**
 
 ### CSS 함정
 
@@ -393,8 +429,8 @@ PIN 재인증 → todos 삭제 → users + usernames 삭제 → Auth 계정 삭�
    `#F2F2F7` 라 흰 하이라이트는 아예 안 보이고 옅은 상단 음영만 읽힙니다.
 4. **`.card` 를 쓰는 곳은 9군데**입니다: 로그인 카드, 월/주/일 뷰, 할 일 리스트,
    `terms.html`, `privacy.html`, `delete-account.html` **×2(ko·en)**. 한 군데만 고치면
-   나머지가 남으니 **토큰으로 고치세요.** 바텀 시트 5개(입력·설정·회원 관리·약관·
-   이미지 미리보기)는 `.card` 가 아니라 `var(--bg)` 단색이라 sheen 이 없습니다.
+   나머지가 남으니 **토큰으로 고치세요.** 바텀 시트 6개(입력·설정·회원 관리·약관·
+   이미지 미리보기·년월 점프)는 `.card` 가 아니라 `var(--bg)` 단색이라 sheen 이 없습니다.
 5. **월간 뷰 요일 헤더 아래 실선과 일간 뷰 시간선은 sheen 이 아닙니다.**
    `border-top:.5px solid var(--separator)` 헤어라인이고 **의도된 것**입니다. 위치도
    다릅니다 — 월간 뷰 헤더는 35px, sheen 은 96px 에서 끝납니다. 같이 지우지 마세요.
@@ -471,8 +507,12 @@ dow() 요일 이름                  fmt()  ← 'YYYY-MM-DD' 생산자
 monthTitle() / dayTitle()        parse() / addDays()
 shortDay() / dateLabel()         occursOn() / isDone()
 timeLabel() 오전·오후            item.date · doneDates[] · state.selected
-                                 <input type="date"> 의 value
+monthShort() / yearLabel()       clampDay() / jumpTo() ← 점프가 돌려주는 값
+  ↑ 점프 피커의 년·월 이름         <input type="date"> 의 value
 ```
+
+**년월 점프도 이 경계 위에 있습니다.** 피커에 *보이는* 것은 `monthShort()`/`yearLabel()`
+이지만, 눌렀을 때 `jumpTo()` 가 돌려주는 것은 **숫자 `cy`/`cm` 와 `fmt()` 문자열**뿐입니다.
 
 **이 경계가 제일 위험한 곳입니다.** Intl 출력이 저장 경로로 새면 타임존 경계에서 할 일이
 하루씩 밀립니다. `?selftest` 가 `lang='en'` 으로 바꾼 뒤 `fmt`·`addDays`·`occursOn`·
@@ -520,11 +560,29 @@ JS 를 안 돌리는 크롤러에게 **빈 페이지**입니다(확인함). 이 
 그립니다. 일간 뷰는 화면의 시간축을 옮기지 않고 아젠다 리스트로 그립니다 — 6시~24시 눈금은
 900px 을 먹고 정보가 0입니다.
 
-| 뷰 | 크기 | 넘칠 때 |
-|---|---|---|
-| 월 | 1080 × (270 + 176×주수) → 5주 1150 / 6주 1326 | pill 3개 + `+N개` (화면과 같은 규칙) |
-| 주 | 1080 × clamp(1000, 260+가장 긴 칸, 1700) | 칸이 허용하는 만큼 + `+N개` |
-| 일 | 1080 × clamp(700, 214+행 합, 1800) | 최대 높이까지 + `+N개` |
+격자 아래에 **폭 1080 을 통째로 쓰는 상세 목록**이 붙습니다(월·주). 셀 폭이 154px 라
+격자에서는 제목이 잘리는데, 상세는 안 잘립니다. 날짜 헤더는 **할 일이 있는 날만** 그리고,
+일간 뷰의 아젠다 렌더러(`exDrawRow`)를 **그대로 재사용**합니다. 일간 뷰는 이미 아젠다라
+토글을 안 보여 줍니다.
+
+**크기 기준선** — 다음 세션이 회귀를 판단할 실측값입니다(2026-07 · 항목 3개 기준):
+
+| 뷰 | 상세 끔 | 상세 켬 | 메모 끔 + 상세 켬 | 넘칠 때 |
+|---|---|---|---|---|
+| 월 | **1080×1150** | 1080×3616 | 1080×3492 | pill 3개 + `+N개` |
+| 주 | **1080×598** | 1080×2234 | 1080×2110 | 칸이 허용하는 만큼 + `+N개` |
+| 일 | 1080×700 | 1080×700 (토글 없음) | 1080×700 | 최대 높이까지 + `+N개` |
+
+공식: 월 `270 + 176×주수` (고정) · 주 `clamp(598, 214+가장 긴 칸, 1700)` ·
+일 `clamp(700, 214+행 합, 8000)` · 상세는 그 아래에 붙고 **전체가 8000 을 못 넘습니다**(§4).
+
+⚠️ **"상세를 끄면 예전과 동일"은 월간에만 해당합니다.** 주간은 하한을 **1000 → 598** 로
+낮췄습니다(할 일이 하루치뿐인 주가 아래 절반을 비워 두고 있었습니다). 그래서 **주 이미지는
+상세를 꺼도 예전보다 짧습니다.** 월간만 바이트 동일합니다.
+
+⚠️ **`exDayLayout` selftest 단언을 1800 → 8000 기준으로 고쳤습니다.** 일간 상한을 올리자
+40행이 전부 들어가 옛 단언(`h === 1800 && hidden > 0`)이 성립하지 않습니다. 단언의 의도
+(클램프 + 잘린 개수 보고)는 120행으로 옮겨 유지했습니다. **회귀가 아니라 명세 변경입니다.**
 
 ⚠️ **`navigator.share()` 는 사용자 제스처 처리 중에만 허용됩니다.** `canvas.toBlob()` 이
 비동기라 클릭→그리기→`await`→`share()` 로 짜면 활성화가 만료돼 **폰에서만**
@@ -539,7 +597,11 @@ JS 를 안 돌리는 크롤러에게 **빈 페이지**입니다(확인함). 이 
   미리보기가 깨집니다 — `closeExport()`/`toggleExportMemo()` 가 revoke 를 책임집니다.
 - `await document.fonts.ready` 를 매번 겁니다. 안 걸면 **첫 내보내기만** 시스템 폰트입니다.
 - [메모 포함] 토글은 개인정보 장치입니다. 끄면 `exportModel()` 이 `memo` **키 자체를 안
-  만듭니다** — 빈 문자열로 두면 `row.memo != null` 검사에서 새어 나갑니다.
+  만듭니다** — 빈 문자열로 두면 `row.memo != null` 검사에서 새어 나갑니다. **상세 목록도
+  같은 `exRow()` 를 지나므로** 메모를 끄면 상세에서도 자동으로 빠집니다(토글 두 개가 따로
+  놀지 않는 지점. selftest 가 모델 JSON 전체에 메모 문자열이 없는지까지 봅니다).
+- 월 상세는 **그 달의 날만** 싣습니다. 앞뒤 달에서 넘어온 격자 칸은 35% 로 흐려 둔 맥락일
+  뿐이라, 제목이 "2026년 7월" 인데 8월 항목을 나열하면 어긋납니다.
 
 **★ 남은 일: 갤럭시 실기기에서 공유·저장 직접 확인.** 데스크톱 크롬 통과는 위 제스처
 만료를 재현하지 못하므로 근거가 되지 않습니다. TWA 패키징(§6-3) 후에도 한 번 더 보세요.

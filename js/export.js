@@ -56,10 +56,30 @@ const EX_FOOT = 64;           // 워터마크 줄
 const EX_GRID = EX_W - EX_PAD * 2;
 
 const M_DOW = 56, M_ROW = 176;                        // 월: 요일 줄 · 주 한 줄
-const W_DOW = 96, W_ITEM = 88, W_MIN = 1000, W_MAX = 1700;
+
+// ★ 이미지 전체 높이 상한. 무제한으로 두면 안 된다 — 캔버스에는 브라우저별
+//   최대 크기가 있고 **넘으면 예외 없이 빈 이미지**가 나온다.
+//   · iOS Safari 의 최대 면적 16,777,216px² 가 실질 하한선이고, 1080 폭이면
+//     높이 15,534 에 해당한다. 8000 은 그 절반이라 브라우저 자체 할당분의
+//     여유가 남는다.
+//   · 비트맵 RAM 은 1080×8000×4 = 34.6MB. PNG 인코딩 피크가 그 두 배라도
+//     중급 갤럭시에서 버틴다. 12000 이면 인코딩 피크가 100MB 를 넘는다.
+//   · 1:7.4 가 실용 한계다. 메신저는 공유 이미지를 썸네일로 줄이므로 더 길면
+//     읽을 수 없는 띠가 된다.
+//   넘치는 만큼은 마지막에 `+N개` 로 자른다.
+const EX_MAX_H = 8000;
+
+// 주 격자. 하한은 요일 줄 + 3칸 = 96+264+24 (총 이미지 598px). 더 낮추면
+// 요일 헤더만 남아 주 격자로 안 읽힌다. 상한은 총 1700 에 해당.
+const W_DOW = 96, W_ITEM = 88, W_GRID_MIN = 384, W_GRID_MAX = 1486;
+
 // 메모가 있는 행은 항상 2줄 자리를 잡는다. 실제 줄 수는 measureText 로만 알 수
 // 있는데(캔버스 필요), 레이아웃 함수는 캔버스 없이 시험 가능해야 하므로 고정한다.
-const D_MIN = 700, D_MAX = 1800, D_ROW = 110, D_MEMO = 62, D_MEMO_LINE = 30;
+const D_MIN = 700, D_ROW = 110, D_MEMO = 62, D_MEMO_LINE = 30;
+
+// 상세 목록 — 격자 아래에 폭 1080 을 통째로 쓴다. 셀 폭 154px 에서 잘리는
+// 제목·메모를 여기서 온전히 보여 준다. 날짜 헤더는 **할 일이 있는 날만** 그린다.
+const DT_HEAD = 56, DT_GAP = 20, DT_MORE = 44;
 
 // ---------------------------------------------------------------- 순수 함수
 // 아래 다섯은 캔버스를 안 건드린다 — ?selftest 가 검증하는 지점이다.
@@ -111,27 +131,49 @@ function exMonthLayout(cy, cm) {
 // 주. 행 수가 달력이 아니라 **데이터**의 함수라 순수 가변은 위험하다 —
 // 빈 주는 텅 비고 바쁜 주는 잘린다. 클램프 한 줄로 둘 다 막는다.
 function exWeekLayout(maxItems) {
-  const want = EX_HEAD + W_DOW + Math.max(0, maxItems) * W_ITEM + 24 + EX_FOOT;
-  const h = Math.min(W_MAX, Math.max(W_MIN, want));
-  const bodyH = h - EX_HEAD - W_DOW - EX_FOOT;
+  const want = W_DOW + Math.max(0, maxItems) * W_ITEM + 24;
+  const gridH = Math.min(W_GRID_MAX, Math.max(W_GRID_MIN, want));
   return {
-    w: EX_W, h: h, bodyTop: EX_HEAD + W_DOW, bodyH: bodyH,
-    colW: EX_GRID / 7, fit: Math.max(1, Math.floor((bodyH - 24) / W_ITEM))
+    w: EX_W, h: EX_HEAD + gridH + EX_FOOT, gridH: gridH,
+    bodyTop: EX_HEAD + W_DOW, bodyH: gridH - W_DOW,
+    colW: EX_GRID / 7, fit: Math.max(1, Math.floor((gridH - W_DOW - 24) / W_ITEM))
   };
 }
 
 // 일. 행마다 높이가 다르므로(메모 줄) 높이 배열을 받는다.
 function exDayLayout(heights) {
-  const cap = D_MAX - EX_HEAD - EX_FOOT - 24;
+  const cap = EX_MAX_H - EX_HEAD - EX_FOOT - 24;
   let used = 0, shown = 0;
   for (let i = 0; i < heights.length; i++) {
     if (used + heights[i] > cap) break;
     used += heights[i]; shown++;
   }
   const hidden = heights.length - shown;
-  if (hidden) used += 44;
-  const h = Math.min(D_MAX, Math.max(D_MIN, EX_HEAD + used + 24 + EX_FOOT));
+  if (hidden) used += DT_MORE;
+  const h = Math.min(EX_MAX_H, Math.max(D_MIN, EX_HEAD + used + 24 + EX_FOOT));
   return { w: EX_W, h: h, bodyTop: EX_HEAD, bodyH: h - EX_HEAD - EX_FOOT, shown: shown, hidden: hidden };
+}
+
+// 상세 목록. `groups` 는 [{ ds, rows }] — 할 일이 **있는 날만** 들어온다.
+// budget 은 격자·머리말·꼬리말을 뺀 나머지 높이다.
+// `hidden` 은 그룹이 아니라 **항목 수**다 — `+N개` 에 그대로 쓴다.
+function exDetailLayout(groups, budget) {
+  const groupH = (g) => DT_HEAD + g.rows.reduce((a, r) => a + D_ROW + (r.memo ? D_MEMO : 0), 0);
+  const fit = (cap) => {
+    let used = 0, shown = 0;
+    for (let i = 0; i < groups.length; i++) {
+      const gh = groupH(groups[i]);
+      if (used + gh > cap) break;
+      used += gh; shown++;
+    }
+    return { used: used, shown: shown };
+  };
+  let r = fit(budget);
+  // 자를 게 있으면 `+N개` 줄까지 예산 안에 들어와야 한다. 두 번째 패스로 다시 잰다.
+  if (r.shown < groups.length) r = fit(budget - DT_MORE);
+  const hidden = groups.slice(r.shown).reduce((a, g) => a + g.rows.length, 0);
+  const used = r.used + (hidden ? DT_MORE : 0);
+  return { h: used ? used + DT_GAP : 0, shown: r.shown, hidden: hidden };
 }
 
 // 파일명. ISO 주차(2026-W30)는 쓰지 않는다 — 이 앱의 주는 **일요일 시작**이고
@@ -159,8 +201,22 @@ function exRow(it, ds, includeMemo) {
 
 const exRemainLabel = (n) => (n === 0 ? t('list.allDone') : t('list.remain', n));
 
+// 상세를 붙이고 최종 높이를 확정한다. `days` 의 행은 이미 `exRow` 를 지나왔으므로
+// ★ [메모 포함] 을 끄면 여기 들어오는 행에 `memo` 키가 없다 — 상세도 자동으로
+//   메모 없이 그려진다. 두 토글이 따로 놀지 않는 지점이다.
+function exAttachDetail(L, days, includeDetail) {
+  if (!includeDetail) return L;
+  const groups = days.filter((d) => d.rows.length).map((d) => ({ ds: d.ds, rows: d.rows }));
+  const det = exDetailLayout(groups, EX_MAX_H - L.h - DT_GAP);
+  if (!det.h) return L;
+  L.detailTop = L.h - EX_FOOT + DT_GAP;
+  L.h += det.h;
+  L.detail = Object.assign(det, { groups: groups });
+  return L;
+}
+
 // 그리기 전에 확정되는 데이터 모델. 캔버스는 이 객체만 보고 그린다.
-function exportModel(view, items, sel, cy, cm, includeMemo) {
+function exportModel(view, items, sel, cy, cm, includeMemo, includeDetail) {
   const remain = (rows) => rows.filter((r) => !r.done).length;
   if (view === 'month') {
     const L = exMonthLayout(cy, cm);
@@ -173,7 +229,12 @@ function exportModel(view, items, sel, cy, cm, includeMemo) {
       if (d.getMonth() === cm) left += remain(rows);
       days.push({ ds: ds, day: d.getDate(), dow: d.getDay(), inMonth: d.getMonth() === cm, rows: rows });
     }
-    return { view: view, layout: L, days: days, title: monthTitle(cy, cm), sub: exRemainLabel(left) };
+    // 상세는 **이 달의 날만** 싣는다. 앞뒤 달에서 넘어온 칸은 격자에서 35% 로
+    // 흐려 둔 맥락일 뿐이고, 제목이 "2026년 7월" 인데 8월 항목을 나열하면 어긋난다.
+    return {
+      view: view, layout: exAttachDetail(L, days.filter((d) => d.inMonth), includeDetail),
+      days: days, title: monthTitle(cy, cm), sub: exRemainLabel(left)
+    };
   }
   if (view === 'week') {
     const ws = addDays(sel, -parse(sel).getDay());
@@ -188,12 +249,13 @@ function exportModel(view, items, sel, cy, cm, includeMemo) {
     const L = exWeekLayout(days.reduce((m, d) => Math.max(m, d.rows.length), 0));
     const start = parse(ws), end = parse(addDays(ws, 6));
     return {
-      view: view, layout: L, days: days,
+      view: view, layout: exAttachDetail(L, days, includeDetail), days: days,
       title: monthTitle(start.getFullYear(), start.getMonth()),
       sub: dateLabel(start) + ' – ' + dateLabel(end)
     };
   }
   // day — 화면의 시간축을 옮기지 않는다. 6시~24시 눈금은 900px 을 먹고 정보는 0이다.
+  // 이미 아젠다 형식이라 상세를 붙이지 않는다 (토글도 안 보여 준다).
   const rows = itemsOn(items, sel, SHOW_COMPLETED).map((it) => exRow(it, sel, includeMemo));
   const L = exDayLayout(rows.map((r) => D_ROW + (r.memo ? D_MEMO : 0)));
   return { view: view, layout: L, rows: rows, title: dayTitle(parse(sel)), sub: exRemainLabel(remain(rows)) };
@@ -337,6 +399,31 @@ function exDrawWeek(ctx, C, m) {
   exLine(ctx, EX_PAD, L.bodyTop, EX_PAD + EX_GRID, C.sep);
 }
 
+// 아젠다 한 줄. 일간 뷰와 월·주의 상세 목록이 **같은 렌더러**를 쓴다.
+// 돌려주는 값은 이 행이 먹은 높이다.
+function exDrawRow(ctx, C, r, x, y, w) {
+  const rh = D_ROW + (r.memo ? D_MEMO : 0);
+  ctx.save();
+  if (r.done) ctx.globalAlpha = C.doneA;
+
+  exRect(ctx, x, y + 24, 6, rh - 44, 3);
+  ctx.fillStyle = r.color;
+  ctx.fill();
+
+  exClip(ctx, r.title, x + 24, y + 44, w - 230, exFont(600, 30), C.label, r.done);
+  exText(ctx, r.time, x + w, y + 44, exFont(600, 25), r.allDay ? C.label3 : C.label2, 'right');
+  if (r.memo) {
+    // 메모만 여러 줄로 흐른다. 한글은 공백이 없어 글자 단위로 끊긴다.
+    ctx.font = exFont(500, 24);
+    const memoLines = exWrap(r.memo, w - 30, 2, (v) => ctx.measureText(v).width);
+    for (let k = 0; k < memoLines.length; k++) {
+      exText(ctx, memoLines[k], x + 24, y + 80 + k * D_MEMO_LINE, exFont(500, 24), C.label3);
+    }
+  }
+  ctx.restore();
+  return rh;
+}
+
 function exDrawDay(ctx, C, m) {
   const L = m.layout;
   exRect(ctx, EX_PAD, EX_HEAD, EX_GRID, L.h - EX_HEAD - EX_FOOT, 24);
@@ -351,36 +438,39 @@ function exDrawDay(ctx, C, m) {
   const x = EX_PAD + 26, w = EX_GRID - 52;
   let y = EX_HEAD + 24;
   for (let i = 0; i < L.shown; i++) {
-    const r = m.rows[i];
-    const rh = D_ROW + (r.memo ? D_MEMO : 0);
     if (i > 0) exLine(ctx, x, y, x + w, C.sep);
-    ctx.save();
-    if (r.done) ctx.globalAlpha = C.doneA;
-
-    exRect(ctx, x, y + 24, 6, rh - 44, 3);
-    ctx.fillStyle = r.color;
-    ctx.fill();
-
-    exClip(ctx, r.title, x + 24, y + 44, w - 230, exFont(600, 30), C.label, r.done);
-    exText(ctx, r.time, x + w, y + 44, exFont(600, 25), r.allDay ? C.label3 : C.label2, 'right');
-    if (r.memo) {
-      // 메모만 여러 줄로 흐른다. 한글은 공백이 없어 글자 단위로 끊긴다.
-      ctx.font = exFont(500, 24);
-      const memoLines = exWrap(r.memo, w - 30, 2, (v) => ctx.measureText(v).width);
-      for (let k = 0; k < memoLines.length; k++) {
-        exText(ctx, memoLines[k], x + 24, y + 80 + k * D_MEMO_LINE, exFont(500, 24), C.label3);
-      }
-    }
-    ctx.restore();
-    y += rh;
+    y += exDrawRow(ctx, C, m.rows[i], x, y, w);
   }
   if (L.hidden) exText(ctx, t('cell.more', L.hidden), x + 24, y + 22, exFont(600, 24), C.label3);
 }
 
+// 격자 아래 상세 목록. 폭 1080 을 통째로 쓰므로 제목·메모가 안 잘린다.
+function exDrawDetail(ctx, C, m) {
+  const L = m.layout, D = L.detail;
+  const cardH = L.h - L.detailTop - EX_FOOT;
+  exRect(ctx, EX_PAD, L.detailTop, EX_GRID, cardH, 24);
+  ctx.fillStyle = C.card;
+  ctx.fill();
+
+  const x = EX_PAD + 26, w = EX_GRID - 52;
+  let y = L.detailTop;
+  for (let i = 0; i < D.shown; i++) {
+    const g = D.groups[i];
+    if (i > 0) exLine(ctx, x, y, x + w, C.sep);
+    // 날짜 헤더는 할 일이 있는 날만 온다 — 빈 날은 groups 단계에서 이미 빠졌다.
+    const d = parse(g.ds);
+    exText(ctx, shortDay(d), x, y + DT_HEAD / 2 + 4, exFont(700, 26),
+      d.getDay() === 0 ? C.sun : d.getDay() === 6 ? C.tint : C.label2);
+    y += DT_HEAD;
+    for (let k = 0; k < g.rows.length; k++) y += exDrawRow(ctx, C, g.rows[k], x, y, w);
+  }
+  if (D.hidden) exText(ctx, t('cell.more', D.hidden), x, y + 22, exFont(600, 24), C.label3);
+}
+
 // 데이터 모델 → 캔버스. 여기서 나가는 것은 canvas 하나뿐이다.
-function drawExport(view, items, sel, cy, cm, includeMemo) {
+function drawExport(view, items, sel, cy, cm, includeMemo, includeDetail) {
   const C = exColors();
-  const m = exportModel(view, items, sel, cy, cm, includeMemo);
+  const m = exportModel(view, items, sel, cy, cm, includeMemo, includeDetail);
   const canvas = document.createElement('canvas');
   canvas.width = m.layout.w;
   canvas.height = m.layout.h;
@@ -393,6 +483,7 @@ function drawExport(view, items, sel, cy, cm, includeMemo) {
   if (view === 'month') exDrawMonth(ctx, C, m);
   else if (view === 'week') exDrawWeek(ctx, C, m);
   else exDrawDay(ctx, C, m);
+  if (m.layout.detail) exDrawDetail(ctx, C, m);
   exFooter(ctx, C, canvas.height);
   return canvas;
 }
@@ -402,21 +493,29 @@ function drawExport(view, items, sel, cy, cm, includeMemo) {
 //   받는다. navigator.share() 는 사용자 제스처 처리 중에만 허용되는데
 //   canvas.toBlob() 이 비동기라 클릭→그리기→await→share() 로 짜면 활성화가
 //   만료돼 폰에서만 NotAllowedError 로 죽는다(데스크톱 크롬은 빨라서 통과한다).
+const blankExp = (memo, detail) =>
+  ({ memo: memo, detail: detail, busy: true, url: '', file: null, canShare: false, err: '' });
+
 function openExport() {
-  state.exp = { memo: true, busy: true, url: '', file: null, canShare: false, err: '' };
+  state.exp = blankExp(true, true);
   render();
   buildExport();
 }
 
-function toggleExportMemo() {
+// [메모 포함]·[상세 목록 포함] 둘 다 여기를 지난다 — 하는 일이 같다.
+function toggleExportOpt(key) {
   const old = state.exp;
   if (!old || old.busy) return;
   if (old.url) URL.revokeObjectURL(old.url);
   // 새 객체로 갈아 끼운다 — 진행 중이던 빌드가 자기 것이 아님을 알아채고 빠진다.
-  state.exp = { memo: !old.memo, busy: true, url: '', file: null, canShare: false, err: '' };
+  const next = blankExp(old.memo, old.detail);
+  next[key] = !old[key];
+  state.exp = next;
   render();
   buildExport();
 }
+const toggleExportMemo = () => toggleExportOpt('memo');
+const toggleExportDetail = () => toggleExportOpt('detail');
 
 function closeExport() {
   if (state.exp && state.exp.url) URL.revokeObjectURL(state.exp.url);
@@ -432,7 +531,8 @@ async function buildExport() {
     // Pretendard 는 CDN 폰트다. 안 기다리면 첫 내보내기만 시스템 폰트로 나간다.
     // 두 번째부터는 이미 resolve 돼 있어 공짜다.
     if (document.fonts && document.fonts.ready) await document.fonts.ready;
-    const canvas = drawExport(state.view, state.items, state.selected, state.cy, state.cm, e.memo);
+    const canvas = drawExport(state.view, state.items, state.selected, state.cy, state.cm,
+      e.memo, e.detail);
     const blob = await new Promise((res, rej) =>
       canvas.toBlob((b) => (b ? res(b) : rej(new Error('toBlob returned null'))), 'image/png'));
     if (state.exp !== e) return;      // 그 사이 닫혔거나 토글로 다시 시작했다
@@ -480,6 +580,18 @@ function saveImage() {
 // ---------------------------------------------------------------- 미리보기 시트
 // 기존 바텀 시트 4개(입력·설정·회원 관리·약관)와 같은 구조. .card 가 아니라
 // background-color:var(--bg) 단색이라 sheen 이 없다.
+// 토글 한 줄. 두 스위치가 같은 모양이라 하나로 찍는다.
+function expToggle(key, label, hint, e) {
+  return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;' +
+    'margin-top:16px;padding:0 4px">' +
+    '<div><div style="font-size:15px;font-weight:600">' + esc(t(label)) + '</div>' +
+    '<div style="font-size:12px;line-height:1.5;color:var(--label-tertiary);margin-top:2px">' +
+      esc(t(hint)) + '</div></div>' +
+    '<button class="sw" role="switch" data-act="exp' + key[0].toUpperCase() + key.slice(1) +
+      '" aria-checked="' + !!e[key] + '" aria-label="' + esc(t(label)) + '"' +
+      (e.busy ? ' disabled' : '') + '><span></span></button></div>';
+}
+
 function renderExportSheet() {
   const e = state.exp;
   const placeholder = (msg) =>
@@ -506,12 +618,9 @@ function renderExportSheet() {
       '<div style="background-color:var(--fill-quaternary);border-radius:14px;padding:8px;overflow:hidden">' +
         preview + '</div>' +
 
-      '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;padding:0 4px">' +
-        '<div><div style="font-size:15px;font-weight:600">' + esc(t('exp.memo')) + '</div>' +
-        '<div style="font-size:12px;line-height:1.5;color:var(--label-tertiary);margin-top:2px">' +
-          esc(t('exp.hint')) + '</div></div>' +
-        '<button class="sw" role="switch" data-act="expMemo" aria-checked="' + e.memo + '" aria-label="' +
-          esc(t('exp.memo')) + '"' + (e.busy ? ' disabled' : '') + '><span></span></button></div>' +
+      // 일간 뷰는 이미 아젠다 형식이라 [상세 목록 포함] 을 안 보여 준다.
+      (state.view === 'day' ? '' : expToggle('detail', 'exp.detail', 'exp.detailHint', e)) +
+      expToggle('memo', 'exp.memo', 'exp.hint', e) +
 
       (e.err ? '<div role="alert" style="margin-top:14px;font-size:13px;font-weight:600;color:#FF3B30;' +
         'background-color:color-mix(in srgb, #FF3B30 12%, transparent);padding:10px 12px;border-radius:10px">' +

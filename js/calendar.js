@@ -97,13 +97,44 @@ const state = {
   legal: null,        // null | 'terms' | 'privacy' — 회원가입 화면의 약관 전문 모달
   showSettings: false,
   del: null,          // 탈퇴 확인 { pin, error, busy }. null 이면 확인 단계 전
-  exp: null           // 이미지 미리보기 { memo, busy, url, file, canShare, err }
+  exp: null,          // 이미지 미리보기 { memo, detail, busy, url, file, canShare, err }
+  jump: null          // 년·월 점프 { y } — y 는 고른 년, 월을 누르면 확정된다
 };
 
 // 시트가 열려 있으면 원격 스냅샷 렌더를 미룬다 — render() 가 #app 을 통째로
-// 갈아엎어서 시트가 튀기 때문이다. 미리보기 시트도 같은 보호가 필요하다.
-// 미룬 변경은 closeForm()/closeExport() 의 render() 가 한 번에 반영한다.
-const sheetBusy = () => state.showForm || !!state.exp;
+// 갈아엎어서 시트가 튀기 때문이다. 미리보기·점프 시트도 같은 보호가 필요하다.
+// 미룬 변경은 closeForm()/closeExport()/closeJump() 의 render() 가 반영한다.
+const sheetBusy = () => state.showForm || !!state.exp || !!state.jump;
+
+// ---------------------------------------------------------------- 년·월 점프
+// ★ 아래 셋은 순수 함수다 (?selftest 가 검증한다). Intl 을 안 쓴다 — 피커에
+//   보이는 년·월 **이름**만 표시용이고, 돌려주는 값은 숫자와 fmt() 문자열이다.
+
+// 같은 '일' 을 유지하되 그 달에 없으면 말일로 맞춘다 (1/31 → 2월 = 2/28).
+// Date 는 계산에만 쓰고 저장하지 않는다 — 나가는 값은 fmt() 문자열이다.
+function clampDay(y, m, d) {
+  const last = new Date(y, m + 1, 0).getDate();
+  return fmt(new Date(y, m, Math.min(d, last)));
+}
+
+// 오늘 기준 앞뒤 10년(21개). 지금 보고 있는 해가 그 밖이면 합쳐 넣는다 —
+// 안 그러면 목록에 정작 자기가 있는 해가 없다.
+function jumpYears(nowY, curY) {
+  const out = [];
+  for (let y = nowY - 10; y <= nowY + 10; y++) out.push(y);
+  if (out.indexOf(curY) < 0) out.push(curY);
+  return out.sort((a, b) => a - b);
+}
+
+// ★ `<` `>` 는 축이 갈린다 — 월간은 cy/cm 만, 주·일간은 selected 만 바꾼다.
+//   점프는 "특정 날짜로 간다" 는 조작이라 셋을 함께 쓰는 [data-day]·[today]
+//   계열을 따른다. 안 그러면 다른 달로 옮긴 뒤 하단 리스트가 이전 달을 가리킨다.
+function jumpTo(view, y, m, selected) {
+  return {
+    cy: y, cm: m,
+    selected: view === 'day' ? clampDay(y, m, parse(selected).getDate()) : fmt(new Date(y, m, 1))
+  };
+}
 
 // ---------------------------------------------------------------- view model
 function pill(it, ds) {
@@ -174,10 +205,15 @@ function render() {
 
   let html = '<div style="max-width:1024px;margin:0 auto;padding:28px 16px 130px">' + accountBar +
     '<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px">' +
-      '<div>' +
+      // 제목을 누르면 년·월 점프 시트가 열린다. < > 로 한 칸씩 걸어가지 않아도 된다.
+      '<button data-act="jump" aria-label="' + esc(t('jump.title')) + '" style="border:none;padding:0;' +
+        'margin:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer;display:block">' +
         '<div style="font-size:13px;font-weight:600;color:var(--tint)">' + esc(todayLabel) + '</div>' +
-        '<h1 style="margin:2px 0 0;font-size:30px;font-weight:700;letter-spacing:.2px">' + esc(monthLabel) + '</h1>' +
-      '</div>' +
+        '<div style="display:flex;align-items:center;gap:6px">' +
+          '<h1 style="margin:2px 0 0;font-size:30px;font-weight:700;letter-spacing:.2px">' + esc(monthLabel) + '</h1>' +
+          icon('chevron.up.chevron.down', 17, 'var(--label-tertiary)') +
+        '</div>' +
+      '</button>' +
       '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
         '<div class="seg-wrap">' + segments + '</div>' +
         '<div data-raise="glass" style="display:flex;gap:8px;align-items:center">' +
@@ -365,6 +401,56 @@ function render() {
   if (state.showAdmin && isAdmin) html += renderAdminSheet();
   if (state.showSettings) html += renderSettingsSheet();
   if (state.exp) html += renderExportSheet();
+  if (state.jump) html += renderJumpSheet();
 
   document.getElementById('app').innerHTML = html;
+}
+
+// ---------------------------------------------------------------- 점프 시트
+// 기존 바텀 시트들과 같은 구조 — background-color:var(--bg) 단색이고 .card 가 아니다.
+// 버튼은 기존 .btn 을 그대로 쓴다 (새 CSS 없음).
+function openJump() { state.jump = { y: state.cy }; render(); }
+function closeJump() {
+  state.jump = null;
+  render();   // ★ sheetBusy() 로 밀려 있던 원격 스냅샷 변경을 여기서 반영한다
+}
+function applyJump(m) {
+  const j = jumpTo(state.view, state.jump.y, m, state.selected);
+  state.cy = j.cy; state.cm = j.cm; state.selected = j.selected;
+  state.jump = null;
+  render();
+}
+
+function renderJumpSheet() {
+  const j = state.jump;
+  const chip = (on, attr, label) =>
+    '<button class="btn ' + (on ? 'btn-prominent' : 'btn-gray') + ' btn-sm" ' + attr +
+    ' aria-pressed="' + on + '">' + esc(label) + '</button>';
+  const heading = (s) => '<div style="font-size:13px;font-weight:700;color:var(--label-secondary);' +
+    'margin:18px 4px 8px;letter-spacing:.2px">' + esc(s) + '</div>';
+
+  const years = jumpYears(new Date().getFullYear(), state.cy).map((y) =>
+    chip(y === j.y, 'data-jy="' + y + '"', yearLabel(y))).join('');
+  const months = [];
+  for (let m = 0; m < 12; m++) {
+    months.push(chip(m === state.cm && j.y === state.cy, 'data-jm="' + m + '"', monthShort(m)));
+  }
+
+  return '<div data-act="closeJump" style="position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.35);animation:tcFade .2s ease-out"></div>' +
+    '<div style="position:fixed;left:0;right:0;bottom:0;z-index:101;display:flex;justify-content:center;pointer-events:none">' +
+    '<div role="dialog" aria-modal="true" aria-label="' + esc(t('jump.title')) + '" style="pointer-events:auto;' +
+      'width:min(560px,100vw);max-height:88vh;overflow:auto;background-color:var(--bg);' +
+      'border-radius:20px 20px 0 0;box-shadow:var(--shadow-3);padding:12px 20px 30px;' +
+      'animation:tcSheet .3s cubic-bezier(.34,1.3,.64,1)">' +
+      '<div style="width:38px;height:5px;border-radius:3px;background-color:var(--fill-secondary);margin:0 auto 12px"></div>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+        '<h3 style="margin:0;font-size:19px;font-weight:700">' + esc(t('jump.title')) + '</h3>' +
+        '<button data-act="closeJump" aria-label="' + esc(t('a.close')) + '" style="border:none;cursor:pointer;' +
+          'width:30px;height:30px;border-radius:50%;background-color:var(--fill-tertiary);color:var(--label-secondary);' +
+          'display:flex;align-items:center;justify-content:center;padding:0">' + icon('xmark', 14) + '</button></div>' +
+      heading(t('jump.year')) +
+      '<div style="display:flex;flex-wrap:wrap;gap:7px">' + years + '</div>' +
+      heading(t('jump.month')) +
+      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px">' + months.join('') + '</div>' +
+    '</div></div>';
 }
