@@ -4,12 +4,12 @@
 > 무엇을 왜 바꿨는지의 이력은 [CHANGELOG.md](CHANGELOG.md) 를 보세요.
 > **이 파일은 매 세션 읽힙니다. 갱신할 때 늘리지 말고 낡은 내용을 지우세요.**
 
-**최종 갱신:** 2026-07-26 · **본진:** `C:\Users\LENOVO\dev\todo-calendar` (git `main`)
+**최종 갱신:** 2026-07-27 · **본진:** `C:\Users\LENOVO\dev\todo-calendar` (git `main`)
 **배포됨:** <https://todo-calendar.kro.kr> (GitHub Pages + `CNAME`) · 보안 규칙도 배포 완료
 
 기능은 다 붙었습니다 — 계정·승인·약관 동의·기기 간 동기화·본인 탈퇴·테마 3종·언어 2종·
-캘린더 이미지 내보내기(캘린더·상세·메모 토글)·날짜 이동 팝오버. 남은 것은 §6 두 개
-(PWA / 스토어)와 **이미지 공유의 실기기 검증**입니다. `?selftest` 124개 통과.
+캘린더 이미지 내보내기(캘린더·상세·메모 토글)·날짜 이동 팝오버·요일 선택 반복. 남은 것은 §6 두 개
+(PWA / 스토어)와 **이미지 공유의 실기기 검증**입니다. `?selftest` 139개 통과.
 
 ---
 
@@ -162,8 +162,8 @@ firebase.js                                                        (ESM 모듈)
 | 함수 | 역할 |
 |---|---|
 | `esc` `pad` **`fmt`** `parse` `addDays` | 유틸. **`fmt` = `YYYY-MM-DD` — 저장 키 생산자** |
-| `priLabel` / `repLabel` | `PRI` 는 색만 남기고 이름은 `t()` 로 |
-| **`occursOn`** | **반복 규칙 판정** (none/daily/weekly/monthly) |
+| `priLabel` / **`repLabel(k, days)`** | `PRI` 는 색만 남기고 이름은 `t()` 로. **days 를 넘기면 '매주 월·수·금'** — 7개면 '매주 (매일)', 없거나 비면 '매주' |
+| **`occursOn`** | **반복 규칙 판정** (none/daily/weekly/monthly). **weekly 는 `days` 가 있으면 그 요일들로, 없거나 비면 시작일 요일로** — 빼면 옛 항목이 전부 사라진다 |
 | **`isDone`** | 반복은 `doneDates[]`, 단발은 `done` |
 | `sortItems` / `itemsOn` | 하루종일→시간→우선순위 정렬, 날짜 필터 |
 | **`state`** | **전역 상태 객체 (단일 소스)** |
@@ -204,7 +204,7 @@ firebase.js                                                        (ESM 모듈)
 | `toggleDone` | 반복이면 날짜 배열, 단발이면 플래그 |
 | `renderSheet` / `openForm` / `saveForm` | 입력 시트 |
 | click / input / keydown 위임 | 모든 버튼이 여기 하나로. **입력은 uncontrolled**(캐럿 보존) |
-| 부트스트랩 · selftest | `render()` + 10초 타임아웃 가드 · `?selftest` 124개 |
+| 부트스트랩 · selftest | `render()` + 10초 타임아웃 가드 · `?selftest` 139개 |
 
 렌더 흐름은 하나뿐입니다: **상태 변경 → `render()` → `#app.innerHTML` 통째 교체.**
 가상 DOM·프레임워크 없음.
@@ -232,11 +232,17 @@ firebase.js                                                        (ESM 모듈)
   time: '10:00',            // '' 이면 하루 종일
   pri: 'none'|'low'|'med'|'high',
   repeat: 'none'|'daily'|'weekly'|'monthly',
+  days: [1, 3, 5],          // 0=일 ~ 6=토, 오름차순. repeat==='weekly' 일 때만 읽는다
   memo: '회의실 B',
   done: false,              // repeat==='none' 일 때만 씀
   doneDates: ['2026-07-25'] // repeat!=='none' 일 때만 씀
 }
 ```
+
+**`days` 는 옛 항목에 없습니다.** 없거나 비면 `occursOn` 이 **시작일의 요일**로 판정합니다
+— 빼면 기존 반복 할 일이 전부 사라집니다. 필드 자체는 `done`/`doneDates` 처럼 **늘 있고**
+(weekly 가 아니면 `[]`), 읽을지는 `repeat` 이 정합니다. 편집 시트가 옛 항목에 `days` 를
+채워 넣지만 판정은 안 바뀝니다 — selftest 가 43일치를 비교합니다.
 
 `done` 과 `doneDates` 는 **배타적**입니다. `isDone` 이 반복 여부로 어느 쪽을 볼지
 고릅니다 — 그래서 이번 주에 체크해도 다음 주 항목은 미완료로 남습니다.
@@ -676,5 +682,6 @@ JS 를 안 돌리는 크롤러에게 **빈 페이지**입니다(확인함). 이 
 | Auth 계정까지 자동 삭제(관리자) | Admin SDK(Cloud Function)를 띄울 때 |
 | 로그인 시도 제한 | Firebase 기본 제공 수준을 넘어야 할 때 |
 | 오프라인 캐시 | PWA 붙일 때 같이 (§6-2) |
+| 전 요일 선택(`days` 7개)을 `daily` 로 자동 변환 | 사용자가 고른 것을 앱이 고쳐 쓰지 않는다. 라벨만 "매주 (매일)" 로 구분 |
 | 세 번째 언어 | `STR` 에 키 추가 + `LANGS` 와 규칙의 `validSettings` 를 함께 넓힐 것 |
 | 약관 영문본의 법적 검토 | 영어권 실사용자를 받을 때. 지금은 한국어본이 정본 |

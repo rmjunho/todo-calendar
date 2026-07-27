@@ -172,6 +172,9 @@ const STR = {
 
     'pri.high': '높음', 'pri.med': '보통', 'pri.low': '낮음', 'pri.none': '없음',
     'rep.none': '반복 안 함', 'rep.daily': '매일', 'rep.weekly': '매주', 'rep.monthly': '매월',
+    // 요일 이름은 dow() 가 준다 — 여기서 정하는 건 잇는 방식뿐이다.
+    'rep.weeklyDays': (n) => '매주 ' + n.join('·'),
+    'rep.weeklyAll': '매주 (매일)',
 
     // 입력 시트
     'form.new': '새로운 할 일',
@@ -183,6 +186,8 @@ const STR = {
     'form.timeToggle': '시간 지정',
     'form.pri': '우선순위',
     'form.repeat': '반복',
+    'form.days': '반복 요일',
+    'form.daysEmpty': '요일을 하나 이상 골라 주세요',
     'form.memo': '메모',
     'form.memoPh': '메모를 남겨 보세요 (선택)',
     'form.delete': '삭제',
@@ -359,6 +364,8 @@ const STR = {
 
     'pri.high': 'High', 'pri.med': 'Medium', 'pri.low': 'Low', 'pri.none': 'None',
     'rep.none': 'Does not repeat', 'rep.daily': 'Daily', 'rep.weekly': 'Weekly', 'rep.monthly': 'Monthly',
+    'rep.weeklyDays': (n) => 'Every ' + n.join(', '),
+    'rep.weeklyAll': 'Weekly (all days)',
 
     'form.new': 'New to-do',
     'form.edit': 'Edit to-do',
@@ -369,6 +376,8 @@ const STR = {
     'form.timeToggle': 'Set a time',
     'form.pri': 'Priority',
     'form.repeat': 'Repeat',
+    'form.days': 'Repeat on',
+    'form.daysEmpty': 'Pick at least one day',
     'form.memo': 'Note',
     'form.memoPh': 'Add a note (optional)',
     'form.delete': 'Delete',

@@ -4,7 +4,11 @@
 // ---------------------------------------------------------------- persistence
 // 할 일은 users/{uid}/todos/{id} 에 산다. 목록은 firebase.js 의 onSnapshot 이
 // state.items 로 흘려 넣는다 — 여기서는 쓰기만 한다.
-const blankForm = (date) => ({ title: '', date, hasTime: false, time: '09:00', pri: 'none', repeat: 'none', memo: '' });
+const blankForm = (date) => ({ title: '', date, hasTime: false, time: '09:00', pri: 'none',
+  repeat: 'none', days: [], memo: '' });
+// 요일 반복의 기본값 = 시작일의 요일 하나. 아무것도 안 고치면 예전 '매주' 와
+// 결과가 같다. 색인은 getDay() 기준 0=일 (주 시작 일요일 고정 — CONTEXT §5).
+const defaultDays = (ds) => [parse(ds).getDay()];
 
 // 낙관적 업데이트: 화면을 먼저 바꾸고 Firestore 에 쓴다. 실패하면 알리고,
 // 스냅샷이 서버 값으로 되돌려 놓는다. 예전 save() 처럼 조용히 삼키지 않는다 —
@@ -45,6 +49,23 @@ function renderSheet() {
       '<span>' + esc(repLabel(k)) + '</span>' + (f.repeat === k ? icon('checkmark', 16, 'var(--tint)') : '') + '</button>'
     ).join('') + '</div>' : '';
 
+  // 요일 선택 줄. 기존 .seg-wrap / .seg 를 그대로 쓴다 (새 CSS 규칙 0개).
+  // dow() 가 0=일 순서로 주므로 버튼 순서도 일요일부터다 — data-dow 값이 곧 색인.
+  // data-day 는 달력 셀이 이미 쓰고 있어서 이름을 달리한다.
+  const dayRow = f.repeat !== 'weekly' ? '' :
+    '<div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">' +
+      esc(t('form.days')) + '</div>' +
+    '<div class="seg-wrap" role="group" aria-label="' + esc(t('form.days')) + '">' +
+      dow().map((nm, i) =>
+        '<button class="seg' + (f.days.includes(i) ? ' seg-on' : '') + '" data-dow="' + i +
+        '" aria-pressed="' + f.days.includes(i) + '" style="flex:1;min-width:0;padding:0">' +
+        esc(nm) + '</button>').join('') + '</div>' +
+    (f.days.length ? '' :
+      '<div style="font-size:12px;color:#FF3B30;margin-top:6px">' + esc(t('form.daysEmpty')) + '</div>');
+
+  // 요일을 하나도 안 고른 '매주' 는 아무 날에도 안 뜨는 항목이 된다 — 저장을 막는다.
+  const canSave = !!f.title.trim() && !(f.repeat === 'weekly' && !f.days.length);
+
   const timeBlock = f.hasTime
     ? '<input class="field" type="time" data-f="time" value="' + esc(f.time) + '" style="padding:11px 14px;font-size:15px">'
     : '<div style="padding:11px 14px;font-size:14px;color:var(--label-tertiary);background:var(--fill-quaternary);border-radius:12px">' +
@@ -83,6 +104,7 @@ function renderSheet() {
       '<div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">' + esc(t('form.repeat')) + '</div>' +
       '<div class="picker"><button class="picker-btn" data-act="repeatToggle" aria-haspopup="menu" aria-expanded="' + state.repeatOpen + '">' +
         '<span>' + esc(repLabel(f.repeat)) + '</span>' + icon('chevron.up.chevron.down', 15, 'var(--tint)') + '</button>' + repeatMenu + '</div>' +
+      dayRow +
 
       '<div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">' + esc(t('form.memo')) + '</div>' +
       '<textarea class="field" rows="2" data-f="memo" placeholder="' + esc(t('form.memoPh')) + '" ' +
@@ -95,7 +117,7 @@ function renderSheet() {
         '<button class="btn btn-gray btn-md" data-act="close">' + esc(t('form.cancel')) + '</button>' +
         '<span data-raise="tint" style="display:inline-flex">' +
           '<button class="btn btn-prominent btn-md" id="saveBtn" data-act="save"' +
-          (f.title.trim() ? '' : ' disabled') + '>' + esc(t('form.save')) + '</button></span>' +
+          (canSave ? '' : ' disabled') + '>' + esc(t('form.save')) + '</button></span>' +
       '</div></div></div>';
 }
 
@@ -108,7 +130,12 @@ function openForm(id, ds) {
     if (!it) return;
     state.editingId = id;
     state.form = { title: it.title, date: ds || it.date, hasTime: !!it.time, time: it.time || '09:00',
-      pri: it.pri || 'none', repeat: it.repeat || 'none', memo: it.memo || '' };
+      pri: it.pri || 'none', repeat: it.repeat || 'none',
+      // days 가 없는 옛 weekly 항목은 시작일 요일 하나가 켜진 채로 열린다 — 지금
+      // 판정과 같은 상태다. 그대로 저장하면 days 가 생기지만 결과는 안 바뀐다.
+      days: (it.days && it.days.length) ? it.days.slice()
+        : (it.repeat === 'weekly' ? defaultDays(it.date) : []),
+      memo: it.memo || '' };
   } else {
     state.editingId = null;
     state.form = blankForm(state.selected);
@@ -127,8 +154,16 @@ function closeForm() {
 function saveForm() {
   const f = state.form;
   if (!f.title.trim()) return;
+  // 요일을 하나도 안 고른 '매주' 는 아무 날에도 안 뜬다. 저장 버튼도 disabled 지만
+  // 여기서도 막는다 — 화면 검사 하나만 믿지 않는다.
+  if (f.repeat === 'weekly' && !f.days.length) return;
   const base = { title: f.title.trim(), date: f.date, time: f.hasTime ? f.time : '',
-    pri: f.pri, repeat: f.repeat, memo: (f.memo || '').trim() };
+    pri: f.pri, repeat: f.repeat,
+    // 오름차순으로 굳혀 둔다 — 판정과 라벨이 고른 순서에 안 흔들린다.
+    // weekly 가 아니면 []. done/doneDates 와 같은 방식이다: 필드는 늘 있고
+    // 어느 쪽을 읽을지는 repeat 이 정한다 (occursOn 은 weekly 에서만 days 를 본다).
+    days: f.repeat === 'weekly' ? f.days.slice().sort((a, b) => a - b) : [],
+    memo: (f.memo || '').trim() };
   // 새 항목의 id 는 Firestore 가 만든다 — 기기 간 충돌이 없고, 쓰기를 기다리지
   // 않고도 화면에 먼저 넣을 수 있다.
   const editing = !!state.editingId;
@@ -143,7 +178,7 @@ function saveForm() {
   state.form = null;
   commit(items, () => fb.saveTodo(id, editing ? base
     : { title: fresh.title, date: fresh.date, time: fresh.time, pri: fresh.pri,
-        repeat: fresh.repeat, memo: fresh.memo, done: false, doneDates: [] }));
+        repeat: fresh.repeat, days: fresh.days, memo: fresh.memo, done: false, doneDates: [] }));
 }
 
 app.addEventListener('click', (e) => {
@@ -209,7 +244,21 @@ app.addEventListener('click', (e) => {
     return render();
   }
   if ((el = hit('[data-pri]'))) { state.form.pri = el.dataset.pri; return render(); }
-  if ((el = hit('[data-repeat]'))) { state.form.repeat = el.dataset.repeat; state.repeatOpen = false; return render(); }
+  if ((el = hit('[data-repeat]'))) {
+    state.form.repeat = el.dataset.repeat;
+    // '매주' 를 고르면 시작일 요일 하나가 켜진 채로 열린다 — 아무것도 더 안 고르고
+    // 저장하면 예전 '매주' 와 결과가 같다.
+    if (state.form.repeat === 'weekly' && !state.form.days.length) {
+      state.form.days = defaultDays(state.form.date);
+    }
+    state.repeatOpen = false;
+    return render();
+  }
+  if ((el = hit('[data-dow]'))) {
+    const n = Number(el.dataset.dow), d = state.form.days;
+    state.form.days = d.includes(n) ? d.filter((x) => x !== n) : d.concat(n).sort((a, b) => a - b);
+    return render();
+  }
   if ((el = hit('[data-act]'))) {
     switch (el.dataset.act) {
       case 'login': return login();
@@ -333,6 +382,37 @@ if (location.search.includes('selftest')) {
   ok(itemsOn([w, m, o], '2026-01-05', false).map((x) => x.id).join() === 'w',
     'completed items are filtered out when hidden');
 
+  // --- 요일 반복 (weekly + days) ---
+  // 2026-01-05 는 월요일이다: 05 월 · 06 화 · 07 수 · 08 목 · 09 금 · 10 토 · 11 일.
+  const wd = { id: 'wd', date: '2026-01-05', repeat: 'weekly', days: [1, 3, 5], time: '', pri: 'none' };
+  ok(occursOn(wd, '2026-01-05') && occursOn(wd, '2026-01-07') && occursOn(wd, '2026-01-09'),
+    'a weekly item with days occurs on every selected weekday');
+  ok(!occursOn(wd, '2026-01-06') && !occursOn(wd, '2026-01-08') && !occursOn(wd, '2026-01-11'),
+    'a weekly item with days skips the weekdays that were not selected');
+  ok(!occursOn(wd, '2026-01-02'), 'days never pull an item earlier than its start date');
+  const sunOnly = { id: 'su', date: '2026-01-05', repeat: 'weekly', days: [0] };
+  ok(occursOn(sunOnly, '2026-01-11') && !occursOn(sunOnly, '2026-01-05'),
+    'days:[0] is Sundays only — the index is getDay(), not an offset from the start');
+  const allDays = { id: 'ad', date: '2026-01-05', repeat: 'weekly', days: [0, 1, 2, 3, 4, 5, 6] };
+  ok([0, 1, 2, 3, 4, 5, 6].every((i) => occursOn(allDays, addDays('2026-01-05', i))),
+    'all seven weekdays selected occurs on every day');
+  // 빈 배열은 '없음'과 같이 다룬다. 저장은 막지만, 어쩌다 들어온 문서가 화면에서
+  // 사라지는 것보다 옛 동작으로 도는 편이 안전하다.
+  const emptyDays = { id: 'ed', date: '2026-01-05', repeat: 'weekly', days: [] };
+  ok(occursOn(emptyDays, '2026-01-12') && !occursOn(emptyDays, '2026-01-13'),
+    'an empty days array falls back to the start weekday instead of disappearing');
+
+  // ★ 옛 항목(days 없음)과, 편집 시트가 days 를 채워 저장한 뒤의 같은 항목이
+  //   모든 날짜에서 한 칸도 다르지 않아야 한다. 이게 깨지면 기존 반복 할 일이
+  //   편집 한 번에 다른 날로 옮겨간다.
+  const migrated = Object.assign({}, w, { days: defaultDays(w.date) });
+  let sameAsOld = true;
+  for (let i = -3; i < 40; i++) {
+    const d = addDays('2026-01-05', i);
+    if (occursOn(w, d) !== occursOn(migrated, d)) sameAsOld = false;
+  }
+  ok(sameAsOld, 'filling days in from the start weekday changes no occurrence, on any date');
+
   // --- accounts ---
   // 계정은 이제 Firebase 가 들고 있다. 여기서 검사할 수 있는 건 서버에 보내기
   // 전의 입력 규칙뿐 — PIN은 Firebase Auth 비밀번호라 6자리여야 한다.
@@ -405,6 +485,22 @@ if (location.search.includes('selftest')) {
   // 반대쪽도 확인한다 — 표시 문자열까지 안 바뀌면 Intl 이 아예 안 걸린 것이다.
   ok(dayTitle(probe) !== koDay && dow().join() !== koDow, 'the displayed month and weekday names do change');
   ok(dow().length === 7 && dow('long')[0] === 'Sunday', 'the weekday array is Sunday-first');
+  // days 판정도 언어를 안 탄다 — 위 한국어 구간에서 단언한 것과 같은 값이어야 한다.
+  ok(occursOn(wd, '2026-01-07') && !occursOn(wd, '2026-01-08'),
+    'occursOn with days gives the same answer in English');
+  // 라벨은 반대로 반드시 언어를 타야 한다. 숫자 days → 이름은 dow() 만 지난다.
+  ok(repLabel('weekly', [1, 3, 5]) === 'Every Mon, Wed, Fri', 'the weekday label is translated');
+  ok(repLabel('weekly', [3]) === 'Every Wednesday', 'a single weekday uses the long English name');
+  ok(repLabel('weekly', [0, 1, 2, 3, 4, 5, 6]) === 'Weekly (all days)' && repLabel('daily') === 'Daily',
+    'all seven weekdays get their own label, distinct from Daily');
+
+  setSettings({ lang: 'ko' });
+  ok(repLabel('weekly') === '매주' && repLabel('weekly', []) === '매주',
+    'an old weekly item with no days still shows the plain label');
+  ok(repLabel('weekly', [1, 3, 5]) === '매주 월·수·금', 'the label lists the selected weekdays');
+  ok(repLabel('weekly', [3]) === '매주 수요일', 'a single weekday gets the long name');
+  ok(repLabel('weekly', [0, 1, 2, 3, 4, 5, 6]) === '매주 (매일)' && repLabel('daily') === '매일',
+    'seven weekdays read as 매주 (매일), which is not 매일');
   setSettings(keep);   // ?selftest 가 저장된 설정을 건드리고 끝나지 않게 되돌린다
 
   // --- 이미지 내보내기 ---

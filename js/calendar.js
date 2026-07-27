@@ -14,7 +14,16 @@ const PRI_ORDER = { high: 0, med: 1, low: 2, none: 3 };
 const priLabel = (k) => t('pri.' + k);
 // 배열 순서가 곧 반복 메뉴의 순서다.
 const REP_KEYS = ['none', 'daily', 'weekly', 'monthly'];
-const repLabel = (k) => t('rep.' + k);
+// 반복 이름. weekly 는 days 를 함께 넘기면 '매주 월·수·금' 이 된다 — days 가
+// 없거나 비면 예전처럼 '매주' 하나로 끝난다(옛 항목이 그대로 읽히는 지점).
+// 숫자 → 요일 이름 변환은 여기서만 한다. days 는 데이터, dow() 는 표시 전용이다.
+function repLabel(k, days) {
+  if (k !== 'weekly' || !Array.isArray(days) || !days.length) return t('rep.' + k);
+  // 7개 전부면 이름을 다 늘어놓지 않는다 — 배지가 pill 이라 폭이 감당이 안 된다.
+  if (days.length === 7) return t('rep.weeklyAll');
+  const names = days.length === 1 ? dow('long') : dow();
+  return t('rep.weeklyDays', days.map((i) => names[i]));
+}
 const HOUR_START = 6, HOUR_H = 52;
 const SHOW_COMPLETED = true;
 
@@ -54,7 +63,14 @@ function occursOn(it, ds) {
   if (rep === 'none') return it.date === ds;
   if (rep === 'daily') return true;
   const a = parse(it.date), b = parse(ds);
-  if (rep === 'weekly') return a.getDay() === b.getDay();
+  // days 가 있으면 고른 요일들로, 없으면 시작일의 요일로 — 옛 항목에는 days 가
+  // 없다. 이 폴백을 빼면 기존 반복 할 일이 전부 사라진다.
+  // 빈 배열도 '없음'과 같이 다룬다: 저장은 막지만, 어쩌다 들어온 문서가 화면에서
+  // 사라지는 것보다 옛 동작으로 도는 편이 안전하다.
+  if (rep === 'weekly') {
+    const days = Array.isArray(it.days) && it.days.length ? it.days : [a.getDay()];
+    return days.includes(b.getDay());
+  }
   if (rep === 'monthly') return a.getDate() === b.getDate();
   return false;
 }
@@ -379,7 +395,7 @@ function render() {
         '<div style="display:flex;align-items:center;gap:8px;flex:none">' +
           (it.repeat && it.repeat !== 'none'
             ? '<span style="font-size:11px;font-weight:600;color:var(--label-secondary);background:var(--fill-quaternary);' +
-              'padding:3px 8px;border-radius:999px">' + esc(repLabel(it.repeat)) + '</span>' : '') +
+              'padding:3px 8px;border-radius:999px">' + esc(repLabel(it.repeat, it.days)) + '</span>' : '') +
           (it.time ? '<span style="font-size:13px;font-weight:500;color:var(--label-secondary);' +
             'font-variant-numeric:tabular-nums">' + esc(timeLabel(it.time)) + '</span>' : '') +
           '<span ' + open + ' style="cursor:pointer;color:var(--label-tertiary);display:flex">' +
