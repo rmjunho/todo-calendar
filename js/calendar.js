@@ -305,7 +305,14 @@ function render() {
       const ds = addDays(ws, i);
       const d = parse(ds);
       const isToday = ds === today, isSel = ds === sel;
-      const list = itemsOn(items, ds, SHOW_COMPLETED).map((it) => {
+      // 월간(3개)과 같은 이유로 접는다 — 안 접으면 17개짜리 날이 칸을 713px 로 늘린다.
+      // 5인 근거(실측): 칸 min-height 320 에 헤더 64 · 항목 33 · gap 4 · `+N개` 12 라
+      // 넓은 화면은 5개=273(여유 47) · 6개=310(여유 10뿐) · 7개=347(초과)이고,
+      // 390px 에서는 열이 51px 라 시간 라벨이 두 줄로 접혀 항목이 48 → 5개라도 348 이다.
+      // 좁은 쪽에서 한 줄이 48px 이라 6으로 올리면 거기서 50px 을 더 먹는다.
+      // ★ 항목 높이·글꼴·시간 라벨 형식을 바꾸면 이 5를 다시 재야 한다.
+      const list = itemsOn(items, ds, SHOW_COMPLETED);
+      const pills = list.slice(0, 5).map((it) => {
         const p = pill(it, ds);
         return '<div ' + openAttr(p, ds) + ' style="cursor:pointer;padding:4px 7px;border-radius:6px;background:' +
           p.bg + ';opacity:' + p.op + '">' +
@@ -313,6 +320,12 @@ function render() {
           esc(p.title) + '</div>' +
           '<div style="font-size:10px;font-weight:500;color:' + p.color + ';opacity:.75">' + esc(p.timeLabel) + '</div></div>';
       }).join('');
+      // ★ data-day 를 여기 직접 단다. 월간은 부모 .cell 이 들고 있어 `+N개` 가 공짜로
+      //   날짜 선택이 되지만, 주간은 헤더에만 있어서 본문에 두면 눌러도 안 먹는다.
+      //   동작은 월간과 같다 — 그 날을 고르고 하단 리스트만 바뀐다(뷰 전환 아님).
+      const more = list.length > 5
+        ? '<div data-day="' + ds + '" style="cursor:pointer;font-size:10px;color:var(--label-tertiary);padding:0 7px">' +
+          esc(t('cell.more', list.length - 5)) + '</div>' : '';
       cols += '<div style="min-height:320px;border-left:' + (i === 0 ? 'none' : '.5px solid var(--separator)') + '">' +
         '<div data-day="' + ds + '" style="cursor:pointer;text-align:center;padding:10px 4px 8px;border-bottom:.5px solid var(--separator)">' +
           '<div style="font-size:11px;font-weight:600;color:' +
@@ -321,7 +334,7 @@ function render() {
             'justify-content:center;font-size:15px;font-weight:600;background:' +
             (isToday ? 'var(--tint)' : isSel ? 'var(--fill-tertiary)' : 'transparent') +
             ';color:' + (isToday ? '#fff' : 'var(--label)') + '">' + d.getDate() + '</div></div>' +
-        '<div style="padding:6px 5px;display:flex;flex-direction:column;gap:4px">' + list + '</div></div>';
+        '<div style="padding:6px 5px;display:flex;flex-direction:column;gap:4px">' + pills + more + '</div></div>';
     }
     // ★ minmax(0,1fr) 이라야 한다. 1fr 이면 긴 제목(.trunc = nowrap)의 min-content 가
     //   그 열을 밀어내 목·금·토가 화면 밖으로 나가고, overflow:hidden 이라 스크롤도 안 된다.
