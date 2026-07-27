@@ -105,6 +105,13 @@ function applyLoggedOut() {
   state.showForm = false;
   state.showAdmin = false;
   state.booting = false;
+  // ★ 열려 있던 시트를 전부 닫는다. 안 닫으면 sheetBusy() 가 영영 true 로 남아
+  //   재로그인 후 원격 스냅샷이 화면에 절대 안 들어온다. exp 는 objectURL 도 샌다.
+  if (state.exp && state.exp.url) URL.revokeObjectURL(state.exp.url);
+  state.exp = null;
+  state.jump = null;
+  state.showSettings = false;
+  state.del = null;
   // state.auth 는 건드리지 않는다 — 로그인 실패 사유·가입 완료 안내가 여기 남아 있다.
   render();
 }
