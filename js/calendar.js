@@ -286,9 +286,13 @@ function render() {
           d.getDate() + '</div>' +
         '<div style="display:flex;flex-direction:column;gap:2px">' + pills + more + '</div></div>';
     }
+    // 7열은 minmax(0,1fr). 1fr(=minmax(auto,1fr))은 열이 자식의 min-content 보다
+    // 작아지지 못해, nowrap 제목 하나가 나머지 요일을 화면 밖으로 밀어낸다.
+    // 월간은 .cell{overflow:hidden} 덕에 지금도 안 깨지지만 같은 요구사항이니
+    // 같은 방식으로 적어 둔다 — .cell 을 건드려도 안 터지게.
     html += '<div class="card" style="border:.5px solid var(--separator);overflow:hidden">' +
-      '<div style="display:grid;grid-template-columns:repeat(7,1fr)">' + heads + '</div>' +
-      '<div style="display:grid;grid-template-columns:repeat(7,1fr)">' + cells + '</div></div>';
+      '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr))">' + heads + '</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr))">' + cells + '</div></div>';
   }
 
   // -- week view ------------------------------------------------------------
@@ -319,8 +323,10 @@ function render() {
             ';color:' + (isToday ? '#fff' : 'var(--label)') + '">' + d.getDate() + '</div></div>' +
         '<div style="padding:6px 5px;display:flex;flex-direction:column;gap:4px">' + list + '</div></div>';
     }
+    // ★ minmax(0,1fr) 이라야 한다. 1fr 이면 긴 제목(.trunc = nowrap)의 min-content 가
+    //   그 열을 밀어내 목·금·토가 화면 밖으로 나가고, overflow:hidden 이라 스크롤도 안 된다.
     html += '<div class="card" style="border:.5px solid var(--separator);' +
-      'overflow:hidden;display:grid;grid-template-columns:repeat(7,1fr)">' + cols + '</div>';
+      'overflow:hidden;display:grid;grid-template-columns:repeat(7,minmax(0,1fr))">' + cols + '</div>';
   }
 
   // -- day view -------------------------------------------------------------

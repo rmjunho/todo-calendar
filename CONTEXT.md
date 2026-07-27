@@ -464,6 +464,10 @@ PIN 재인증 → todos 삭제 → users + usernames 삭제 → Auth 계정 삭�
    `border-top:.5px solid var(--separator)` 헤어라인이고 **의도된 것**입니다. 위치도
    다릅니다 — 월간 뷰 헤더는 35px, sheen 은 96px 에서 끝납니다. 같이 지우지 마세요.
 6. **`_ds/` 는 원본 그대로 두세요.** `css/style.css` 에서 토큰을 덮어쓰면 됩니다.
+7. **7열 격자는 `repeat(7, minmax(0,1fr))`.** `1fr`(=`minmax(auto,1fr)`)로 쓰면 nowrap
+   제목(`.trunc`·`.pill`)의 min-content 가 열을 밀어내 나머지 요일이 화면 밖으로 나가고,
+   `.card` 가 `overflow:hidden` 이라 가로 스크롤도 안 됩니다. **월간·주간 양쪽 다**
+   해당합니다(월간은 `.cell{overflow:hidden}` 이 우연히 막고 있었을 뿐).
 
 ### 기타
 
