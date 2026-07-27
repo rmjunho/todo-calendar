@@ -154,6 +154,12 @@ const openAttr = (p, ds) => 'data-open="' + esc(p.id) + '" data-ds="' + ds + '"'
 
 // ---------------------------------------------------------------- render
 function render() {
+  // ★ innerHTML 을 갈아엎기 전에 팝오버의 스크롤 위치를 챙긴다. 여기서 하는 이유는
+  //   render() 가 탭 말고도 불리기 때문이다 — darkMQ 의 change 리스너가 대표적이고
+  //   (안드로이드 자동 다크 모드가 고르는 도중에 터진다), sheetBusy() 가 막는 것은
+  //   원격 스냅샷뿐이다. 진입부에 두면 앞으로 생길 경로까지 공짜로 덮인다.
+  saveJumpScroll();
+
   const today = fmt(new Date());
   const sel = state.selected;
   const selD = parse(sel);
@@ -205,15 +211,19 @@ function render() {
 
   let html = '<div style="max-width:1024px;margin:0 auto;padding:28px 16px 130px">' + accountBar +
     '<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px">' +
-      // 제목을 누르면 년·월 점프 시트가 열린다. < > 로 한 칸씩 걸어가지 않아도 된다.
-      '<button data-act="jump" aria-label="' + esc(t('jump.title')) + '" style="border:none;padding:0;' +
-        'margin:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer;display:block">' +
+      // 제목을 누르면 년·월 팝오버가 열린다. < > 로 한 칸씩 걸어가지 않아도 된다.
+      // ★ position:relative 래퍼 — 팝오버가 top:100% 로 제목 바로 아래에 붙는다.
+      //   화면이 좁아 헤더가 줄바꿈돼도 팝오버는 제목을 따라간다.
+      '<div style="position:relative">' +
+      '<button data-act="jump" aria-label="' + esc(t('jump.title')) + '" aria-expanded="' + !!state.jump +
+        '" style="border:none;padding:0;margin:0;background:none;color:inherit;font:inherit;' +
+        'text-align:left;cursor:pointer;display:block">' +
         '<div style="font-size:13px;font-weight:600;color:var(--tint)">' + esc(todayLabel) + '</div>' +
         '<div style="display:flex;align-items:center;gap:6px">' +
           '<h1 style="margin:2px 0 0;font-size:30px;font-weight:700;letter-spacing:.2px">' + esc(monthLabel) + '</h1>' +
           icon('chevron.up.chevron.down', 17, 'var(--label-tertiary)') +
         '</div>' +
-      '</button>' +
+      '</button>' + (state.jump ? renderJumpPopover() : '') + '</div>' +
       '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
         '<div class="seg-wrap">' + segments + '</div>' +
         '<div data-raise="glass" style="display:flex;gap:8px;align-items:center">' +
@@ -401,56 +411,96 @@ function render() {
   if (state.showAdmin && isAdmin) html += renderAdminSheet();
   if (state.showSettings) html += renderSettingsSheet();
   if (state.exp) html += renderExportSheet();
-  if (state.jump) html += renderJumpSheet();
+  // 점프는 바텀 시트가 아니라 제목 아래 팝오버다 — 위 헤더 안에 이미 들어가 있다.
+  // 백드롭만 여기서 덧붙인다 (팝오버보다 뒤에 와야 z-index 없이도 순서가 맞다).
+  if (state.jump) html += '<div data-act="closeJump" style="position:fixed;inset:0;z-index:69"></div>';
 
   document.getElementById('app').innerHTML = html;
+  applyJumpScroll();
 }
 
-// ---------------------------------------------------------------- 점프 시트
-// 기존 바텀 시트들과 같은 구조 — background-color:var(--bg) 단색이고 .card 가 아니다.
-// 버튼은 기존 .btn 을 그대로 쓴다 (새 CSS 없음).
-function openJump() { state.jump = { y: state.cy }; render(); }
-function closeJump() {
-  state.jump = null;
-  render();   // ★ sheetBusy() 로 밀려 있던 원격 스냅샷 변경을 여기서 반영한다
+// ---------------------------------------------------------------- 점프 팝오버
+// 제목 아래에 붙는 두 열 스크롤 피커. 바텀 시트가 아니다 — 21+12개를 전부 펼치면
+// 화면 절반을 먹고 정작 자주 쓰는 현재 연도가 묻힌다.
+//
+// ★ 스크롤은 선택이 아니다. 항목을 **탭해야** 임시 선택이 바뀌고, [이동] 을 눌러야
+//   달력이 움직인다. 가운데 오는 항목이 자동 선택되는 휠 방식은 오조작이 잦다.
+const J_ITEM = 44;          // 한 칸 높이. iOS 최소 터치 타깃이자 .btn-md 와 같다
+const J_VISIBLE = 5;        // 보이는 칸 수. 홀수라 선택 항목 위아래로 2칸씩 남는다
+const J_COL = J_ITEM * J_VISIBLE;
+
+function openJump() {
+  // ★ 임시 선택이다. 확정 전까지 state.cy/cm 을 건드리지 않는다.
+  state.jump = { y: state.cy, m: state.cm, sy: null, sm: null };
+  render();
 }
-function applyJump(m) {
-  const j = jumpTo(state.view, state.jump.y, m, state.selected);
-  state.cy = j.cy; state.cm = j.cm; state.selected = j.selected;
+function closeJump() {
+  state.jump = null;   // 고르던 값은 버린다
+  render();            // ★ sheetBusy() 로 밀려 있던 원격 스냅샷 변경을 여기서 반영
+}
+function applyJump() {
+  const j = state.jump;
+  const r = jumpTo(state.view, j.y, j.m, state.selected);
+  state.cy = r.cy; state.cm = r.cm; state.selected = r.selected;
+  state.jump = null;
+  render();
+}
+// [오늘] — data-nav="today" 와 같은 일을 하고 팝오버까지 닫는다.
+function jumpNow() {
+  const n = new Date();
+  state.cy = n.getFullYear(); state.cm = n.getMonth(); state.selected = fmt(n);
   state.jump = null;
   render();
 }
 
-function renderJumpSheet() {
+// render() 가 #app 을 통째로 갈아엎으므로 스크롤은 매번 0 으로 리셋된다.
+// 진입부에서 저장하고, innerHTML 을 쓴 뒤 되돌린다.
+function saveJumpScroll() {
   const j = state.jump;
-  const chip = (on, attr, label) =>
-    '<button class="btn ' + (on ? 'btn-prominent' : 'btn-gray') + ' btn-sm" ' + attr +
-    ' aria-pressed="' + on + '">' + esc(label) + '</button>';
-  const heading = (s) => '<div style="font-size:13px;font-weight:700;color:var(--label-secondary);' +
-    'margin:18px 4px 8px;letter-spacing:.2px">' + esc(s) + '</div>';
+  if (!j) return;
+  const cy = document.getElementById('jcolY'), cm = document.getElementById('jcolM');
+  if (cy) j.sy = cy.scrollTop;
+  if (cm) j.sm = cm.scrollTop;
+}
+// 처음 열릴 때는 저장된 값이 없다 — 선택 항목이 5칸 중 3번째에 오도록 계산한다.
+// 스크롤 맨 위에서 열리면 2016년부터 보여서 의미가 없다.
+const jumpOffset = (idx) => Math.max(0, (idx - Math.floor(J_VISIBLE / 2)) * J_ITEM);
+function applyJumpScroll() {
+  const j = state.jump;
+  if (!j) return;
+  const cy = document.getElementById('jcolY'), cm = document.getElementById('jcolM');
+  if (cy) cy.scrollTop = j.sy == null ? jumpOffset(jumpYears(new Date().getFullYear(), state.cy).indexOf(j.y)) : j.sy;
+  if (cm) cm.scrollTop = j.sm == null ? jumpOffset(j.m) : j.sm;
+}
 
-  const years = jumpYears(new Date().getFullYear(), state.cy).map((y) =>
-    chip(y === j.y, 'data-jy="' + y + '"', yearLabel(y))).join('');
-  const months = [];
-  for (let m = 0; m < 12; m++) {
-    months.push(chip(m === state.cm && j.y === state.cy, 'data-jm="' + m + '"', monthShort(m)));
-  }
+function renderJumpPopover() {
+  const j = state.jump;
+  const col = (id, rows) =>
+    '<div id="' + id + '" style="flex:1;height:' + J_COL + 'px;overflow-y:auto;' +
+    '-webkit-overflow-scrolling:touch;scrollbar-width:thin">' + rows + '</div>';
+  const row = (on, attr, label) =>
+    '<button ' + attr + ' aria-pressed="' + on + '" style="display:block;width:100%;height:' + J_ITEM +
+    'px;border:none;cursor:pointer;font-family:inherit;font-size:15px;font-weight:' + (on ? 700 : 500) +
+    ';border-radius:9px;padding:0;background-color:' + (on ? 'var(--tint)' : 'transparent') +
+    ';color:' + (on ? 'var(--on-tint)' : 'var(--label)') + '">' + esc(label) + '</button>';
+  const head = (s) => '<div style="flex:1;font-size:12px;font-weight:700;color:var(--label-tertiary);' +
+    'text-align:center;padding-bottom:6px">' + esc(s) + '</div>';
 
-  return '<div data-act="closeJump" style="position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.35);animation:tcFade .2s ease-out"></div>' +
-    '<div style="position:fixed;left:0;right:0;bottom:0;z-index:101;display:flex;justify-content:center;pointer-events:none">' +
-    '<div role="dialog" aria-modal="true" aria-label="' + esc(t('jump.title')) + '" style="pointer-events:auto;' +
-      'width:min(560px,100vw);max-height:88vh;overflow:auto;background-color:var(--bg);' +
-      'border-radius:20px 20px 0 0;box-shadow:var(--shadow-3);padding:12px 20px 30px;' +
-      'animation:tcSheet .3s cubic-bezier(.34,1.3,.64,1)">' +
-      '<div style="width:38px;height:5px;border-radius:3px;background-color:var(--fill-secondary);margin:0 auto 12px"></div>' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
-        '<h3 style="margin:0;font-size:19px;font-weight:700">' + esc(t('jump.title')) + '</h3>' +
-        '<button data-act="closeJump" aria-label="' + esc(t('a.close')) + '" style="border:none;cursor:pointer;' +
-          'width:30px;height:30px;border-radius:50%;background-color:var(--fill-tertiary);color:var(--label-secondary);' +
-          'display:flex;align-items:center;justify-content:center;padding:0">' + icon('xmark', 14) + '</button></div>' +
-      heading(t('jump.year')) +
-      '<div style="display:flex;flex-wrap:wrap;gap:7px">' + years + '</div>' +
-      heading(t('jump.month')) +
-      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px">' + months.join('') + '</div>' +
+  const years = jumpYears(new Date().getFullYear(), state.cy)
+    .map((y) => row(y === j.y, 'data-jy="' + y + '"', yearLabel(y))).join('');
+  let months = '';
+  for (let m = 0; m < 12; m++) months += row(m === j.m, 'data-jm="' + m + '"', monthShort(m));
+
+  return '<div role="dialog" aria-label="' + esc(t('jump.title')) + '" style="position:absolute;top:100%;' +
+    'left:0;margin-top:8px;z-index:70;width:min(320px,calc(100vw - 32px));background-color:var(--bg);' +
+    'border-radius:16px;box-shadow:var(--shadow-3);padding:10px;' +
+    'animation:iosMenuIn var(--duration-fast) var(--ease-decelerate)">' +
+    '<div style="display:flex;gap:6px">' + head(t('jump.year')) + head(t('jump.month')) + '</div>' +
+    '<div style="display:flex;gap:6px">' + col('jcolY', years) + col('jcolM', months) + '</div>' +
+    '<div style="display:flex;gap:8px;margin-top:10px;border-top:.5px solid var(--separator);padding-top:10px">' +
+      '<button class="btn btn-gray btn-sm" data-act="jumpToday" style="flex:1">' + esc(t('nav.today')) + '</button>' +
+      '<span data-raise="tint" style="flex:1;display:flex">' +
+        '<button class="btn btn-prominent btn-sm" data-act="jumpGo" style="flex:1">' + esc(t('jump.go')) + '</button>' +
+      '</span>' +
     '</div></div>';
 }

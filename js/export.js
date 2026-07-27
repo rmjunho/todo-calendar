@@ -116,12 +116,18 @@ function exWrap(text, maxWidth, maxLines, measure) {
 }
 
 // 월 격자. 높이가 데이터가 아니라 달력 자체의 함수라 5주/6주에 따라 변한다.
-function exMonthLayout(cy, cm) {
+// includeGrid 가 거짓이면 격자를 안 그리므로 그 높이가 통째로 빠진다 —
+// 제목(150)과 꼬리말(64)은 남는다. 제목까지 빠지면 무슨 달인지 알 수 없다.
+function exMonthLayout(cy, cm, includeGrid) {
+  // 생략(undefined)하면 켠 것으로 본다 — 격자가 기본값이고 끄는 쪽이 명시적이라야
+  // 한다. ★ `!== false` 로 쓰지 말 것: 0 을 넘겨도 격자가 안 꺼진다.
+  const on = includeGrid === undefined ? true : !!includeGrid;
   const offset = new Date(cy, cm, 1).getDay();
   const dim = new Date(cy, cm + 1, 0).getDate();
   const weeks = Math.ceil((offset + dim) / 7);
+  const gridH = on ? M_DOW + weeks * M_ROW : 0;
   return {
-    w: EX_W, h: EX_HEAD + M_DOW + weeks * M_ROW + EX_FOOT,
+    w: EX_W, h: EX_HEAD + gridH + EX_FOOT, gridH: gridH, grid: on,
     weeks: weeks, offset: offset, dim: dim,
     cellW: EX_GRID / 7, cellH: M_ROW,
     gridTop: EX_HEAD + M_DOW
@@ -130,15 +136,24 @@ function exMonthLayout(cy, cm) {
 
 // 주. 행 수가 달력이 아니라 **데이터**의 함수라 순수 가변은 위험하다 —
 // 빈 주는 텅 비고 바쁜 주는 잘린다. 클램프 한 줄로 둘 다 막는다.
-function exWeekLayout(maxItems) {
+function exWeekLayout(maxItems, includeGrid) {
+  const on = includeGrid === undefined ? true : !!includeGrid;      // 생략하면 켠 것으로 본다 (exMonthLayout 과 같다)
   const want = W_DOW + Math.max(0, maxItems) * W_ITEM + 24;
-  const gridH = Math.min(W_GRID_MAX, Math.max(W_GRID_MIN, want));
+  const gridH = on ? Math.min(W_GRID_MAX, Math.max(W_GRID_MIN, want)) : 0;
   return {
-    w: EX_W, h: EX_HEAD + gridH + EX_FOOT, gridH: gridH,
+    w: EX_W, h: EX_HEAD + gridH + EX_FOOT, gridH: gridH, grid: on,
     bodyTop: EX_HEAD + W_DOW, bodyH: gridH - W_DOW,
     colW: EX_GRID / 7, fit: Math.max(1, Math.floor((gridH - W_DOW - 24) / W_ITEM))
   };
 }
+
+// ★ 마지막 남은 하나는 끌 수 없다 — 캘린더도 상세도 없으면 제목만 있는 빈 이미지가
+//   나간다. grid ↔ detail 어느 쪽이든 대칭이다. 토글의 disabled 와 실행 양쪽에서
+//   본다 — 화면만 막으면 키보드로 뚫린다.
+//   ★ 이 규칙은 grid/detail **쌍에만** 적용된다. memo 는 내용이 아니라 개인정보
+//     장치라 언제든 끌 수 있어야 한다 — 빼먹으면 캘린더를 끈 순간 메모까지 잠긴다.
+const EX_BODY = { grid: 'detail', detail: 'grid' };
+const expCanToggle = (e, key) => !EX_BODY[key] || !e[key] || !!e[EX_BODY[key]];
 
 // 일. 행마다 높이가 다르므로(메모 줄) 높이 배열을 받는다.
 function exDayLayout(heights) {
@@ -216,10 +231,10 @@ function exAttachDetail(L, days, includeDetail) {
 }
 
 // 그리기 전에 확정되는 데이터 모델. 캔버스는 이 객체만 보고 그린다.
-function exportModel(view, items, sel, cy, cm, includeMemo, includeDetail) {
+function exportModel(view, items, sel, cy, cm, includeMemo, includeDetail, includeGrid) {
   const remain = (rows) => rows.filter((r) => !r.done).length;
   if (view === 'month') {
-    const L = exMonthLayout(cy, cm);
+    const L = exMonthLayout(cy, cm, includeGrid);
     const days = [];
     let left = 0;
     for (let i = 0; i < L.weeks * 7; i++) {
@@ -246,7 +261,7 @@ function exportModel(view, items, sel, cy, cm, includeMemo, includeDetail) {
         rows: itemsOn(items, ds, SHOW_COMPLETED).map((it) => exRow(it, ds, includeMemo))
       });
     }
-    const L = exWeekLayout(days.reduce((m, d) => Math.max(m, d.rows.length), 0));
+    const L = exWeekLayout(days.reduce((m, d) => Math.max(m, d.rows.length), 0), includeGrid);
     const start = parse(ws), end = parse(addDays(ws, 6));
     return {
       view: view, layout: exAttachDetail(L, days, includeDetail), days: days,
@@ -468,9 +483,9 @@ function exDrawDetail(ctx, C, m) {
 }
 
 // 데이터 모델 → 캔버스. 여기서 나가는 것은 canvas 하나뿐이다.
-function drawExport(view, items, sel, cy, cm, includeMemo, includeDetail) {
+function drawExport(view, items, sel, cy, cm, includeMemo, includeDetail, includeGrid) {
   const C = exColors();
-  const m = exportModel(view, items, sel, cy, cm, includeMemo, includeDetail);
+  const m = exportModel(view, items, sel, cy, cm, includeMemo, includeDetail, includeGrid);
   const canvas = document.createElement('canvas');
   canvas.width = m.layout.w;
   canvas.height = m.layout.h;
@@ -480,9 +495,9 @@ function drawExport(view, items, sel, cy, cm, includeMemo, includeDetail) {
   ctx.fillStyle = C.page;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   exHeader(ctx, C, m);
-  if (view === 'month') exDrawMonth(ctx, C, m);
-  else if (view === 'week') exDrawWeek(ctx, C, m);
-  else exDrawDay(ctx, C, m);
+  // 캘린더를 끄면 격자를 통째로 건너뛴다. 제목·꼬리말·상세만 남는다.
+  if (view === 'day') exDrawDay(ctx, C, m);
+  else if (m.layout.grid) (view === 'month' ? exDrawMonth : exDrawWeek)(ctx, C, m);
   if (m.layout.detail) exDrawDetail(ctx, C, m);
   exFooter(ctx, C, canvas.height);
   return canvas;
@@ -493,22 +508,23 @@ function drawExport(view, items, sel, cy, cm, includeMemo, includeDetail) {
 //   받는다. navigator.share() 는 사용자 제스처 처리 중에만 허용되는데
 //   canvas.toBlob() 이 비동기라 클릭→그리기→await→share() 로 짜면 활성화가
 //   만료돼 폰에서만 NotAllowedError 로 죽는다(데스크톱 크롬은 빨라서 통과한다).
-const blankExp = (memo, detail) =>
-  ({ memo: memo, detail: detail, busy: true, url: '', file: null, canShare: false, err: '' });
+const blankExp = (memo, detail, grid) =>
+  ({ memo: memo, detail: detail, grid: grid, busy: true, url: '', file: null, canShare: false, err: '' });
 
 function openExport() {
-  state.exp = blankExp(true, true);
+  state.exp = blankExp(true, true, true);
   render();
   buildExport();
 }
 
-// [메모 포함]·[상세 목록 포함] 둘 다 여기를 지난다 — 하는 일이 같다.
+// [캘린더 포함]·[상세 목록 포함]·[메모 포함] 셋 다 여기를 지난다 — 하는 일이 같다.
 function toggleExportOpt(key) {
   const old = state.exp;
   if (!old || old.busy) return;
+  if (!expCanToggle(old, key)) return;   // 마지막 남은 하나는 못 끈다
   if (old.url) URL.revokeObjectURL(old.url);
   // 새 객체로 갈아 끼운다 — 진행 중이던 빌드가 자기 것이 아님을 알아채고 빠진다.
-  const next = blankExp(old.memo, old.detail);
+  const next = blankExp(old.memo, old.detail, old.grid);
   next[key] = !old[key];
   state.exp = next;
   render();
@@ -516,6 +532,7 @@ function toggleExportOpt(key) {
 }
 const toggleExportMemo = () => toggleExportOpt('memo');
 const toggleExportDetail = () => toggleExportOpt('detail');
+const toggleExportGrid = () => toggleExportOpt('grid');
 
 function closeExport() {
   if (state.exp && state.exp.url) URL.revokeObjectURL(state.exp.url);
@@ -532,7 +549,7 @@ async function buildExport() {
     // 두 번째부터는 이미 resolve 돼 있어 공짜다.
     if (document.fonts && document.fonts.ready) await document.fonts.ready;
     const canvas = drawExport(state.view, state.items, state.selected, state.cy, state.cm,
-      e.memo, e.detail);
+      e.memo, e.detail, e.grid);
     const blob = await new Promise((res, rej) =>
       canvas.toBlob((b) => (b ? res(b) : rej(new Error('toBlob returned null'))), 'image/png'));
     if (state.exp !== e) return;      // 그 사이 닫혔거나 토글로 다시 시작했다
@@ -589,7 +606,7 @@ function expToggle(key, label, hint, e) {
       esc(t(hint)) + '</div></div>' +
     '<button class="sw" role="switch" data-act="exp' + key[0].toUpperCase() + key.slice(1) +
       '" aria-checked="' + !!e[key] + '" aria-label="' + esc(t(label)) + '"' +
-      (e.busy ? ' disabled' : '') + '><span></span></button></div>';
+      (e.busy || !expCanToggle(e, key) ? ' disabled' : '') + '><span></span></button></div>';
 }
 
 function renderExportSheet() {
@@ -619,7 +636,10 @@ function renderExportSheet() {
         preview + '</div>' +
 
       // 일간 뷰는 이미 아젠다 형식이라 [상세 목록 포함] 을 안 보여 준다.
-      (state.view === 'day' ? '' : expToggle('detail', 'exp.detail', 'exp.detailHint', e)) +
+      // 일간 뷰는 이미 아젠다 형식이라 캘린더·상세 토글을 안 보여 준다.
+      (state.view === 'day' ? '' :
+        expToggle('grid', 'exp.grid', 'exp.gridHint', e) +
+        expToggle('detail', 'exp.detail', 'exp.detailHint', e)) +
       expToggle('memo', 'exp.memo', 'exp.hint', e) +
 
       (e.err ? '<div role="alert" style="margin-top:14px;font-size:13px;font-weight:600;color:#FF3B30;' +

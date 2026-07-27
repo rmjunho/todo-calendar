@@ -180,9 +180,10 @@ app.addEventListener('click', (e) => {
   if ((el = hit('[data-reject]'))) return decide(el.dataset.reject, 'rejected');
   if ((el = hit('[data-resetpin]'))) return resetPin(el.dataset.resetpin);
   if ((el = hit('[data-delacct]'))) return removeAccount(el.dataset.delacct);
-  // 년·월 점프. 년은 고르기만 하고, 월을 누르는 순간 확정된다.
+  // 년·월 점프. 탭은 **임시 선택**만 옮긴다 — 달력은 [이동] 을 눌러야 움직인다.
+  // 스크롤 위치는 render() 진입부의 saveJumpScroll() 이 챙기므로 여기서 안 만진다.
   if ((el = hit('[data-jy]'))) { state.jump.y = Number(el.dataset.jy); return render(); }
-  if ((el = hit('[data-jm]'))) return applyJump(Number(el.dataset.jm));
+  if ((el = hit('[data-jm]'))) { state.jump.m = Number(el.dataset.jm); return render(); }
   if ((el = hit('[data-view]'))) { state.view = el.dataset.view; return render(); }
   if ((el = hit('[data-nav]'))) {
     const dir = el.dataset.nav;
@@ -231,8 +232,11 @@ app.addEventListener('click', (e) => {
       case 'closeExport': return closeExport();
       case 'expMemo': return toggleExportMemo();
       case 'expDetail': return toggleExportDetail();
+      case 'expGrid': return toggleExportGrid();
       case 'jump': return openJump();
       case 'closeJump': return closeJump();
+      case 'jumpGo': return applyJump();
+      case 'jumpToday': return jumpNow();
       case 'expShare': return shareImage();
       case 'expSave': return saveImage();
       case 'open': return openForm(null);
@@ -542,6 +546,76 @@ if (location.search.includes('selftest')) {
     ok(r.selected.slice(0, 7) === '2026-02' && parse(r.selected).getMonth() === r.cm,
       'the selected date always lands inside the month that was jumped to (' + v + ')');
   });
+
+  // --- [캘린더 포함] 토글 ---
+  // 격자를 빼면 그 높이가 통째로 빠지고 제목(150)·꼬리말(64)만 남는다.
+  const gOn = exportModel('month', busy, '2026-07-26', 2026, 6, true, true, true);
+  const gOff = exportModel('month', busy, '2026-07-26', 2026, 6, true, true, false);
+  const gridOnly = exportModel('month', busy, '2026-07-26', 2026, 6, true, false, true);
+  ok(gridOnly.layout.h === 1150, 'grid on + detail off is the unchanged 1150 baseline');
+  ok(gOn.layout.h === on.layout.h, 'grid on + detail on matches what it was before the toggle existed');
+  ok(gOff.layout.h === gOn.layout.h - 936, 'dropping the grid removes exactly its 936px (56 + 176x5)');
+  ok(gOff.layout.gridH === 0 && gOff.layout.grid === false, 'the grid contributes no height when off');
+  ok(exMonthLayout(2026, 6).h === 1150, 'omitting the flag keeps the grid — old call sites still mean what they meant');
+  ok(exMonthLayout(2026, 6, 0).gridH === 0, 'any falsy value turns the grid off, not just a literal false');
+  ok(gOff.layout.detail.shown === 28, 'the detail list survives with the grid off');
+  ok(gOff.title === gOn.title && gOff.sub === gOn.sub,
+    'the heading stays so the image still says which month it is');
+  // 주간도 같은 규칙 — 격자 높이만 빠진다.
+  const wOn = exportModel('week', busy, '2026-07-26', 2026, 6, true, true, true);
+  const wOff = exportModel('week', busy, '2026-07-26', 2026, 6, true, true, false);
+  ok(wOn.layout.h - wOff.layout.h === wOn.layout.gridH, 'the week loses exactly its grid height');
+  ok(wOff.layout.h > 214, 'the week keeps its heading, footer and detail list');
+
+  // ★ 마지막 남은 하나는 끌 수 없다. 양방향 대칭이어야 한다.
+  ok(expCanToggle({ grid: true, detail: true }, 'grid'), 'either can be turned off while both are on');
+  ok(expCanToggle({ grid: true, detail: true }, 'detail'), 'symmetric for the other one');
+  ok(!expCanToggle({ grid: true, detail: false }, 'grid'), 'the last remaining one cannot be turned off');
+  ok(!expCanToggle({ grid: false, detail: true }, 'detail'), 'and the same the other way round');
+  ok(expCanToggle({ grid: false, detail: true }, 'grid'), 'an already-off toggle can always be turned back on');
+  ok(expCanToggle({ grid: true, detail: false }, 'detail'), 'symmetric for turning the other back on');
+  // ★ memo 는 내용이 아니라 개인정보 장치다. 무엇이 꺼져 있든 항상 끌 수 있어야 한다.
+  ok(expCanToggle({ grid: false, detail: true, memo: true }, 'memo'),
+    'the note switch never locks just because the calendar is off');
+  ok(expCanToggle({ grid: true, detail: false, memo: true }, 'memo'),
+    'nor because the detail list is off');
+
+  // --- 점프 팝오버: 임시 선택 ---
+  // ★ 탭은 임시 선택만 옮긴다. [이동] 을 누르기 전에는 달력이 안 움직인다.
+  const kv = { view: state.view, cy: state.cy, cm: state.cm, selected: state.selected, jump: state.jump };
+  state.view = 'month'; state.cy = 2026; state.cm = 6; state.selected = '2026-07-26';
+
+  openJump();
+  ok(state.jump.y === 2026 && state.jump.m === 6, 'the picker opens on the month currently shown');
+  ok(state.jump.sy === null && state.jump.sm === null, 'scroll offsets start unset so the first render centres them');
+  state.jump.y = 2030; state.jump.m = 11;      // 탭 두 번과 같다
+  ok(state.cy === 2026 && state.cm === 6 && state.selected === '2026-07-26',
+    'staging a year and month does not move the calendar');
+  closeJump();
+  ok(state.jump === null && state.cy === 2026 && state.cm === 6 && state.selected === '2026-07-26',
+    'cancelling the picker throws the staged selection away');
+
+  openJump();
+  state.jump.y = 2030; state.jump.m = 11;
+  applyJump();
+  ok(state.cy === 2030 && state.cm === 11 && state.selected === '2030-12-01' && state.jump === null,
+    'Go commits all three at once and closes the picker');
+
+  // 일간은 같은 '일' 을 유지하고 없으면 말일로 내려앉는다.
+  state.view = 'day'; state.cy = 2026; state.cm = 0; state.selected = '2026-01-31';
+  openJump(); state.jump.y = 2026; state.jump.m = 1; applyJump();
+  ok(state.selected === '2026-02-28', 'day view clamps Jan 31 to the last day of February');
+  state.cy = 2028; state.cm = 0; state.selected = '2028-01-31';
+  openJump(); state.jump.y = 2028; state.jump.m = 1; applyJump();
+  ok(state.selected === '2028-02-29', 'a leap year keeps the 29th');
+
+  // 스크롤 오프셋: 선택 항목이 5칸 중 3번째에 온다. 맨 위 두 개는 0 으로 눌린다.
+  ok(jumpOffset(0) === 0 && jumpOffset(2) === 0, 'the first entries do not scroll past the top');
+  ok(jumpOffset(10) === 8 * J_ITEM, 'a mid-list entry is scrolled to the third visible slot');
+  ok(jumpOffset(jumpYears(2026, 2026).indexOf(2026)) === 8 * J_ITEM,
+    'opening on the current year does not leave the list sitting at 2016');
+
+  Object.assign(state, kv);   // 검사 때문에 달력이 옮겨진 채 끝나지 않게 되돌린다
 
   console.log('selftest: all checks passed');
 }
