@@ -99,6 +99,12 @@ function timeLabel(hhmm) {
   const p = hhmm.split(':').map(Number);
   return dtf({ hour: 'numeric', minute: '2-digit' }).format(new Date(2000, 0, 1, p[0], p[1]));
 }
+// 시작–종료. ko '오전 7:00 – 오전 8:00' / en '7:00 AM – 8:00 AM'
+// ★ 종료가 비면 timeLabel() 과 **문자 하나까지 같다** — endTime 이 없는 옛 항목의
+//   표시가 안 바뀌게 하는 지점이다. 오전/오후·AM/PM 은 timeLabel 이 이미 붙이므로
+//   여기가 하는 일은 두 라벨을 en dash 로 잇는 것뿐이고, 그래서 ko/en 양쪽에
+//   따로 손볼 것이 없다. 자정 넘김은 입력에서 막으므로 여기서 볼 일이 없다.
+const timeRange = (a, b) => (b ? timeLabel(a) + ' – ' + timeLabel(b) : timeLabel(a));
 // 달력 머리말. ko '2026년 7월' / en 'July 2026'
 const monthTitle = (y, m) => dtf({ year: 'numeric', month: 'long' }).format(new Date(y, m, 1));
 // 선택한 날. ko '7월 25일 토요일' / en 'Saturday, July 25'
@@ -184,6 +190,9 @@ const STR = {
     'form.date': '날짜',
     'form.time': '시간',
     'form.timeToggle': '시간 지정',
+    'form.timeStart': '시작',
+    'form.timeEnd': '종료',
+    'form.endBeforeStart': '종료 시간은 시작 시간보다 늦어야 합니다',
     'form.pri': '우선순위',
     'form.repeat': '반복',
     'form.days': '반복 요일',
@@ -374,6 +383,9 @@ const STR = {
     'form.date': 'Date',
     'form.time': 'Time',
     'form.timeToggle': 'Set a time',
+    'form.timeStart': 'Start',
+    'form.timeEnd': 'End',
+    'form.endBeforeStart': 'The end time must be later than the start time',
     'form.pri': 'Priority',
     'form.repeat': 'Repeat',
     'form.days': 'Repeat on',

@@ -205,7 +205,7 @@ function exRow(it, ds, includeMemo) {
   const r = {
     title: it.title || '',
     color: (PRI[it.pri] || PRI.none).c,
-    time: it.time ? timeLabel(it.time) : t('item.allDay'),
+    time: it.time ? timeRange(it.time, it.endTime || '') : t('item.allDay'),
     allDay: !it.time,
     done: isDone(it, ds)
   };
@@ -425,7 +425,12 @@ function exDrawRow(ctx, C, r, x, y, w) {
   ctx.fillStyle = r.color;
   ctx.fill();
 
-  exClip(ctx, r.title, x + 24, y + 44, w - 230, exFont(600, 30), C.label, r.done);
+  // 시간 칸은 오른쪽 정렬이라 제목과 겹칠 수 있다. 230 은 '오후 2:30' 한 벌에
+  // 맞춘 옛 예약폭이고, '07:00 – 08:00' 범위는 그보다 넓다. Math.min 으로 좁히기만
+  // 하므로 **종료가 없는 옛 행은 230 그대로** — 내보낸 이미지가 안 바뀐다.
+  ctx.font = exFont(600, 25);
+  const timeW = ctx.measureText(r.time).width;
+  exClip(ctx, r.title, x + 24, y + 44, Math.min(w - 230, w - 44 - timeW), exFont(600, 30), C.label, r.done);
   exText(ctx, r.time, x + w, y + 44, exFont(600, 25), r.allDay ? C.label3 : C.label2, 'right');
   if (r.memo) {
     // 메모만 여러 줄로 흐른다. 한글은 공백이 없어 글자 단위로 끊긴다.

@@ -161,7 +161,12 @@ function pill(it, ds) {
     bg: 'color-mix(in srgb, ' + c + ' 16%, transparent)',
     deco: done ? 'line-through' : 'none',
     op: done ? 0.5 : 1,
-    timeLabel: it.time ? timeLabel(it.time) : t('item.allDay')
+    timeLabel: it.time ? timeLabel(it.time) : t('item.allDay'),
+    // ★ 라벨이 둘인 이유: 주간 격자 칸은 390px 화면에서 51px 밖에 안 돼 지금도 시간
+    //   라벨이 두 줄로 접힌다(접기 기준 5의 근거 — 아래 주간 뷰 주석). 범위를 넣으면
+    //   3~4줄이 되므로 **좁은 격자는 timeLabel, 넓은 곳은 range** 를 쓴다.
+    //   endTime 이 없으면 둘은 같은 문자열이다.
+    range: it.time ? timeRange(it.time, it.endTime || '') : t('item.allDay')
   };
 }
 // data-open carries the id + the date the row was rendered for, so editing a
@@ -378,7 +383,7 @@ function render() {
         ';top:' + top + 'px;opacity:' + p.op + '">' +
         '<div class="trunc" style="font-size:13px;font-weight:600;color:' + p.color + ';text-decoration:' + p.deco + '">' +
         esc(p.title) + '</div>' +
-        '<div style="font-size:11px;color:' + p.color + ';opacity:.75">' + esc(p.timeLabel) + '</div></div>';
+        '<div style="font-size:11px;color:' + p.color + ';opacity:.75">' + esc(p.range) + '</div></div>';
     }).join('');
 
     html += '<div class="card" style="border:.5px solid var(--separator);padding:16px 16px 20px">' + allDayBlock +
@@ -416,7 +421,7 @@ function render() {
             ? '<span style="font-size:11px;font-weight:600;color:var(--label-secondary);background:var(--fill-quaternary);' +
               'padding:3px 8px;border-radius:999px">' + esc(repLabel(it.repeat, it.days)) + '</span>' : '') +
           (it.time ? '<span style="font-size:13px;font-weight:500;color:var(--label-secondary);' +
-            'font-variant-numeric:tabular-nums">' + esc(timeLabel(it.time)) + '</span>' : '') +
+            'font-variant-numeric:tabular-nums">' + esc(timeRange(it.time, it.endTime || '')) + '</span>' : '') +
           '<span ' + open + ' style="cursor:pointer;color:var(--label-tertiary);display:flex">' +
             icon('chevron.right', 15) + '</span>' +
         '</div></div>';

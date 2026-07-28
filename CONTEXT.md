@@ -9,7 +9,7 @@
 
 기능은 다 붙었습니다 — 계정·승인·약관 동의·기기 간 동기화·본인 탈퇴·테마 3종·언어 2종·
 캘린더 이미지 내보내기(캘린더·상세·메모 토글)·날짜 이동 팝오버·요일 선택 반복. 남은 것은 §6 두 개
-(PWA / 스토어)와 **이미지 공유의 실기기 검증**입니다. `?selftest` 139개 통과.
+(PWA / 스토어)와 **이미지 공유의 실기기 검증**입니다. `?selftest` 158개 통과.
 
 ---
 
@@ -98,7 +98,8 @@ firebase.js                                                        (ESM 모듈)
 
 - **`i18n.js` 가 맨 앞**이라야 합니다. 로드 즉시 `applyTheme()` 을 돌려 첫 페인트 전에
   `data-theme` 을 겁니다. 뒤로 밀면 어두운 테마에서 흰 화면이 한 번 번쩍입니다.
-- `i18n.js`·`legal.js` 는 상수만 담아 호출이 없고, 뒤 4개는 서로 의존합니다 —
+- `i18n.js`·`legal.js` 는 **뒤 파일의 함수를 하나도 안 부릅니다**(자기 안에서 끝나는
+  `loadSettings()`·`applyTheme()` 뿐이라 맨 앞에 둘 수 있습니다). 뒤 4개는 서로 의존합니다 —
   `calendar.js` 의 `state` 리터럴이 `blankAuth()`(auth.js)를 부르고, `todo.js` 끝에서
   `render()` 가 앱을 띄웁니다.
 - **`export.js` 는 `calendar.js` 뒤 · `todo.js` 앞**입니다. 앞쪽에서 `state`·`fmt`·
@@ -127,7 +128,7 @@ firebase.js                                                        (ESM 모듈)
 | **`adoptSettings`** | **로그인 시 병합.** 있는 키는 서버가 이기고 빠진 키는 로컬 유지. `false` 면 승격 필요 |
 | `okTheme` / `okLang` | 값 검증. 규칙의 `validSettings()` 와 **같은 집합을 유지할 것** |
 | **`applyTheme`** | **`data-theme` 을 건다.** `system` 일 때만 `darkMQ` 를 본다 |
-| `dow` `timeLabel` `monthTitle` `dayTitle` `shortDay` `dateLabel` `monthShort` `yearLabel` | **Intl. 전부 화면 표시 전용** |
+| `dow` `timeLabel` **`timeRange`** `monthTitle` `dayTitle` `shortDay` `dateLabel` `monthShort` `yearLabel` | **Intl. 전부 화면 표시 전용.** `timeRange(a,b)` 는 `b` 가 비면 **`timeLabel(a)` 와 문자까지 동일** — `endTime` 없는 옛 항목의 표시가 안 변하는 근거 |
 | `t(key, a, b)` / `STR` | 문자열. 값이 함수면 인자로 문장을 만든다. ko / en 각 ~170개 |
 
 ### js\auth.js — 계정 (화면·검증만. 실제 인증은 firebase.js)
@@ -168,7 +169,7 @@ firebase.js                                                        (ESM 모듈)
 | `sortItems` / `itemsOn` | 하루종일→시간→우선순위 정렬, 날짜 필터 |
 | **`state`** | **전역 상태 객체 (단일 소스)** |
 | **`sheetBusy`** | **시트가 열려 있나.** 원격 스냅샷 렌더를 미룰지 판정 (`showForm \|\| exp \|\| jump`) |
-| **`render`** | **`#app` 전체 innerHTML 재생성.** 격자는 접는다 — 월간 **3**개·주간 **5**개까지만 그리고 나머지는 `cell.more`(`+N개`). 주간 5의 근거(실측): 칸 `min-height:320` 에 헤더 64·항목 33·`gap:4`·`+N개` 12 라 넓은 화면은 5개=273(여유 47)·6개=310(여유 10뿐)·7개=347(초과)이고, **390px 에서는 열이 51px 라 시간 라벨이 두 줄로 접혀 항목이 48 → 5개라도 348** 이다(접기 전 17개는 713). **항목 높이·글꼴·시간 라벨 형식을 바꾸면 5를 다시 재야 한다.** `+N개` 는 월간처럼 **그 날을 고를 뿐**(뷰 전환 아님)이고, 주간은 부모에 `data-day` 가 없어 **`+N개` 요소에 직접** 달아 준다. 하단 리스트는 안 접는다 |
+| **`render`** | **`#app` 전체 innerHTML 재생성.** 격자는 접는다 — 월간 **3**개·주간 **5**개까지만 그리고 나머지는 `cell.more`(`+N개`). 주간 5의 근거(실측): 칸 `min-height:320` 에 헤더 64·항목 33·`gap:4`·`+N개` 12 라 넓은 화면은 5개=273(여유 47)·6개=310(여유 10뿐)·7개=347(초과)이고, **390px 에서는 열이 51px 라 시간 라벨이 두 줄로 접혀 항목이 48 → 5개라도 348** 이다(접기 전 17개는 713). **항목 높이·글꼴·시간 라벨 형식을 바꾸면 5를 다시 재야 한다.** 그래서 **격자 칸은 `pill.timeLabel`(시작만), 넓은 곳은 `pill.range`(시작–종료)** 로 갈라 둔다 — 51px 칸에 범위를 넣으면 3~4줄이 된다. 월간 셀은 애초에 시간을 안 그린다(제목만). `+N개` 는 월간처럼 **그 날을 고를 뿐**(뷰 전환 아님)이고, 주간은 부모에 `data-day` 가 없어 **`+N개` 요소에 직접** 달아 준다. 하단 리스트는 안 접는다 |
 | **`clampDay`** | **말일 클램프.** 없는 날이면 그 달 마지막 날 (1/31 → 2월 = 2/28) |
 | `jumpYears` | 오늘 ±10년(21개). 보고 있는 해가 밖이면 합쳐 넣는다 |
 | **`jumpTo`** | **`cy`·`cm`·`selected` 를 함께 돌려준다.** `[data-day]` 계열 — 아래 지뢰 참고 |
@@ -202,9 +203,10 @@ firebase.js                                                        (ESM 모듈)
 |---|---|
 | **`commit`** | **낙관적 업데이트** — 상태·렌더 먼저, Firestore 쓰기는 뒤. 실패하면 알림 |
 | `toggleDone` | 반복이면 날짜 배열, 단발이면 플래그 |
-| `renderSheet` / `openForm` / `saveForm` | 입력 시트 |
+| `renderSheet` / `openForm` / `saveForm` | 입력 시트. 날짜 칸은 한 줄 통째, 시간은 시작·종료 두 칸 |
+| **`endOk` / `formTimes`** | **종료 ≤ 시작이면 저장 거부**(자정 넘김 금지) · 폼 → `{time, endTime}`. 하루 종일이면 둘 다 `''` |
 | click / input / keydown 위임 | 모든 버튼이 여기 하나로. **입력은 uncontrolled**(캐럿 보존) |
-| 부트스트랩 · selftest | `render()` + 10초 타임아웃 가드 · `?selftest` 139개 |
+| 부트스트랩 · selftest | `render()` + 10초 타임아웃 가드 · `?selftest` 158개 |
 
 렌더 흐름은 하나뿐입니다: **상태 변경 → `render()` → `#app.innerHTML` 통째 교체.**
 가상 DOM·프레임워크 없음.
@@ -230,6 +232,7 @@ firebase.js                                                        (ESM 모듈)
   title: '팀 주간 회의',
   date: '2026-07-25',       // fmt() 산출. 로컬 자정 기준 문자열
   time: '10:00',            // '' 이면 하루 종일
+  endTime: '11:00',         // '' 이면 종료 없음. 자정 넘김은 입력에서 막는다
   pri: 'none'|'low'|'med'|'high',
   repeat: 'none'|'daily'|'weekly'|'monthly',
   days: [1, 3, 5],          // 0=일 ~ 6=토, 오름차순. repeat==='weekly' 일 때만 읽는다
@@ -243,6 +246,13 @@ firebase.js                                                        (ESM 모듈)
 — 빼면 기존 반복 할 일이 전부 사라집니다. 필드 자체는 `done`/`doneDates` 처럼 **늘 있고**
 (weekly 가 아니면 `[]`), 읽을지는 `repeat` 이 정합니다. 편집 시트가 옛 항목에 `days` 를
 채워 넣지만 판정은 안 바뀝니다 — selftest 가 43일치를 비교합니다.
+
+**`endTime` 도 옛 항목에 없습니다** — `days` 와 같은 방식입니다. 필드는 **늘 쓰고**(하루
+종일이면 `time`·`endTime` 둘 다 `''`), 읽는 쪽이 `it.endTime || ''` 로 폴백합니다. 비면
+`timeRange()` 가 `timeLabel()` 과 **문자 하나까지 같은 문자열**을 돌려주므로 시작 시간만
+있는 기존 항목의 표시가 안 바뀝니다. **종료 ≤ 시작은 저장이 거부됩니다**(`endOk`, todo.js)
+— `23:00 → 01:00` 을 허용하면 "그 날 안"이라는 전제가 깨져 반복 판정·정렬·일간 뷰가 전부
+이틀짜리 항목을 다뤄야 합니다. 정렬은 `endTime` 을 안 봅니다.
 
 `done` 과 `doneDates` 는 **배타적**입니다. `isDone` 이 반복 여부로 어느 쪽을 볼지
 고릅니다 — 그래서 이번 주에 체크해도 다음 주 항목은 미완료로 남습니다.
@@ -539,7 +549,8 @@ Intl (표시 전용)                 손대지 않음 (데이터 키)
 dow() 요일 이름                  fmt()  ← 'YYYY-MM-DD' 생산자
 monthTitle() / dayTitle()        parse() / addDays()
 shortDay() / dateLabel()         occursOn() / isDone()
-timeLabel() 오전·오후            item.date · doneDates[] · state.selected
+timeLabel() / timeRange()        item.date · item.time · item.endTime
+  ↑ 오전·오후 · 시작–종료          · doneDates[] · state.selected
 monthShort() / yearLabel()       clampDay() / jumpTo() ← 점프가 돌려주는 값
   ↑ 점프 피커의 년·월 이름         <input type="date"> 의 value
 ```

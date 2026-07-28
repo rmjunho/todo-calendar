@@ -4,8 +4,17 @@
 // ---------------------------------------------------------------- persistence
 // 할 일은 users/{uid}/todos/{id} 에 산다. 목록은 firebase.js 의 onSnapshot 이
 // state.items 로 흘려 넣는다 — 여기서는 쓰기만 한다.
-const blankForm = (date) => ({ title: '', date, hasTime: false, time: '09:00', pri: 'none',
-  repeat: 'none', days: [], memo: '' });
+const blankForm = (date) => ({ title: '', date, hasTime: false, time: '07:00', end: '08:00',
+  pri: 'none', repeat: 'none', days: [], memo: '' });
+
+// ★ 자정 넘김을 막는다. 종료가 시작보다 빠르거나 같으면 저장하지 않는다 —
+//   23:00 → 01:00 을 허용하면 "그 날 안"이라는 전제가 깨져서 반복 판정·정렬·
+//   일간 뷰가 전부 이틀에 걸친 항목을 다뤄야 한다. 'HH:MM' 은 사전순이 곧
+//   시간순이라 문자열 비교로 충분하다 (Date 를 만들면 타임존이 끼어든다).
+const endOk = (f) => !f.hasTime || !f.end || f.end > f.time;
+// 폼 → 저장값. 하루 종일이면 둘 다 비운다. weekly 의 days 와 같은 방식으로
+// endTime 은 **늘 쓴다** — 옛 문서엔 키가 없고, 읽는 쪽이 `|| ''` 로 폴백한다.
+const formTimes = (f) => (f.hasTime ? { time: f.time, endTime: f.end || '' } : { time: '', endTime: '' });
 // 요일 반복의 기본값 = 시작일의 요일 하나. 아무것도 안 고치면 예전 '매주' 와
 // 결과가 같다. 색인은 getDay() 기준 0=일 (주 시작 일요일 고정 — CONTEXT §5).
 const defaultDays = (ds) => [parse(ds).getDay()];
@@ -64,10 +73,20 @@ function renderSheet() {
       '<div style="font-size:12px;color:#FF3B30;margin-top:6px">' + esc(t('form.daysEmpty')) + '</div>');
 
   // 요일을 하나도 안 고른 '매주' 는 아무 날에도 안 뜨는 항목이 된다 — 저장을 막는다.
-  const canSave = !!f.title.trim() && !(f.repeat === 'weekly' && !f.days.length);
+  const canSave = !!f.title.trim() && !(f.repeat === 'weekly' && !f.days.length) && endOk(f);
+
+  // 시작·종료 한 쌍. 종료를 비우면 종료 없음 — endTime 이 없던 옛 항목과 같은 상태다.
+  const timeField = (k, v, key) =>
+    '<div><div style="font-size:12px;font-weight:600;color:var(--label-tertiary);margin:0 0 4px">' +
+      esc(t(key)) + '</div>' +
+    '<input class="field" type="time" data-f="' + k + '" value="' + esc(v) +
+      '" style="padding:11px 14px;font-size:15px"></div>';
 
   const timeBlock = f.hasTime
-    ? '<input class="field" type="time" data-f="time" value="' + esc(f.time) + '" style="padding:11px 14px;font-size:15px">'
+    ? '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+        timeField('time', f.time, 'form.timeStart') + timeField('end', f.end, 'form.timeEnd') + '</div>' +
+      (endOk(f) ? '' : '<div style="font-size:12px;color:#FF3B30;margin-top:6px">' +
+        esc(t('form.endBeforeStart')) + '</div>')
     : '<div style="padding:11px 14px;font-size:14px;color:var(--label-tertiary);background:var(--fill-quaternary);border-radius:12px">' +
       esc(t('item.allDay')) + '</div>';
 
@@ -87,16 +106,24 @@ function renderSheet() {
       '<input class="field" type="text" data-f="title" placeholder="' + esc(t('form.titlePh')) + '" value="' + esc(f.title) +
         '" style="padding:12px 14px;font-size:16px">' +
 
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">' +
-        '<div><div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">' + esc(t('form.date')) + '</div>' +
-          // value 는 'YYYY-MM-DD' 그대로다. type="date" 가 요구하는 형식이자 저장 키의
-          // 형식이라 Intl 을 끼우면 안 된다 — 표시 형식은 브라우저가 로케일에 맞춘다.
-          '<input class="field" type="date" data-f="date" value="' + esc(f.date) + '" style="padding:11px 14px;font-size:15px"></div>' +
-        '<div><div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 6px">' +
-            '<span style="font-size:13px;font-weight:600;color:var(--label-secondary)">' + esc(t('form.time')) + '</span>' +
-            '<button class="sw" role="switch" data-act="toggleTime" aria-checked="' + f.hasTime +
-              '" aria-label="' + esc(t('form.timeToggle')) + '"><span></span></button>' +
-          '</div>' + timeBlock + '</div></div>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 6px">' +
+        '<span style="font-size:13px;font-weight:600;color:var(--label-secondary)">' + esc(t('form.date')) + '</span>' +
+        // ★ 요일은 표시 전용이다 (CONTEXT §5). type="date" 의 네이티브 표시는 브라우저가
+        //   정해서 요일을 끼워 넣을 수 없으므로 라벨 줄에 따로 적는다. 저장되는 값은
+        //   아래 input 의 'YYYY-MM-DD' 하나뿐이고, dow() 결과가 그리로 되돌아가는
+        //   경로는 없다. 날짜를 지워 value 가 비면 요일도 안 그린다.
+        (f.date ? '<span style="font-size:13px;font-weight:600;color:var(--label-tertiary)">(' +
+          esc(dow()[parse(f.date).getDay()]) + ')</span>' : '') +
+      '</div>' +
+      // value 는 'YYYY-MM-DD' 그대로다. type="date" 가 요구하는 형식이자 저장 키의
+      // 형식이라 Intl 을 끼우면 안 된다 — 표시 형식은 브라우저가 로케일에 맞춘다.
+      '<input class="field" type="date" data-f="date" value="' + esc(f.date) + '" style="padding:11px 14px;font-size:15px">' +
+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 6px">' +
+        '<span style="font-size:13px;font-weight:600;color:var(--label-secondary)">' + esc(t('form.time')) + '</span>' +
+        '<button class="sw" role="switch" data-act="toggleTime" aria-checked="' + f.hasTime +
+          '" aria-label="' + esc(t('form.timeToggle')) + '"><span></span></button>' +
+      '</div>' + timeBlock +
 
       '<div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">' + esc(t('form.pri')) + '</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap">' + priChoices + '</div>' +
@@ -129,7 +156,11 @@ function openForm(id, ds) {
     const it = state.items.find((x) => x.id === id);
     if (!it) return;
     state.editingId = id;
-    state.form = { title: it.title, date: ds || it.date, hasTime: !!it.time, time: it.time || '09:00',
+    state.form = { title: it.title, date: ds || it.date, hasTime: !!it.time, time: it.time || '07:00',
+      // endTime 은 옛 항목에 아예 없다 — 없으면 '' 로 열려 '종료 없음' 이 그대로
+      // 유지된다. 하루 종일이던 항목의 시간을 켜면 새 항목과 같은 07:00–08:00 에서
+      // 시작한다 (그 항목에는 지울 종료 시간이 애초에 없다).
+      end: it.time ? (it.endTime || '') : '08:00',
       pri: it.pri || 'none', repeat: it.repeat || 'none',
       // days 가 없는 옛 weekly 항목은 시작일 요일 하나가 켜진 채로 열린다 — 지금
       // 판정과 같은 상태다. 그대로 저장하면 days 가 생기지만 결과는 안 바뀐다.
@@ -157,13 +188,15 @@ function saveForm() {
   // 요일을 하나도 안 고른 '매주' 는 아무 날에도 안 뜬다. 저장 버튼도 disabled 지만
   // 여기서도 막는다 — 화면 검사 하나만 믿지 않는다.
   if (f.repeat === 'weekly' && !f.days.length) return;
-  const base = { title: f.title.trim(), date: f.date, time: f.hasTime ? f.time : '',
+  // 자정을 넘기는 종료 시간도 같은 이유로 여기서 한 번 더 막는다.
+  if (!endOk(f)) return;
+  const base = Object.assign({ title: f.title.trim(), date: f.date }, formTimes(f), {
     pri: f.pri, repeat: f.repeat,
     // 오름차순으로 굳혀 둔다 — 판정과 라벨이 고른 순서에 안 흔들린다.
     // weekly 가 아니면 []. done/doneDates 와 같은 방식이다: 필드는 늘 있고
     // 어느 쪽을 읽을지는 repeat 이 정한다 (occursOn 은 weekly 에서만 days 를 본다).
     days: f.repeat === 'weekly' ? f.days.slice().sort((a, b) => a - b) : [],
-    memo: (f.memo || '').trim() };
+    memo: (f.memo || '').trim() });
   // 새 항목의 id 는 Firestore 가 만든다 — 기기 간 충돌이 없고, 쓰기를 기다리지
   // 않고도 화면에 먼저 넣을 수 있다.
   const editing = !!state.editingId;
@@ -177,8 +210,9 @@ function saveForm() {
   state.editingId = null;
   state.form = null;
   commit(items, () => fb.saveTodo(id, editing ? base
-    : { title: fresh.title, date: fresh.date, time: fresh.time, pri: fresh.pri,
-        repeat: fresh.repeat, days: fresh.days, memo: fresh.memo, done: false, doneDates: [] }));
+    : { title: fresh.title, date: fresh.date, time: fresh.time, endTime: fresh.endTime,
+        pri: fresh.pri, repeat: fresh.repeat, days: fresh.days, memo: fresh.memo,
+        done: false, doneDates: [] }));
 }
 
 app.addEventListener('click', (e) => {
@@ -412,6 +446,64 @@ if (location.search.includes('selftest')) {
     if (occursOn(w, d) !== occursOn(migrated, d)) sameAsOld = false;
   }
   ok(sameAsOld, 'filling days in from the start weekday changes no occurrence, on any date');
+
+  // --- 시작·종료 시간 (endTime) ---
+  // ★ 제일 중요한 것은 첫 세 줄이다: endTime 키가 아예 없는 옛 항목의 표시가
+  //   한 글자도 변하면 안 된다. 변하면 기존 사용자의 화면과 내보낸 이미지가
+  //   조용히 전부 달라진다.
+  const e0 = { id: 'e0', title: '회의', date: '2026-01-05', repeat: 'none', time: '07:00', pri: 'none' };
+  const e1 = Object.assign({}, e0, { id: 'e1', endTime: '08:00' });
+  ok(timeRange('07:00', '') === timeLabel('07:00'), 'an empty end time renders exactly like the old start-only label');
+  ok(pill(e0, '2026-01-05').range === timeLabel('07:00') &&
+     pill(e0, '2026-01-05').timeLabel === timeLabel('07:00'),
+    'an item with no endTime key is unchanged in both grid labels');
+  ok(exRow(e0, '2026-01-05', false).time === timeLabel('07:00'),
+    'and unchanged in the exported image');
+  ok(timeRange('07:00', '08:00') === timeLabel('07:00') + ' – ' + timeLabel('08:00'),
+    'a range is the two labels joined by an en dash');
+  ok(pill(e1, '2026-01-05').range === timeRange('07:00', '08:00') &&
+     exRow(e1, '2026-01-05', false).time === timeRange('07:00', '08:00'),
+    'an item with an end time shows the range everywhere it is drawn wide');
+  // 주간 격자만 시작 시간을 유지한다 — 51px 칸에서 범위는 3~4줄로 접힌다.
+  ok(pill(e1, '2026-01-05').timeLabel === timeLabel('07:00'),
+    'the narrow week grid keeps the start-only label');
+  ok(pill({ id: 'a', date: '2026-01-05', repeat: 'none', time: '', pri: 'none' }, '2026-01-05').range
+     === t('item.allDay'), 'an all-day item has no time at either end');
+
+  // ★ 자정 넘김 금지.
+  ok(endOk({ hasTime: true, time: '07:00', end: '08:00' }), 'an end after the start is accepted');
+  ok(!endOk({ hasTime: true, time: '23:00', end: '01:00' }), 'a range that crosses midnight is refused');
+  ok(!endOk({ hasTime: true, time: '07:00', end: '07:00' }), 'an end equal to the start is refused');
+  ok(endOk({ hasTime: true, time: '07:00', end: '' }), 'leaving the end empty is always allowed');
+  ok(endOk({ hasTime: false, time: '23:00', end: '01:00' }), 'an all-day item ignores both times');
+
+  // 하루 종일로 바꾸면 시작·종료가 함께 비워진다.
+  const cleared = formTimes({ hasTime: false, time: '07:00', end: '08:00' });
+  ok(cleared.time === '' && cleared.endTime === '', 'switching to all-day clears the start and the end together');
+  ok(formTimes({ hasTime: true, time: '07:00', end: '' }).endTime === '',
+    'a missing end is stored as an empty string, never undefined');
+  ok(formTimes({ hasTime: true, time: '07:00', end: '08:00' }).endTime === '08:00',
+    'the end time is stored as the plain HH:MM string it came in as');
+
+  // 정렬은 endTime 을 안 본다 — 시작이 같으면 넣은 순서를 지킨다 (안정 정렬).
+  const q1 = { id: 'q1', date: '2026-01-05', repeat: 'none', time: '09:00', endTime: '23:00', pri: 'none' };
+  const q2 = { id: 'q2', date: '2026-01-05', repeat: 'none', time: '09:00', pri: 'none' };
+  ok(sortItems([q1, q2]).map((x) => x.id).join() === 'q1,q2' &&
+     sortItems([q2, q1]).map((x) => x.id).join() === 'q2,q1',
+    'endTime never reorders items that start at the same time');
+
+  // ko/en 양쪽 형식. 문자열을 통째로 박아 두지 않는다 — Intl 이 AM/PM 앞에 좁은
+  // 공백(U+202F)을 넣는 브라우저가 있어서, 구조만 본다.
+  const lk = SETTINGS.lang;
+  setSettings({ lang: 'ko' });
+  const koR = timeRange('07:00', '08:00');
+  setSettings({ lang: 'en' });
+  const enR = timeRange('07:00', '08:00');
+  ok(koR.indexOf(' – ') > 0 && enR.indexOf(' – ') > 0, 'both languages use the same separator');
+  ok(koR !== enR && koR.indexOf('오전') === 0 && enR.indexOf('AM') > 0,
+    'the range is localised on both sides, not just the first');
+  ok(timeRange('07:00', '') === timeLabel('07:00'), 'a start-only label stays start-only in English too');
+  setSettings({ lang: lk });
 
   // --- accounts ---
   // 계정은 이제 Firebase 가 들고 있다. 여기서 검사할 수 있는 건 서버에 보내기
