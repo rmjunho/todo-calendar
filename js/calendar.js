@@ -24,7 +24,6 @@ function repLabel(k, days) {
   const names = days.length === 1 ? dow('long') : dow();
   return t('rep.weeklyDays', days.map((i) => names[i]));
 }
-const HOUR_START = 6, HOUR_H = 52;
 const SHOW_COMPLETED = true;
 
 // SF-Symbols-style glyphs, lifted verbatim from the design system's Icon.jsx
@@ -78,6 +77,115 @@ function occursOn(it, ds) {
 function isDone(it, ds) {
   return (it.repeat && it.repeat !== 'none') ? (it.doneDates || []).includes(ds) : !!it.done;
 }
+// ------------------------------------------------------- 일간 뷰 (순수 함수)
+// 아래 다섯 함수는 DOM 을 모른다 — 그래야 ?selftest 가 좌표를 직접 단언한다.
+// 자정 넘김은 endOk(todo.js)가 저장에서 막으므로 end > start 를 전제로 둔다.
+// 이틀에 걸치는 항목은 이 앱에 존재하지 않는다.
+
+const DAY_MIN_HOURS = 3;              // 데이터가 아무리 짧아도 이만큼은 보여 준다
+const HOUR_MIN_H = 40, HOUR_MAX_H = 72;
+const AXIS_TARGET = 620;              // 목표 축 높이. pxPerHour 를 정할 때만 쓴다 —
+                                      // 축 높이는 반드시 시간수 × pxPerHour 다(아래 참고)
+const MARK_MIN = 30;                  // 종료 없는 항목이 겹침 계산에서만 차지하는 길이
+const MARK_H = 20;                    // 그 항목의 화면 높이(고정). 길이를 지어내지 않는다
+const BLOCK_MIN_H = 28;               // 아주 짧은 일정도 제목 한 줄은 보이게
+// 제목+시간 두 줄이 들어가는 최소 높이: 패딩 5 + 13px×1.3(17) + 11px×1.3(15) + 패딩 5.
+// ★ 글꼴 크기·line-height·패딩을 바꾸면 이 값을 다시 계산할 것.
+const TWO_LINE_H = 42;
+
+// ⚠️ **CSS 와 이중 소스다.** maxW·outerPad 는 render() 의 바깥 래퍼 인라인 스타일,
+//    cardPad 는 일간 뷰 카드의 인라인 패딩에서 온 값이고 여기 숫자와 맞아야 한다.
+//    axisW·gutter 만 아래 렌더가 이 상수로 직접 생성하므로 어긋날 수 없다.
+//    **래퍼·카드 쪽 값을 고치면 여기도 같이 고칠 것** — 안 그러면 colW 만 조용히
+//    틀려져서 좁은 화면의 표시 단계가 한 칸씩 밀린다(화면은 멀쩡해 보인다).
+const DAY_PX = { maxW: 1024, outerPad: 16, cardPad: 16, axisW: 58, gutter: 6 };
+
+// 'HH:MM' → 분. Date 를 안 만든다 — 타임존이 끼어들 자리를 두지 않는다.
+const toMin = (hhmm) => { const p = hhmm.split(':').map(Number); return p[0] * 60 + p[1]; };
+// 종료가 없으면 겹침 계산에서만 30분으로 친다. 화면 높이는 MARK_H 고정이다.
+const itemEndMin = (it) => (it.endTime ? toMin(it.endTime) : toMin(it.time) + MARK_MIN);
+
+// 그날 시간축의 범위와 배율. 시간 항목이 없으면 null → 축을 아예 안 그린다.
+function dayRange(timed) {
+  if (!timed.length) return null;
+  let a = 1440, b = 0;
+  timed.forEach((it) => { a = Math.min(a, toMin(it.time)); b = Math.max(b, itemEndMin(it)); });
+  a = Math.floor(a / 60) * 60;                       // 정시로 내리고
+  b = Math.min(1440, Math.ceil(b / 60) * 60);        // 정시로 올린다
+  if (b - a < DAY_MIN_HOURS * 60) {                  // 최소 3시간 — 뒤로 늘리고
+    b = a + DAY_MIN_HOURS * 60;
+    if (b > 1440) { b = 1440; a = b - DAY_MIN_HOURS * 60; }   // 24시에 닿으면 앞으로
+  }
+  const hours = (b - a) / 60;
+  const pxPerHour = Math.max(HOUR_MIN_H, Math.min(HOUR_MAX_H, Math.round(AXIS_TARGET / hours)));
+  // ★ 높이는 **반올림된** pxPerHour 에서만 나온다. AXIS_TARGET 을 그대로 쓰면
+  //   마지막 눈금선이 축 밖으로 나간다(12시간이면 620 vs 624).
+  return { startMin: a, endMin: b, hours: hours, pxPerHour: pxPerHour, h: hours * pxPerHour };
+}
+
+// 겹침 → 열 배정. 시작 오름차순(같으면 긴 것 먼저, 그래도 같으면 입력 순서) →
+// 겹침 그룹 → 그룹 안에서 "마지막 종료 ≤ 현재 시작"인 열 재사용, 없으면 새 열.
+// 폭은 그룹 전체의 열 수로 균등 분할한다.
+function dayLayout(timed, range) {
+  const rows = timed.map((it, i) => ({ it: it, i: i, s: toMin(it.time), e: itemEndMin(it) }))
+    .sort((x, y) => (x.s - y.s) || (y.e - x.e) || (x.i - y.i));
+  const out = [];
+  let group = [], colEnds = [], groupEnd = -1;
+  const flush = () => {
+    group.forEach((g) => { g.cols = colEnds.length; });
+    group = []; colEnds = []; groupEnd = -1;
+  };
+  rows.forEach((r) => {
+    if (r.s >= groupEnd) flush();          // 그룹의 어느 것과도 안 겹친다 → 새 그룹
+    let c = 0;
+    while (c < colEnds.length && colEnds[c] > r.s) c++;
+    if (c === colEnds.length) colEnds.push(0);
+    colEnds[c] = r.e;
+    groupEnd = Math.max(groupEnd, r.e);
+    const marker = !r.it.endTime;
+    const o = {
+      id: r.it.id, col: c, cols: 0,
+      top: Math.round((r.s - range.startMin) * range.pxPerHour / 60),
+      height: marker ? MARK_H
+        : Math.max(BLOCK_MIN_H, Math.round((r.e - r.s) * range.pxPerHour / 60)),
+      marker: marker
+    };
+    group.push(o); out.push(o);
+  });
+  flush();
+  return out;
+}
+
+// 열 하나의 폭. 측정(offsetWidth)을 하지 않는다 — 2패스가 되면 render() 뒤에
+// 후처리 훅이 생기고, @container 는 selftest 가 문자열로 단언하지 못한다.
+const dayColW = (vw, cols) =>
+  (Math.min(vw, DAY_PX.maxW) - DAY_PX.outerPad * 2 - DAY_PX.cardPad * 2
+    - DAY_PX.axisW - DAY_PX.gutter) / cols;
+
+// 좁아지면 숨기지 않고 **단계적으로 버린다**(+N 접기 없음).
+// 임계값은 열 개수가 아니라 폭 px 이라 넓은 화면에서는 4열이어도 full 이 유지된다.
+// 글자가 실제로 쓰는 폭은 colW - 21 이다(왼쪽 강조선 3 + 오른쪽 구분선 2 + 패딩 8×2).
+// 실측(Pretendard, document.fonts.ready 이후 span.getBoundingClientRect):
+//   '오후 12:30 – 오후 12:30' 11px/500 = 110.05  ← ko 가 최장 (en 은 104.44)
+//   '가나…'                  13px/600 =  33.11
+//   T_FULL  = ceil(110.05) + 21 = 132   시간 범위가 **잘리지 않는** 최소 폭
+//   T_TITLE = ceil(33.11)  + 21 =  55   이 아래는 '…' 만 남아 정보가 0
+// ★ 글꼴·글자 크기·패딩·구분선을 바꾸면 다시 잴 것 — 주간 뷰의 '5개' 와 같은 성격이다.
+//   열 폭은 (vw-16×2-16×2-58-6)/cols 다. 실기기 폭별 2열 결과:
+//     360(갤럭시 다수) 116 · 384 128 · 390 131 → 전부 title (132 에 못 미친다)
+//     412 142 · 1024 448 → full
+//   ★ 폰에서 겹치면 시간 라벨을 버리는 것이 정상 동작이다. 축 폭을 2px 깎아 390 만
+//     full 로 넘긴 적이 있는데, 360 은 그래도 못 넘어서 이득 없이 축만 좁아졌다.
+//   시간 라벨은 .trunc(nowrap+말줄임)라 폰트가 늦게 와 폭이 커져도 두 줄이 되지 않는다
+//   — height >= TWO_LINE_H 전제가 깨지지 않게 하는 장치다.
+const T_FULL = 132, T_TITLE = 55;
+const blockTier = (colW, h) =>
+  (colW >= T_FULL && h >= TWO_LINE_H) ? 'full' : (colW >= T_TITLE ? 'title' : 'bar');
+
+// 균등 분할은 % 로 적는다 — calc() 를 쓰면 selftest 가 style 문자열로 못 본다.
+// 소수 4자리에서 끊어 '33.3333%' 처럼 값이 항상 같은 모양으로 나오게 한다.
+const pct = (v) => (Math.round(v * 1e4) / 1e4) + '%';
+
 function sortItems(list) {
   return list.slice().sort((x, y) => {
     const tx = x.time || '', ty = y.time || '';
@@ -359,35 +467,84 @@ function render() {
     const allDayBlock = allDay
       ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' + allDay + '</div>' : '';
 
-    let hours = '';
-    for (let h = HOUR_START; h < 24; h++) {
-      hours += '<div style="display:flex;height:' + HOUR_H + 'px;gap:8px;align-items:flex-start">' +
-        '<div style="width:42px;text-align:right;font-size:11px;color:var(--label-tertiary);transform:translateY(-6px)">' +
-        pad(h) + ':00</div><div style="flex:1;border-top:.5px solid var(--separator)"></div></div>';
+    // 시간축은 데이터가 정한다 — 그날 가장 이른 시각 ~ 가장 늦은 시각.
+    // 시간 항목이 하나도 없으면 축 자체를 안 그린다(6시~24시 눈금은 정보가 0이다).
+    const timedItems = dayList.filter((it) => it.time);
+    const range = dayRange(timedItems);
+
+    let axis = '';
+    if (range) {
+      // 눈금은 흐름이 아니라 절대 배치다 — 블록과 같은 좌표계를 쓰고, selftest 가
+      // 마지막 눈금의 top 을 읽어 축 높이와 맞는지 볼 수 있다.
+      let ticks = '';
+      for (let h = range.startMin / 60; h < range.endMin / 60; h++) {
+        ticks += '<div data-hr="' + h + '" style="position:absolute;left:0;right:0;display:flex;gap:8px;' +
+          'align-items:flex-start;top:' + ((h - range.startMin / 60) * range.pxPerHour) + 'px">' +
+          '<div style="width:42px;text-align:right;font-size:11px;color:var(--label-tertiary);transform:translateY(-6px)">' +
+          pad(h) + ':00</div><div style="flex:1;border-top:.5px solid var(--separator)"></div></div>';
+      }
+
+      // 현재 시각 선은 **보고 있는 날이 오늘이고** 지금이 축 범위 안일 때만.
+      // 범위가 유동이라 어제를 볼 때뿐 아니라 09~12시 축에 14:00 이 새는 것도 막는다.
+      const n = new Date();
+      const nowMin = n.getHours() * 60 + n.getMinutes();
+      let nowLine = '';
+      if (sel === today && nowMin >= range.startMin && nowMin <= range.endMin) {
+        const top = (nowMin - range.startMin) * range.pxPerHour / 60;
+        nowLine = '<div data-now style="position:absolute;left:' + (DAY_PX.axisW - 6) +
+          'px;right:0;height:2px;border-radius:1px;background-color:#FF3B30;z-index:2;top:' + top + 'px">' +
+          '<div style="position:absolute;left:-5px;top:-3px;width:8px;height:8px;border-radius:50%;' +
+          'background-color:#FF3B30"></div></div>';
+      }
+
+      const placed = dayLayout(timedItems, range);
+      const byId = {};
+      timedItems.forEach((it) => { byId[it.id] = it; });
+      const vw = document.documentElement.clientWidth;
+
+      const blocks = placed.map((b) => {
+        const it = byId[b.id];
+        const p = pill(it, sel);
+        const tier = blockTier(dayColW(vw, b.cols), b.height);
+        // 폭 계산에는 손대지 않는다(calc 로 gap 을 빼면 selftest 의 문자열 단언이 깨진다).
+        // 인접한 열은 카드 배경색 2px 로 가른다 — .card 가 var(--bg) 라 **같은 토큰**이고,
+        // 블록 배경이 반투명이라 그 자리만 카드색이 드러나 밝은/어두운 양쪽에서 맞는다.
+        // 겹치지 않는 날(cols===1)과 마지막 열에는 안 붙인다 — 기존 화면이 그대로다.
+        const gap = (b.cols > 1 && b.col < b.cols - 1) ? ';border-right:2px solid var(--bg)' : '';
+        const pos = 'position:absolute;left:' + pct(b.col * 100 / b.cols) + ';width:' + pct(100 / b.cols) +
+          ';top:' + b.top + 'px;height:' + b.height + 'px;cursor:pointer;opacity:' + p.op + gap;
+
+        // 종료가 없는 항목은 블록이 아니라 얇은 마커다 — 없는 길이를 지어내지 않는다.
+        if (b.marker) {
+          return '<div ' + openAttr(p, sel) + ' data-block="' + esc(b.id) + '" style="' + pos +
+            ';border-top:2px solid ' + p.color + ';padding:3px 6px 0">' +
+            '<div class="trunc" style="font-size:11px;font-weight:600;color:' + p.color +
+            ';text-decoration:' + p.deco + '">' + esc(p.title) + '</div></div>';
+        }
+        const body = tier === 'bar'
+          ? '<div class="trunc" style="font-size:10px;font-weight:600;color:' + p.color +
+            ';text-decoration:' + p.deco + '">' + esc(p.title) + '</div>'
+          : '<div class="trunc" style="font-size:13px;font-weight:600;color:' + p.color +
+            ';text-decoration:' + p.deco + '">' + esc(p.title) + '</div>' +
+            (tier === 'full' ? '<div class="trunc" style="font-size:11px;color:' + p.color +
+              ';opacity:.75">' + esc(p.range) + '</div>' : '');
+        return '<div ' + openAttr(p, sel) + ' data-block="' + esc(b.id) + '" style="' + pos +
+          // 좌우 패딩 8 은 위 T_FULL 산식(inset 21)의 일부다 — 같이 고칠 것.
+          ';border-radius:9px;padding:5px ' + (tier === 'bar' ? 4 : 8) + 'px;background-color:' + p.bg +
+          ';border-left:3px solid ' + p.color + '">' + body + '</div>';
+      }).join('');
+
+      axis = '<div style="position:relative;height:' + range.h + 'px">' + ticks + nowLine +
+        '<div style="position:absolute;left:' + DAY_PX.axisW + 'px;right:' + DAY_PX.gutter +
+        'px;top:0;bottom:0">' + blocks + '</div></div>';
+    } else {
+      axis = '<div style="padding:22px 0;text-align:center;font-size:14px;color:var(--label-tertiary)">' +
+        esc(t('day.noTimed')) + '</div>';
     }
 
-    const n = new Date();
-    let nowLine = '';
-    if (sel === today && n.getHours() >= HOUR_START) {
-      const top = (n.getHours() * 60 + n.getMinutes() - HOUR_START * 60) / 60 * HOUR_H;
-      nowLine = '<div style="position:absolute;left:52px;right:0;height:2px;border-radius:1px;background:#FF3B30;z-index:2;top:' +
-        top + 'px"><div style="position:absolute;left:-5px;top:-3px;width:8px;height:8px;border-radius:50%;background:#FF3B30"></div></div>';
-    }
-
-    const timed = dayList.filter((it) => it.time).map((it) => {
-      const p = pill(it, sel);
-      const hm = it.time.split(':').map(Number);
-      const top = Math.max(0, (hm[0] * 60 + hm[1] - HOUR_START * 60) / 60 * HOUR_H);
-      return '<div ' + openAttr(p, sel) + ' style="position:absolute;left:58px;right:6px;height:46px;cursor:pointer;' +
-        'border-radius:9px;padding:5px 10px;background:' + p.bg + ';border-left:3px solid ' + p.color +
-        ';top:' + top + 'px;opacity:' + p.op + '">' +
-        '<div class="trunc" style="font-size:13px;font-weight:600;color:' + p.color + ';text-decoration:' + p.deco + '">' +
-        esc(p.title) + '</div>' +
-        '<div style="font-size:11px;color:' + p.color + ';opacity:.75">' + esc(p.range) + '</div></div>';
-    }).join('');
-
+    // ⚠️ 이 카드의 padding 16 은 DAY_PX.cardPad 와 같은 값이어야 한다(위 주석).
     html += '<div class="card" style="border:.5px solid var(--separator);padding:16px 16px 20px">' + allDayBlock +
-      '<div style="position:relative">' + hours + nowLine + timed + '</div></div>';
+      axis + '</div>';
   }
 
   // -- selected day list ----------------------------------------------------

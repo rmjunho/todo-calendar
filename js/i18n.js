@@ -151,6 +151,7 @@ const STR = {
     'list.emptyHint': '오른쪽 아래 + 버튼으로 추가해 보세요',
     'list.check': '완료 체크',
     'item.allDay': '하루 종일',
+    'day.noTimed': '시간이 정해진 할 일이 없습니다',
     'item.add': '할 일 추가',
 
     // 이미지 내보내기
@@ -348,6 +349,7 @@ const STR = {
     'list.emptyHint': 'Tap the + button at the bottom right to add one',
     'list.check': 'Mark complete',
     'item.allDay': 'All day',
+    'day.noTimed': 'Nothing scheduled at a time',
     'item.add': 'Add a to-do',
 
     'exp.btn': 'Image',

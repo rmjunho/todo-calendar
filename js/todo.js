@@ -403,6 +403,21 @@ darkMQ.addEventListener('change', render);
 // The "now" indicator tracks a real clock, so refresh the day view each minute.
 setInterval(() => { if (state.view === 'day' && !sheetBusy()) render(); }, 60000);
 
+// 일간 뷰의 표시 단계(제목+시간 / 제목만 / 색 블록)는 열 폭 px 으로 갈린다. 그 폭은
+// 뷰포트에서 산술로 나오므로 **화면을 돌리면 다시 계산해야** 한다 — 안 걸면 세로에서
+// 4열이던 것이 가로로 돌려도 색 블록으로 남는다. 요소별 리스너가 아니라 위 setInterval·
+// darkMQ 와 같은 층의 창 단위 리스너 하나이고, 가드도 setInterval 과 똑같이 sheetBusy()
+// 를 탄다(시트를 연 채 돌리면 미루고, closeForm() 이 그때 반영한다).
+// 150ms 로 합치는 이유는 데스크톱 창 드래그다 — 안 합치면 #app 을 초당 수십 번 새로 만든다.
+let resizeT = null;
+window.addEventListener('resize', () => {
+  if (resizeT) return;
+  resizeT = setTimeout(() => {
+    resizeT = null;
+    if (state.view === 'day' && !sheetBusy()) render();
+  }, 150);
+});
+
 // 세션 복원은 firebase.js 의 onAuthStateChanged 가 한다. 여기서는 로딩 화면만
 // 띄우고, 모듈이 끝내 오지 않으면(오프라인·CDN 차단) 사용자를 붙잡아 두지 않는다.
 render();
@@ -870,6 +885,123 @@ if (location.search.includes('selftest')) {
     'the weekday beside the date follows the date field without a full re-render');
 
   Object.assign(state, kForm);
+  render();
+
+  // --- 일간 뷰: 겹침 배치 + 유동 시간축 ---
+  const dItem = (id, time, endTime) => ({ id: id, title: id, date: '2026-01-05', time: time,
+    endTime: endTime === undefined ? '' : endTime, pri: 'none', repeat: 'none', days: [], memo: '' });
+  const lay = (list) => { const r = dayRange(list); return { r: r, out: dayLayout(list, r) }; };
+  const byId = (out) => { const m = {}; out.forEach((o) => { m[o.id] = o; }); return m; };
+
+  // 2개 겹침 → 두 열
+  const ov2 = lay([dItem('a', '10:00', '11:00'), dItem('b', '10:30', '11:30')]);
+  ok(byId(ov2.out).a.col === 0 && byId(ov2.out).b.col === 1 &&
+     ov2.out.every((o) => o.cols === 2), 'two overlapping items get one column each');
+  // 3개 겹침 → 세 열
+  const ov3 = lay([dItem('a', '10:00', '12:00'), dItem('b', '10:30', '11:30'), dItem('c', '11:00', '11:45')]);
+  ok(ov3.out.every((o) => o.cols === 3) && byId(ov3.out).c.col === 2,
+    'three mutually overlapping items get three columns');
+  // ★ 안 겹치는 연속은 한 열이고, 같은 열을 재사용한다
+  const seq = lay([dItem('a', '10:00', '11:00'), dItem('b', '11:00', '12:00')]);
+  ok(seq.out.every((o) => o.cols === 1 && o.col === 0),
+    'back-to-back items do not overlap — the column is reused, not split');
+  // 완전 포함 — 긴 것이 먼저(왼쪽), 안에 든 것이 옆 열
+  const nest = lay([dItem('in', '13:00', '14:00'), dItem('out', '09:00', '18:00')]);
+  ok(byId(nest.out).out.col === 0 && byId(nest.out).in.col === 1 &&
+     nest.out.every((o) => o.cols === 2), 'a contained item sits beside its container, longest first');
+  // 종료 없는 항목: 겹침은 30분으로 치고, 높이는 지어내지 않는다
+  const mk = lay([dItem('m', '10:00'), dItem('n', '10:15', '11:00')]);
+  ok(byId(mk.out).m.marker === true && byId(mk.out).m.height === MARK_H,
+    'an item with no end time is a fixed-height marker, not a block');
+  ok(byId(mk.out).m.cols === 2, 'but it still occupies 30 minutes for overlap purposes');
+  ok(lay([dItem('m', '10:00'), dItem('n', '10:30', '11:00')]).out.every((o) => o.cols === 1),
+    'and exactly 30 minutes — an item starting at the 30-minute mark does not overlap it');
+
+  // 범위: 정시로 내리고/올리고, 최소 3시간, pxPerHour 상·하한
+  ok(dayRange([]) === null, 'a day with no timed items has no axis at all');
+  const r1 = dayRange([dItem('a', '09:20', '09:40')]);
+  ok(r1.startMin === 540 && r1.endMin === 720 && r1.hours === 3,
+    'a short day is floored to the hour and stretched to the 3-hour minimum');
+  ok(r1.pxPerHour === HOUR_MAX_H && r1.h === 3 * HOUR_MAX_H, 'a 3-hour axis is capped at the max scale');
+  const r24 = dayRange([dItem('a', '00:00', '23:59')]);
+  ok(r24.startMin === 0 && r24.endMin === 1440 && r24.pxPerHour === HOUR_MIN_H && r24.h === 24 * HOUR_MIN_H,
+    'a full day is floored to the min scale, not squeezed into the target height');
+  const r12 = dayRange([dItem('a', '08:00', '20:00')]);
+  ok(r12.pxPerHour === 52 && r12.h === 624, 'a 12-hour axis keeps the old 52px-per-hour feel');
+  ok(dayRange([dItem('a', '23:30')]).startMin === 1260,
+    'a late item pulls the range start back so the axis never runs past midnight');
+
+  // 표시 단계는 개수가 아니라 폭으로 갈린다
+  ok(blockTier(T_FULL, TWO_LINE_H) === 'full' && blockTier(T_FULL - 1, TWO_LINE_H) === 'title',
+    'the full tier needs the whole time-range label to fit');
+  ok(blockTier(T_FULL, TWO_LINE_H - 1) === 'title',
+    'a block too short for two lines drops the time label even when it is wide');
+  ok(blockTier(T_TITLE, 200) === 'title' && blockTier(T_TITLE - 1, 200) === 'bar',
+    'below the two-character title width only the colour bar is left');
+  ok(dayColW(360, 2) === 116 && dayColW(390, 2) === 131,
+    'the phone column width is arithmetic, not measured');
+  // 실기기 폭: 갤럭시가 많이 쓰는 360 은 2열부터 시간 라벨을 버린다. 폰에서 겹치면
+  // 제목만 남는 것이 정상 동작이고, 축을 깎아 억지로 넘기지 않는다.
+  ok(blockTier(dayColW(360, 2), 100) === 'title' && blockTier(dayColW(360, 5), 100) === 'bar',
+    'a 360px phone drops the time label at two columns and keeps only colour at five');
+  ok(blockTier(dayColW(412, 2), 100) === 'full',
+    'a wider phone still shows the range at two columns');
+  ok(blockTier(dayColW(1024, 4), 100) === 'full',
+    'the same four columns keep the range on a wide screen — the threshold is px, not count');
+
+  // --- 그려진 결과 ---
+  const kDay = { view: state.view, selected: state.selected, items: state.items,
+    user: state.user, booting: state.booting };
+  state.booting = false;
+  state.user = { uid: 'u', name: 'selftest', email: 'a@b.co', role: 'user', status: 'approved' };
+  state.view = 'day';
+  state.selected = '2026-01-05';
+  const drawDay = (list) => { state.items = list; render(); return document.getElementById('app'); };
+
+  let app2 = drawDay([dItem('a', '10:00', '11:00'), dItem('b', '10:30', '11:30')]);
+  const blocks = app2.querySelectorAll('[data-block]');
+  ok(blocks.length === 2, 'both overlapping items are actually drawn');
+  ok(blocks[0].style.left === '0%' && blocks[0].style.width === '50%' &&
+     blocks[1].style.left === '50%' && blocks[1].style.width === '50%',
+    'two columns are drawn as an even 50% split');
+  // ★ style.borderRightWidth 로 보면 안 된다 — var() 를 쓴 단축 속성은 CSSOM 롱핸드가
+  //   빈 문자열이다(pending-substitution). 계산값이 곧 그려진 결과다.
+  ok(getComputedStyle(blocks[0]).borderRightWidth === '2px' &&
+     getComputedStyle(blocks[1]).borderRightWidth === '0px',
+    'only the non-last column carries the separating gap');
+  // ★ 축 높이는 조건이 아니라 **그려진 마지막 눈금**과 맞아야 한다
+  const rr = dayRange([dItem('a', '10:00', '11:00'), dItem('b', '10:30', '11:30')]);
+  const ticks = app2.querySelectorAll('[data-hr]');
+  ok(ticks.length === rr.hours, 'one tick per hour of the range is drawn');
+  ok(parseFloat(ticks[ticks.length - 1].style.top) + rr.pxPerHour === rr.h,
+    'the last drawn tick plus one hour lands exactly on the axis height');
+  ok(app2.querySelectorAll('[data-now]').length === 0,
+    'a day that is not today draws no current-time line, even when the clock is inside the range');
+
+  app2 = drawDay([dItem('a', '10:00', '11:00'), dItem('b', '10:30', '11:30'), dItem('c', '10:40', '11:10')]);
+  ok(app2.querySelectorAll('[data-block]')[2].style.left === '66.6667%',
+    'three columns split into exact thirds');
+
+  // 하루 종일만 있는 날 / 아무것도 없는 날 — 시간축을 아예 그리지 않는다
+  app2 = drawDay([{ id: 'z', title: '휴가', date: '2026-01-05', time: '', endTime: '',
+    pri: 'none', repeat: 'none', days: [], memo: '' }]);
+  ok(app2.querySelectorAll('[data-hr]').length === 0 && app2.querySelectorAll('[data-block]').length === 0,
+    'a day with only all-day items draws no axis');
+  ok(app2.innerHTML.indexOf(t('day.noTimed')) > 0 && app2.innerHTML.indexOf('휴가') > 0,
+    'the all-day band and the empty-axis message are both there');
+  app2 = drawDay([]);
+  ok(app2.querySelectorAll('[data-hr]').length === 0 && app2.innerHTML.indexOf(t('day.noTimed')) > 0,
+    'an empty day draws the message and nothing else');
+
+  // ★ endTime 이 없는 옛 항목의 표시는 한 글자도 안 바뀐다
+  app2 = drawDay([dItem('old', '09:00')]);
+  const marker = app2.querySelector('[data-block]');
+  ok(marker.style.height === MARK_H + 'px' && marker.textContent === 'old',
+    'an item with no end time draws as a marker carrying just its title');
+  ok(timeRange('09:00', '') === timeLabel('09:00'),
+    'and its label is byte-identical to the start-only label it has always had');
+
+  Object.assign(state, kDay);
   render();
 
   console.log('selftest: all checks passed');
