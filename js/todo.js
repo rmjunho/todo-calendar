@@ -432,7 +432,21 @@ setTimeout(() => {
 // Run with ?selftest in the URL. Covers recurrence + per-date completion +
 // ordering — the logic that silently corrupts the calendar if it breaks.
 if (location.search.includes('selftest')) {
-  const ok = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };
+  // ★ 첫 실패에서 throw 하지 않는다. 이유가 둘이다 —
+  //   1) 남은 검사 결과를 못 본다. 하나 고치고 다시 돌리는 왕복이 실패 개수만큼 생긴다.
+  //   2) 더 나쁜 것: 아래 state 복원(kv·kForm·kDay)이 통째로 건너뛰어 **selftest 픽스처가
+  //      화면에 그대로 남는다.** 실패한 화면을 들여다보면 자기 데이터가 아니다.
+  //   그래서 전부 돌리고 끝에서 목록으로 보고한다.
+  const fails = [];
+  let checks = 0;
+  // info 는 **실제 값**이다. 이름만 적힌 실패 메시지는 무엇이 틀렸는지 못 알려 준다 —
+  // 새로 추가하는 단언은 반드시 값을 같이 넘기거나, 아래 eq() 를 쓸 것.
+  const ok = (cond, msg, info) => {
+    checks++;
+    if (!cond) fails.push(msg + (info === undefined ? '' : ' — ' + info));
+  };
+  const eq = (actual, expected, msg) => ok(actual === expected, msg,
+    'got ' + JSON.stringify(actual) + ', expected ' + JSON.stringify(expected));
   const w = { id: 'w', date: '2026-01-05', repeat: 'weekly', time: '', pri: 'none', doneDates: ['2026-01-12'] };
   const m = { id: 'm', date: '2026-01-31', repeat: 'monthly', time: '09:00', pri: 'none', doneDates: [] };
   const o = { id: 'o', date: '2026-01-05', repeat: 'none', time: '08:00', pri: 'high', done: true };
@@ -966,9 +980,12 @@ if (location.search.includes('selftest')) {
     'two columns are drawn as an even 50% split');
   // ★ style.borderRightWidth 로 보면 안 된다 — var() 를 쓴 단축 속성은 CSSOM 롱핸드가
   //   빈 문자열이다(pending-substitution). 계산값이 곧 그려진 결과다.
-  ok(getComputedStyle(blocks[0]).borderRightWidth === '2px' &&
-     getComputedStyle(blocks[1]).borderRightWidth === '0px',
-    'only the non-last column carries the separating gap');
+  // 기대값은 리터럴로 적는다. 조건식을 그대로 옮겨 적으면 항등식이 되어 아무것도 검증하지 않는다.
+  const gapPx = (el) => getComputedStyle(el).borderRightWidth;
+  const okGap = (el, col, cols, want, msg) => ok(gapPx(el) === want, msg,
+    'col ' + col + '/' + cols + ' borderRightWidth=' + gapPx(el) + ', expected ' + want);
+  okGap(blocks[0], 0, 2, '2px', 'the non-last column carries the separating gap');
+  okGap(blocks[1], 1, 2, '0px', 'the last column carries no gap');
   // ★ 축 높이는 조건이 아니라 **그려진 마지막 눈금**과 맞아야 한다
   const rr = dayRange([dItem('a', '10:00', '11:00'), dItem('b', '10:30', '11:30')]);
   const ticks = app2.querySelectorAll('[data-hr]');
@@ -979,8 +996,24 @@ if (location.search.includes('selftest')) {
     'a day that is not today draws no current-time line, even when the clock is inside the range');
 
   app2 = drawDay([dItem('a', '10:00', '11:00'), dItem('b', '10:30', '11:30'), dItem('c', '10:40', '11:10')]);
-  ok(app2.querySelectorAll('[data-block]')[2].style.left === '66.6667%',
-    'three columns split into exact thirds');
+  const b3 = app2.querySelectorAll('[data-block]');
+  eq(b3[2].style.left, '66.6667%', 'three columns split into exact thirds');
+  okGap(b3[0], 0, 3, '2px', 'the first of three columns carries the gap');
+  okGap(b3[1], 1, 3, '2px', 'the middle column carries the gap too — it is not the last one');
+  okGap(b3[2], 2, 3, '0px', 'only the last of three columns drops the gap');
+
+  // ★ cols === 1 — 겹치지 않는 날. 여기가 검사에 없었다. 화면에 시간 항목이 하나뿐인
+  //   보통의 하루가 바로 이 경우이고, 구분선이 붙으면 블록 오른쪽이 카드색으로 깎인다.
+  app2 = drawDay([dItem('solo', '07:00', '08:00')]);
+  const solo = app2.querySelectorAll('[data-block]');
+  eq(solo.length, 1, 'a day with a single timed item draws one block');
+  eq(solo[0].style.width, '100%', 'a lone block spans the whole width');
+  okGap(solo[0], 0, 1, '0px', 'a lone column carries no gap — cols === 1 is never split');
+  // 붙어 있지만 안 겹치는 두 개도 같은 열이라 cols === 1 이다.
+  app2 = drawDay([dItem('x', '09:00', '10:00'), dItem('y', '10:00', '11:00')]);
+  const b2s = app2.querySelectorAll('[data-block]');
+  okGap(b2s[0], 0, 1, '0px', 'back-to-back items share one column and neither gets a gap');
+  okGap(b2s[1], 0, 1, '0px', 'including the second one');
 
   // 하루 종일만 있는 날 / 아무것도 없는 날 — 시간축을 아예 그리지 않는다
   app2 = drawDay([{ id: 'z', title: '휴가', date: '2026-01-05', time: '', endTime: '',
@@ -1004,5 +1037,10 @@ if (location.search.includes('selftest')) {
   Object.assign(state, kDay);
   render();
 
-  console.log('selftest: all checks passed');
+  // 보고는 state 를 되돌린 **뒤에** 한다 — 여기서 던져도 화면은 사용자 데이터로 돌아가 있다.
+  if (fails.length) {
+    fails.forEach((f, i) => console.error('selftest FAIL ' + (i + 1) + '/' + fails.length + ': ' + f));
+    throw new Error('selftest: ' + fails.length + ' of ' + checks + ' checks failed — see the list above');
+  }
+  console.log('selftest: all ' + checks + ' checks passed');
 }
