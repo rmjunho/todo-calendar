@@ -15,6 +15,28 @@ const endOk = (f) => !f.hasTime || !f.end || f.end > f.time;
 // 폼 → 저장값. 하루 종일이면 둘 다 비운다. weekly 의 days 와 같은 방식으로
 // endTime 은 **늘 쓴다** — 옛 문서엔 키가 없고, 읽는 쪽이 `|| ''` 로 폴백한다.
 const formTimes = (f) => (f.hasTime ? { time: f.time, endTime: f.end || '' } : { time: '', endTime: '' });
+
+// ★ 저장 가능 조건은 여기 하나뿐이다. 저장 버튼의 disabled · 안내 문구 · saveForm 의
+//   마지막 가드가 **전부 이걸 본다**. 예전에는 입력 위임이 제목만 따로 검사해서,
+//   종료 < 시작인 상태에서 제목을 한 글자 치면 버튼이 다시 켜졌다 — 화면과 실제
+//   저장 판정이 어긋나면 "눌러도 아무 일이 없는 진한 파란 버튼"이 된다.
+const formOk = (f) => !!f.title.trim() && !(f.repeat === 'weekly' && !f.days.length) && endOk(f);
+
+// 입력 위임은 render() 를 부르지 않는다 — 입력이 uncontrolled 라야 캐럿이 살고,
+// type="date"/"time" 은 **반쯤 입력한 상태에서도** input 이벤트를 쏘기 때문에 다시
+// 그리면 편집 중인 세그먼트가 통째로 날아간다. 그래서 값에서 파생되는 표시만
+// 여기서 직접 맞춘다: 저장 버튼 · 종료 안내 · 날짜 옆 요일.
+// 요일·우선순위·반복은 버튼 탭이라 클릭 위임의 render() 가 이미 맡는다.
+function syncSheet() {
+  const f = state.form;
+  if (!f) return;
+  const btn = document.getElementById('saveBtn');
+  if (btn) btn.disabled = !formOk(f);
+  const wd = document.getElementById('formDow');
+  if (wd) wd.textContent = f.date ? '(' + dow()[parse(f.date).getDay()] + ')' : '';
+  const warn = document.getElementById('formEndWarn');
+  if (warn) warn.hidden = endOk(f);
+}
 // 요일 반복의 기본값 = 시작일의 요일 하나. 아무것도 안 고치면 예전 '매주' 와
 // 결과가 같다. 색인은 getDay() 기준 0=일 (주 시작 일요일 고정 — CONTEXT §5).
 const defaultDays = (ds) => [parse(ds).getDay()];
@@ -73,7 +95,7 @@ function renderSheet() {
       '<div style="font-size:12px;color:#FF3B30;margin-top:6px">' + esc(t('form.daysEmpty')) + '</div>');
 
   // 요일을 하나도 안 고른 '매주' 는 아무 날에도 안 뜨는 항목이 된다 — 저장을 막는다.
-  const canSave = !!f.title.trim() && !(f.repeat === 'weekly' && !f.days.length) && endOk(f);
+  const canSave = formOk(f);
 
   // 시작·종료 한 쌍. 종료를 비우면 종료 없음 — endTime 이 없던 옛 항목과 같은 상태다.
   const timeField = (k, v, key) =>
@@ -85,8 +107,10 @@ function renderSheet() {
   const timeBlock = f.hasTime
     ? '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
         timeField('time', f.time, 'form.timeStart') + timeField('end', f.end, 'form.timeEnd') + '</div>' +
-      (endOk(f) ? '' : '<div style="font-size:12px;color:#FF3B30;margin-top:6px">' +
-        esc(t('form.endBeforeStart')) + '</div>')
+      // 안내는 늘 그려 두고 hidden 만 토글한다 — syncSheet() 가 render() 없이
+      // 껐다 켤 수 있어야 입력 도중에도 바로 따라온다.
+      '<div id="formEndWarn"' + (endOk(f) ? ' hidden' : '') +
+        ' style="font-size:12px;color:#FF3B30;margin-top:6px">' + esc(t('form.endBeforeStart')) + '</div>'
     : '<div style="padding:11px 14px;font-size:14px;color:var(--label-tertiary);background:var(--fill-quaternary);border-radius:12px">' +
       esc(t('item.allDay')) + '</div>';
 
@@ -112,8 +136,8 @@ function renderSheet() {
         //   정해서 요일을 끼워 넣을 수 없으므로 라벨 줄에 따로 적는다. 저장되는 값은
         //   아래 input 의 'YYYY-MM-DD' 하나뿐이고, dow() 결과가 그리로 되돌아가는
         //   경로는 없다. 날짜를 지워 value 가 비면 요일도 안 그린다.
-        (f.date ? '<span style="font-size:13px;font-weight:600;color:var(--label-tertiary)">(' +
-          esc(dow()[parse(f.date).getDay()]) + ')</span>' : '') +
+        '<span id="formDow" style="font-size:13px;font-weight:600;color:var(--label-tertiary)">' +
+          (f.date ? '(' + esc(dow()[parse(f.date).getDay()]) + ')' : '') + '</span>' +
       '</div>' +
       // value 는 'YYYY-MM-DD' 그대로다. type="date" 가 요구하는 형식이자 저장 키의
       // 형식이라 Intl 을 끼우면 안 된다 — 표시 형식은 브라우저가 로케일에 맞춘다.
@@ -184,12 +208,10 @@ function closeForm() {
 }
 function saveForm() {
   const f = state.form;
-  if (!f.title.trim()) return;
-  // 요일을 하나도 안 고른 '매주' 는 아무 날에도 안 뜬다. 저장 버튼도 disabled 지만
-  // 여기서도 막는다 — 화면 검사 하나만 믿지 않는다.
-  if (f.repeat === 'weekly' && !f.days.length) return;
-  // 자정을 넘기는 종료 시간도 같은 이유로 여기서 한 번 더 막는다.
-  if (!endOk(f)) return;
+  // 저장 버튼도 disabled 지만 여기서 한 번 더 막는다 — 화면 검사 하나만 믿지 않는다.
+  // 버튼과 **같은 formOk()** 를 본다: 요일을 하나도 안 고른 '매주' 는 아무 날에도
+  // 안 뜨고, 종료 ≤ 시작은 자정을 넘긴다.
+  if (!formOk(f)) return;
   const base = Object.assign({ title: f.title.trim(), date: f.date }, formTimes(f), {
     pri: f.pri, repeat: f.repeat,
     // 오름차순으로 굳혀 둔다 — 판정과 라벨이 고른 순서에 안 흔들린다.
@@ -351,10 +373,9 @@ app.addEventListener('input', (e) => {
   const el = e.target.closest('[data-f]');
   if (!el || !state.form) return;
   state.form[el.dataset.f] = el.value;
-  if (el.dataset.f === 'title') {
-    const btn = document.getElementById('saveBtn');
-    if (btn) btn.disabled = !el.value.trim();
-  }
+  // ★ 필드를 가리지 않고 부른다. 예전에는 title 일 때만, 그것도 formOk() 가 아니라
+  //   제목만 보고 버튼을 켰다 — 그래서 종료 시간을 잘못 넣어도 화면이 그대로였다.
+  syncSheet();
 });
 
 document.addEventListener('keydown', (e) => {
@@ -804,6 +825,52 @@ if (location.search.includes('selftest')) {
     'opening on the current year does not leave the list sitting at 2016');
 
   Object.assign(state, kv);   // 검사 때문에 달력이 옮겨진 채 끝나지 않게 되돌린다
+
+  // --- 저장 버튼: 조건이 아니라 **그려진 화면**을 본다 ---
+  // ★ formOk() 만 검사하면 갤럭시에서 나온 버그를 못 잡는다 — 그때도 저장은
+  //   막혔고(조건은 옳았고) 버튼만 진한 파란색으로 남아 있었다. 그래서 실제로
+  //   렌더된 #saveBtn 의 disabled 와 안내 문구의 표시 여부를 본다.
+  const kForm = { showForm: state.showForm, editingId: state.editingId, form: state.form,
+    user: state.user, booting: state.booting, items: state.items };
+  state.booting = false;
+  state.items = [];
+  state.user = { uid: 'u', name: 'selftest', email: 'a@b.co', role: 'user', status: 'approved' };
+  const renderForm = (patch) => {
+    state.showForm = true;
+    state.editingId = null;
+    state.form = Object.assign(blankForm('2026-01-05'), patch);
+    render();
+    return document.getElementById('saveBtn');
+  };
+  ok(renderForm({ title: '회의' }) && !renderForm({ title: '회의' }).disabled,
+    'a valid form renders an enabled save button');
+  ok(renderForm({ title: '   ' }).disabled, 'an empty title renders the save button disabled');
+  ok(renderForm({ title: '회의', repeat: 'weekly', days: [] }).disabled,
+    'weekly with no weekday selected renders the save button disabled');
+  ok(renderForm({ title: '회의', hasTime: true, time: '07:00', end: '06:00' }).disabled,
+    'an end time before the start renders the save button disabled');
+  ok(renderForm({ title: '회의', hasTime: true, time: '07:00', end: '07:00' }).disabled,
+    'an end time equal to the start renders the save button disabled');
+  ok(!document.getElementById('formEndWarn').hidden,
+    'the end-time hint is on screen while the end time is invalid');
+
+  // ★ 버그 재현 경로: 입력 위임은 render() 를 안 부르므로 syncSheet() 가 화면을
+  //   맞춰야 한다. 제목을 치는 것만으로 버튼이 다시 켜지면 안 된다.
+  state.form.title = '회의록';
+  syncSheet();
+  ok(document.getElementById('saveBtn').disabled,
+    'typing in the title never re-enables the button while the end time is still invalid');
+  state.form.end = '08:00';
+  syncSheet();
+  ok(!document.getElementById('saveBtn').disabled && document.getElementById('formEndWarn').hidden,
+    'fixing the end time clears the hint and enables the button without a full re-render');
+  state.form.date = '2026-01-07';   // 수요일
+  syncSheet();
+  ok(document.getElementById('formDow').textContent === '(' + dow()[3] + ')',
+    'the weekday beside the date follows the date field without a full re-render');
+
+  Object.assign(state, kForm);
+  render();
 
   console.log('selftest: all checks passed');
 }
