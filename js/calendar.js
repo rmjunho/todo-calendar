@@ -2,16 +2,30 @@
 // 공용 상수 · 유틸 · 반복 규칙 · 전역 state · 캘린더 렌더링.
 
 // ---------------------------------------------------------------- constants
-// 색만 남긴다. 이름은 i18n.js 의 문자열 테이블에서 온다 — 라벨을 여기 두면
-// 언어를 바꿔도 우선순위·반복 이름만 한국어로 남는다.
-const PRI = {
-  high: { c: '#FF3B30' },
-  med:  { c: '#FF9500' },
-  low:  { c: '#34C759' },
-  none: { c: '#8E8E93' }
-};
-const PRI_ORDER = { high: 0, med: 1, low: 2, none: 3 };
-const priLabel = (k) => t('pri.' + k);
+// 카테고리 색 팔레트. **여기 있는 값만** 저장된다.
+//
+// ⚠️ 자유 입력을 안 받는 이유는 취향이 아니다. 색은 pill()·일간 블록·폼 칩에서
+//    style="background:…색…" 안으로 **esc() 없이** 들어간다 — esc() 는 HTML 이스케이프라
+//    속성 안의 CSS 값을 못 막고, 큰따옴표 하나면 속성을 탈출한다. 캔버스 쪽은 더
+//    조용하다: fillStyle 은 파싱 못 하는 값을 예외 없이 무시해서 색만 틀린 PNG 가 나간다.
+//    집합으로 고정하면 둘 다 원리적으로 사라지고 규칙도 한 줄이다.
+// ★ firestore.rules 의 catColor() 목록과 **같은 집합을 유지할 것**(validSettings 와 같은 성격).
+// 노랑(#FFCC00)은 뺐다 — 흰 배경 위 글자색으로 쓰기엔 대비가 안 나온다.
+const CAT_COLORS = ['#FF3B30', '#FF9500', '#34C759', '#00C7BE', '#30B0C7',
+                    '#007AFF', '#5856D6', '#AF52DE', '#FF2D55', '#A2845E'];
+// 개수 상한 = 팔레트 크기. 규칙으로는 못 센다(Firestore 규칙에 집계가 없다) —
+// 카운터 문서 + 트랜잭션은 개인용 앱에 과하다고 보고 화면에서만 막는다.
+const CAT_MAX = CAT_COLORS.length;
+const CAT_NAME_MAX = 20;
+
+// 카테고리가 없거나(categoryId === '') **지워진 카테고리**를 가리킬 때의 폴백.
+// ★ 카테고리 삭제는 할 일 문서를 건드리지 않는다 — 죽은 id 는 조용히 여기로 떨어진다.
+//   days·endTime 이 없는 옛 항목을 다루는 방식과 같다(CONTEXT §3).
+const CAT_NONE = { id: '', color: '#8E8E93' };
+const catOf = (it) =>
+  (it && it.categoryId && state.cats.find((c) => c.id === it.categoryId)) || CAT_NONE;
+// 이름은 i18n 을 탄다 — '없음' 을 데이터로 들고 있으면 언어를 바꿔도 안 변한다.
+const catName = (c) => (c.id ? c.name : t('cat.none'));
 // 배열 순서가 곧 반복 메뉴의 순서다.
 const REP_KEYS = ['none', 'daily', 'weekly', 'monthly'];
 // 반복 이름. weekly 는 days 를 함께 넘기면 '매주 월·수·금' 이 된다 — days 가
@@ -209,14 +223,25 @@ const pct = (v) => (Math.round(v * 1e4) / 1e4) + '%';
 function sortItems(list) {
   return list.slice().sort((x, y) => {
     const tx = x.time || '', ty = y.time || '';
-    if (tx === ty) return (PRI_ORDER[x.pri] ?? 3) - (PRI_ORDER[y.pri] ?? 3);
+    // 시간이 같으면 제목순. localeCompare 를 쓰지 않는다 — 정렬은 화면에 보이는
+    // 순서라 표시처럼 보이지만, ?selftest 가 lang='en' 에서 정렬이 한 글자도 안
+    // 변하는지 본다(Intl 경계, CONTEXT §5). 코드 단위 비교는 로케일을 안 탄다.
+    if (tx === ty) { const a = x.title || '', b = y.title || ''; return a < b ? -1 : a > b ? 1 : 0; }
     if (!tx) return -1;
     if (!ty) return 1;
     return tx < ty ? -1 : 1;
   });
 }
+// ★ 필터를 인자로 안 받고 state.filter 를 직접 읽는다.
+//   화면에 할 일을 꺼내는 통로가 이 함수 하나뿐이다 — 월(cells)·주(cols)·일(dayList)·
+//   하단 목록·내보내기(export.js 3곳)가 전부 여기를 지난다. 인자로 넘기면 호출부
+//   6곳을 다 고쳐야 하고, **하나만 빠뜨리면 그 화면에서 필터가 조용히 안 먹는다**
+//   (내보내기가 제일 놓치기 쉽다). 순수함을 잃는 대신 그 실수를 원천적으로 없앴다.
+// 필터가 걸리면 일간 뷰 시간축 범위(dayRange)도 따라 좁아진다 — 의도된 동작이다.
 function itemsOn(items, ds, showCompleted) {
-  return sortItems(items.filter((it) => occursOn(it, ds) && (showCompleted || !isDone(it, ds))));
+  const f = state.filter;
+  return sortItems(items.filter((it) => occursOn(it, ds) && (showCompleted || !isDone(it, ds))
+    && (!f || (it.categoryId || '') === f)));
 }
 
 // ---------------------------------------------------------------- state
@@ -227,6 +252,11 @@ const state = {
   cm: now0.getMonth(),
   selected: fmt(now0),
   items: [],
+  cats: [],           // users/{uid}/categories 스냅샷. 이름순 정렬은 firebase.js 가 한다
+  // null = 전체. 아니면 categoryId 문자열. ★ 저장하지 않는다 — 새로고침하면 풀린다.
+  // 남겨 두면 다음에 열었을 때 "할 일이 다 사라졌다" 로 읽힌다.
+  filter: null,
+  showCats: false,    // 카테고리 관리 시트
   showForm: false,
   editingId: null,
   form: null,
@@ -248,7 +278,10 @@ const state = {
 // 시트가 열려 있으면 원격 스냅샷 렌더를 미룬다 — render() 가 #app 을 통째로
 // 갈아엎어서 시트가 튀기 때문이다. 미리보기·점프 시트도 같은 보호가 필요하다.
 // 미룬 변경은 closeForm()/closeExport()/closeJump() 의 render() 가 반영한다.
-const sheetBusy = () => state.showForm || !!state.exp || !!state.jump;
+// ★ showCats 도 여기 든다 — 카테고리 시트에는 이름 입력칸(uncontrolled)이 있어서
+//   원격 스냅샷이 render() 를 돌리면 타이핑하던 캐럿이 날아간다. showSettings·
+//   showAdmin 이 여기 없는 이유는 그쪽에 입력칸이 없기 때문이다.
+const sheetBusy = () => state.showForm || !!state.exp || !!state.jump || state.showCats;
 
 // ---------------------------------------------------------------- 년·월 점프
 // ★ 아래 셋은 순수 함수다 (?selftest 가 검증한다). Intl 을 안 쓴다 — 피커에
@@ -282,7 +315,7 @@ function jumpTo(view, y, m, selected) {
 
 // ---------------------------------------------------------------- view model
 function pill(it, ds) {
-  const c = (PRI[it.pri] || PRI.none).c;
+  const c = catOf(it).color;
   const done = isDone(it, ds);
   return {
     id: it.id, title: it.title, color: c,
@@ -385,6 +418,22 @@ function render() {
         '</div>' +
       '</div>' +
     '</div>';
+
+  // -- category filter ------------------------------------------------------
+  // 카테고리가 하나도 없으면 줄 자체를 안 그린다 — '전체' 칩만 있는 줄은 정보가 0이다.
+  // .seg-wrap / .seg 를 그대로 재사용한다 (새 CSS 규칙 0개 — 요일 선택 줄과 같은 방식).
+  // 칩이 최대 11개(전체 + 팔레트 10)라 폰에서는 한 줄에 안 들어간다 → 가로로 흘린다.
+  if (state.cats.length) {
+    const chip = (id, label, color) => {
+      const on = (state.filter || '') === id;
+      return '<button class="seg' + (on ? ' seg-on' : '') + '" data-filter="' + esc(id) + '">' +
+        (color ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;' +
+          'margin-right:5px;background-color:' + color + '"></span>' : '') + esc(label) + '</button>';
+    };
+    html += '<div class="seg-wrap" style="overflow-x:auto;max-width:100%;margin-bottom:16px">' +
+      chip('', t('cat.all'), '') +
+      state.cats.map((c) => chip(c.id, c.name, c.color)).join('') + '</div>';
+  }
 
   // -- month view -----------------------------------------------------------
   if (state.view === 'month') {
@@ -583,7 +632,7 @@ function render() {
   let listHtml;
   if (selShown.length) {
     listHtml = selShown.map((it, idx) => {
-      const c = (PRI[it.pri] || PRI.none).c;
+      const c = catOf(it).color;
       const done = isDone(it, sel);
       const open = 'data-open="' + esc(it.id) + '" data-ds="' + sel + '"';
       return '<div style="display:flex;align-items:center;gap:12px;padding:13px 16px;border-top:' +
@@ -633,6 +682,7 @@ function render() {
   if (state.showForm) html += renderSheet();
   if (state.showAdmin && isAdmin) html += renderAdminSheet();
   if (state.showSettings) html += renderSettingsSheet();
+  if (state.showCats) html += renderCatSheet();
   if (state.exp) html += renderExportSheet();
   // 점프는 바텀 시트가 아니라 제목 아래 팝오버다 — 위 헤더 안에 이미 들어가 있다.
   // 백드롭만 여기서 덧붙인다 (팝오버보다 뒤에 와야 z-index 없이도 순서가 맞다).
