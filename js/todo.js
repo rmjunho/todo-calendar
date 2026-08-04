@@ -931,6 +931,28 @@ if (location.search.includes('selftest')) {
   ok(lay([dItem('m', '10:00'), dItem('n', '10:30', '11:00')]).out.every((o) => o.cols === 1),
     'and exactly 30 minutes — an item starting at the 30-minute mark does not overlap it');
 
+  // ★ 겹침은 시간이 아니라 픽셀로 본다 — BLOCK_MIN_H 로 부푼 블록이 같은 열에서 서로를
+  //   덮던 버그. 16시간 축(pxPerHour 하한 40)에서 20분짜리 두 개를 5분 띄워 놓는다.
+  const long16 = dItem('z', '08:00', '24:00');
+  const shorts = lay([dItem('a', '10:00', '10:20'), dItem('b', '10:25', '10:45'), long16]);
+  eq(shorts.r.pxPerHour, HOUR_MIN_H, 'a 16-hour axis sits at the minimum scale');
+  eq(byId(shorts.out).a.height, BLOCK_MIN_H, 'a 20-minute block is inflated to the minimum height');
+  const sameColOverlap = (out) => out.some((x, i) => out.some((y, j) =>
+    j > i && x.col === y.col && x.top < y.top + y.height && y.top < x.top + x.height));
+  ok(sameColOverlap(shorts.out) === false,
+    'blocks sharing a column never overlap in pixel space',
+    'a=' + JSON.stringify(byId(shorts.out).a) + ' b=' + JSON.stringify(byId(shorts.out).b));
+  ok(byId(shorts.out).a.col !== byId(shorts.out).b.col,
+    'time-wise they do not overlap, but the inflated blocks do — so they get separate columns',
+    'a.col=' + byId(shorts.out).a.col + ' b.col=' + byId(shorts.out).b.col);
+  // ★ 그래서 판정이 pxPerHour 에 의존한다 — 의도된 동작이다. 같은 두 항목이라도 축이
+  //   짧아 배율이 커지면(72px/h) 30px 이 25분밖에 안 돼 다시 한 열에 들어간다.
+  const shortsTight = lay([dItem('a', '10:00', '10:20'), dItem('b', '10:25', '10:45')]);
+  eq(shortsTight.r.pxPerHour, HOUR_MAX_H, 'the same two items on their own get the maximum scale');
+  ok(shortsTight.out.every((o) => o.cols === 1),
+    'and at that scale the same two items fit one column — the verdict follows pxPerHour by design',
+    'cols=' + shortsTight.out.map((o) => o.cols).join(','));
+
   // 범위: 정시로 내리고/올리고, 최소 3시간, pxPerHour 상·하한
   ok(dayRange([]) === null, 'a day with no timed items has no axis at all');
   const r1 = dayRange([dItem('a', '09:20', '09:40')]);
@@ -1017,6 +1039,26 @@ if (location.search.includes('selftest')) {
   const b2s = app2.querySelectorAll('[data-block]');
   okGap(b2s[0], 0, 1, false, 'back-to-back items share one column and neither gets a gap');
   okGap(b2s[1], 0, 1, false, 'including the second one');
+
+  // ★ 짧은 블록은 제목 한 줄만 그리고, 그 한 줄이 블록을 넘지 않는다.
+  //   높이는 BLOCK_MIN_H 로 고정인데 글자 높이는 글꼴이 정하므로(line-height 미지정)
+  //   폴백 글꼴이면 넘칠 수 있다 — overflow:hidden 이 최후의 방어선이다.
+  app2 = drawDay([dItem('a', '10:00', '10:30'), dItem('z', '08:00', '24:00')]);
+  const drawn = [...app2.querySelectorAll('[data-block]')];
+  const shortEl = drawn.filter((el) => el.getAttribute('data-block') === 'a')[0];
+  eq(shortEl.style.height, BLOCK_MIN_H + 'px',
+    'a 30-minute block at the minimum scale is drawn at the minimum height');
+  eq(shortEl.children.length, 1,
+    'and carries the title only — it is too short for the time label');
+  eq(getComputedStyle(shortEl).overflow, 'hidden',
+    'every block clips its content — text must never escape the block');
+  // 넘침 단언. overflow:hidden 이어도 scrollHeight 는 넘치는 콘텐츠를 그대로 보고하므로
+  // (확인함: clientHeight 28 에 scrollHeight 50) 잘라 놓고 통과하는 가짜 초록이 아니다.
+  drawn.forEach((el) => {
+    ok(el.scrollHeight <= el.clientHeight,
+      'block "' + el.getAttribute('data-block') + '" does not overflow its own box',
+      'scrollHeight=' + el.scrollHeight + ' clientHeight=' + el.clientHeight);
+  });
 
   // 하루 종일만 있는 날 / 아무것도 없는 날 — 시간축을 아예 그리지 않는다
   app2 = drawDay([{ id: 'z', title: '휴가', date: '2026-01-05', time: '', endTime: '',

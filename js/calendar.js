@@ -88,7 +88,17 @@ const AXIS_TARGET = 620;              // 목표 축 높이. pxPerHour 를 정할
                                       // 축 높이는 반드시 시간수 × pxPerHour 다(아래 참고)
 const MARK_MIN = 30;                  // 종료 없는 항목이 겹침 계산에서만 차지하는 길이
 const MARK_H = 20;                    // 그 항목의 화면 높이(고정). 길이를 지어내지 않는다
-const BLOCK_MIN_H = 28;               // 아주 짧은 일정도 제목 한 줄은 보이게
+// 아주 짧은 일정도 제목 한 줄은 **온전히** 보이게. 주간 뷰 '5개' 와 같은 성격의 실측값이다.
+//   한 줄 블록 = 패딩 5 + line-height(13px, normal) + 패딩 5
+//   실측(13px/600 한 줄. line-height 를 지정하지 않으므로 글꼴 metrics 가 정한다):
+//     Pretendard Variable (CDN 로드 성공)  15.2 → 25.2
+//     system-ui / Segoe UI                 17.6 → 27.6
+//     맑은 고딕 / 굴림                     15.2 / 14.4 → 25.2 / 24.4
+//     Pretendard(정적) · serif ← 최악      19.2 → **29.2**
+//   BLOCK_MIN_H = ceil(29.2) = 30   ← 폴백 글꼴에서도 제목이 안 잘리는 최소 정수
+// ★ 28 이던 시절 폴백 글꼴에서 1.2px 이 블록 밖으로 샜다. 글꼴·글자 크기·패딩을 바꾸면
+//   다시 잴 것. 이 값을 올리면 픽셀 겹침 판정(dayLayout)도 같이 넓어진다.
+const BLOCK_MIN_H = 30;
 // 제목+시간 두 줄이 들어가는 최소 높이: 패딩 5 + 13px×1.3(17) + 11px×1.3(15) + 패딩 5.
 // ★ 글꼴 크기·line-height·패딩을 바꾸면 이 값을 다시 계산할 것.
 const TWO_LINE_H = 42;
@@ -136,18 +146,28 @@ function dayLayout(timed, range) {
     group = []; colEnds = []; groupEnd = -1;
   };
   rows.forEach((r) => {
+    const marker = !r.it.endTime;
+    const height = marker ? MARK_H
+      : Math.max(BLOCK_MIN_H, Math.round((r.e - r.s) * range.pxPerHour / 60));
+    // ★ 겹침은 시간이 아니라 **픽셀**로 본다 — 렌더 높이와 판정을 한 좌표계에 두기 위해서다.
+    //   BLOCK_MIN_H·MARK_H 가 짧은 항목의 높이를 부풀리므로, 시간으로만 보면 40px/h 축의
+    //   10:00–10:20 과 10:25–10:45 가 "안 겹친다"며 같은 열에 놓인 뒤 화면에서 서로를 덮는다
+    //   (실제로 밟았다: 11px 포갬). 뒤 블록이 앞을 덮으면 정보가 0 이라 열을 쪼개는 쪽이 낫다.
+    //   ⚠️ **그래서 판정이 pxPerHour 에 의존한다** — 같은 항목들이라도 축 범위가 바뀌면
+    //   열 배정이 달라질 수 있다. 버그가 아니라 의도된 선택이다(종료 없는 항목을 겹침
+    //   계산에서만 MARK_MIN 으로 치는 것과 같은 방식). 대가: 40px/h 에서는 한 항목이
+    //   최소 45분(30px)을 점유해 짧은 항목이 몰린 시간대가 열을 더 쪼갠다.
+    const eOcc = Math.max(r.e, r.s + height * 60 / range.pxPerHour);
     if (r.s >= groupEnd) flush();          // 그룹의 어느 것과도 안 겹친다 → 새 그룹
     let c = 0;
     while (c < colEnds.length && colEnds[c] > r.s) c++;
     if (c === colEnds.length) colEnds.push(0);
-    colEnds[c] = r.e;
-    groupEnd = Math.max(groupEnd, r.e);
-    const marker = !r.it.endTime;
+    colEnds[c] = eOcc;
+    groupEnd = Math.max(groupEnd, eOcc);
     const o = {
       id: r.it.id, col: c, cols: 0,
       top: Math.round((r.s - range.startMin) * range.pxPerHour / 60),
-      height: marker ? MARK_H
-        : Math.max(BLOCK_MIN_H, Math.round((r.e - r.s) * range.pxPerHour / 60)),
+      height: height,
       marker: marker
     };
     group.push(o); out.push(o);
@@ -514,7 +534,10 @@ function render() {
         // 블록 배경이 반투명이라 그 자리만 카드색이 드러나 밝은/어두운 양쪽에서 맞는다.
         // 겹치지 않는 날(cols===1)과 마지막 열에는 안 붙인다 — 기존 화면이 그대로다.
         const gap = (b.cols > 1 && b.col < b.cols - 1) ? ';border-right:2px solid var(--bg)' : '';
-        const pos = 'position:absolute;left:' + pct(b.col * 100 / b.cols) + ';width:' + pct(100 / b.cols) +
+        // overflow:hidden 은 취향이 아니라 안전장치다 — 높이는 BLOCK_MIN_H/MARK_H 로 고정인데
+        // 글자 높이는 글꼴이 정한다(line-height 를 안 건다). CDN 이 늦어 폴백으로 그려지면
+        // 한 줄이 29.2px 까지 커지므로, 최악에도 블록 **밖**으로는 절대 안 나가게 잘라 둔다.
+        const pos = 'position:absolute;overflow:hidden;left:' + pct(b.col * 100 / b.cols) + ';width:' + pct(100 / b.cols) +
           ';top:' + b.top + 'px;height:' + b.height + 'px;cursor:pointer;opacity:' + p.op + gap;
 
         // 종료가 없는 항목은 블록이 아니라 얇은 마커다 — 없는 길이를 지어내지 않는다.
