@@ -480,7 +480,10 @@ function render() {
       for (let h = range.startMin / 60; h < range.endMin / 60; h++) {
         ticks += '<div data-hr="' + h + '" style="position:absolute;left:0;right:0;display:flex;gap:8px;' +
           'align-items:flex-start;top:' + ((h - range.startMin / 60) * range.pxPerHour) + 'px">' +
-          '<div style="width:42px;text-align:right;font-size:11px;color:var(--label-tertiary);transform:translateY(-6px)">' +
+          // 눈금 라벨은 늘 'HH:00' 5글자다(로케일을 안 탄다). 공백이 없어 두 줄이 될 수는
+          // 없지만 CDN 폰트가 늦어 시스템 폰트로 그려지면 42px 을 넘칠 수 있다 — .trunc 로
+          // 축 폭 안에 가둔다. 최악이 '두 줄'이 아니라 '말줄임'이어야 한다.
+          '<div class="trunc" style="width:42px;text-align:right;font-size:11px;color:var(--label-tertiary);transform:translateY(-6px)">' +
           pad(h) + ':00</div><div style="flex:1;border-top:.5px solid var(--separator)"></div></div>';
       }
 

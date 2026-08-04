@@ -980,12 +980,15 @@ if (location.search.includes('selftest')) {
     'two columns are drawn as an even 50% split');
   // ★ style.borderRightWidth 로 보면 안 된다 — var() 를 쓴 단축 속성은 CSSOM 롱핸드가
   //   빈 문자열이다(pending-substitution). 계산값이 곧 그려진 결과다.
-  // 기대값은 리터럴로 적는다. 조건식을 그대로 옮겨 적으면 항등식이 되어 아무것도 검증하지 않는다.
-  const gapPx = (el) => getComputedStyle(el).borderRightWidth;
-  const okGap = (el, col, cols, want, msg) => ok(gapPx(el) === want, msg,
-    'col ' + col + '/' + cols + ' borderRightWidth=' + gapPx(el) + ', expected ' + want);
-  okGap(blocks[0], 0, 2, '2px', 'the non-last column carries the separating gap');
-  okGap(blocks[1], 1, 2, '0px', 'the last column carries no gap');
+  // ★ 그 계산값은 **사용값**이라 브라우저 확대에서 소수로 나온다 — 180% 에서 2px 이
+  //   1.11111px 이었다(실제로 밟았다). px 리터럴로 단언하면 확대한 사용자 화면에서 깨진다.
+  //   여기서 볼 것은 굵기가 아니라 **구분선이 붙었나 안 붙었나**뿐이다(굵기 2 의 소스는
+  //   calendar.js 한 곳이다). 실패 메시지에는 실제 값을 그대로 남긴다.
+  const gapPx = (el) => parseFloat(getComputedStyle(el).borderRightWidth);
+  const okGap = (el, col, cols, want, msg) => ok(want ? gapPx(el) > 0 : gapPx(el) === 0, msg,
+    'col ' + col + '/' + cols + ' borderRightWidth=' + gapPx(el) + ', expected ' + (want ? '> 0' : '0'));
+  okGap(blocks[0], 0, 2, true, 'the non-last column carries the separating gap');
+  okGap(blocks[1], 1, 2, false, 'the last column carries no gap');
   // ★ 축 높이는 조건이 아니라 **그려진 마지막 눈금**과 맞아야 한다
   const rr = dayRange([dItem('a', '10:00', '11:00'), dItem('b', '10:30', '11:30')]);
   const ticks = app2.querySelectorAll('[data-hr]');
@@ -998,9 +1001,9 @@ if (location.search.includes('selftest')) {
   app2 = drawDay([dItem('a', '10:00', '11:00'), dItem('b', '10:30', '11:30'), dItem('c', '10:40', '11:10')]);
   const b3 = app2.querySelectorAll('[data-block]');
   eq(b3[2].style.left, '66.6667%', 'three columns split into exact thirds');
-  okGap(b3[0], 0, 3, '2px', 'the first of three columns carries the gap');
-  okGap(b3[1], 1, 3, '2px', 'the middle column carries the gap too — it is not the last one');
-  okGap(b3[2], 2, 3, '0px', 'only the last of three columns drops the gap');
+  okGap(b3[0], 0, 3, true, 'the first of three columns carries the gap');
+  okGap(b3[1], 1, 3, true, 'the middle column carries the gap too — it is not the last one');
+  okGap(b3[2], 2, 3, false, 'only the last of three columns drops the gap');
 
   // ★ cols === 1 — 겹치지 않는 날. 여기가 검사에 없었다. 화면에 시간 항목이 하나뿐인
   //   보통의 하루가 바로 이 경우이고, 구분선이 붙으면 블록 오른쪽이 카드색으로 깎인다.
@@ -1008,12 +1011,12 @@ if (location.search.includes('selftest')) {
   const solo = app2.querySelectorAll('[data-block]');
   eq(solo.length, 1, 'a day with a single timed item draws one block');
   eq(solo[0].style.width, '100%', 'a lone block spans the whole width');
-  okGap(solo[0], 0, 1, '0px', 'a lone column carries no gap — cols === 1 is never split');
+  okGap(solo[0], 0, 1, false, 'a lone column carries no gap — cols === 1 is never split');
   // 붙어 있지만 안 겹치는 두 개도 같은 열이라 cols === 1 이다.
   app2 = drawDay([dItem('x', '09:00', '10:00'), dItem('y', '10:00', '11:00')]);
   const b2s = app2.querySelectorAll('[data-block]');
-  okGap(b2s[0], 0, 1, '0px', 'back-to-back items share one column and neither gets a gap');
-  okGap(b2s[1], 0, 1, '0px', 'including the second one');
+  okGap(b2s[0], 0, 1, false, 'back-to-back items share one column and neither gets a gap');
+  okGap(b2s[1], 0, 1, false, 'including the second one');
 
   // 하루 종일만 있는 날 / 아무것도 없는 날 — 시간축을 아예 그리지 않는다
   app2 = drawDay([{ id: 'z', title: '휴가', date: '2026-01-05', time: '', endTime: '',
