@@ -4,8 +4,10 @@
 // ---------------------------------------------------------------- persistence
 // 할 일은 users/{uid}/todos/{id} 에 산다. 목록은 firebase.js 의 onSnapshot 이
 // state.items 로 흘려 넣는다 — 여기서는 쓰기만 한다.
+// ★ 새 항목의 기본 카테고리는 **지금 걸린 필터**다. 필터가 '업무' 인데 새 할 일이
+//   '없음' 으로 태어나면 저장하자마자 화면에서 사라진다(필터가 걸러낸다).
 const blankForm = (date) => ({ title: '', date, hasTime: false, time: '07:00', end: '08:00',
-  pri: 'none', repeat: 'none', days: [], memo: '' });
+  categoryId: state.filter || '', repeat: 'none', days: [], memo: '' });
 
 // ★ 자정 넘김을 막는다. 종료가 시작보다 빠르거나 같으면 저장하지 않는다 —
 //   23:00 → 01:00 을 허용하면 "그 날 안"이라는 전제가 깨져서 반복 판정·정렬·
@@ -65,13 +67,15 @@ function toggleDone(id, ds) {
 // ---------------------------------------------------------------- form sheet
 function renderSheet() {
   const f = state.form;
-  const priChoices = Object.keys(PRI).map((k) => {
-    const on = f.pri === k, c = PRI[k].c;
-    return '<button class="pri" data-pri="' + k + '" style="background-color:' +
-      (on ? 'color-mix(in srgb, ' + c + ' 16%, transparent)' : 'var(--fill-tertiary)') +
-      ';color:' + (on ? c : 'var(--label-secondary)') +
-      (on ? ';box-shadow:inset 0 0 0 1.5px ' + c + ', var(--tc-raise-sm)' : '') + '">' +
-      '<span style="width:9px;height:9px;border-radius:50%;background:' + c + '"></span>' + esc(priLabel(k)) + '</button>';
+  // '없음' + 만들어 둔 카테고리들. 옛 우선순위 칩과 같은 .pri CSS 를 그대로 쓴다.
+  const catChoices = [CAT_NONE].concat(state.cats).map((c) => {
+    const on = (f.categoryId || '') === c.id;
+    return '<button class="pri" data-cat="' + esc(c.id) + '" style="background-color:' +
+      (on ? 'color-mix(in srgb, ' + c.color + ' 16%, transparent)' : 'var(--fill-tertiary)') +
+      ';color:' + (on ? c.color : 'var(--label-secondary)') +
+      (on ? ';box-shadow:inset 0 0 0 1.5px ' + c.color + ', var(--tc-raise-sm)' : '') + '">' +
+      '<span style="width:9px;height:9px;border-radius:50%;background:' + c.color + '"></span>' +
+      esc(catName(c)) + '</button>';
   }).join('');
 
   const repeatMenu = state.repeatOpen ? '<div class="picker-menu" role="menu">' +
@@ -149,8 +153,8 @@ function renderSheet() {
           '" aria-label="' + esc(t('form.timeToggle')) + '"><span></span></button>' +
       '</div>' + timeBlock +
 
-      '<div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">' + esc(t('form.pri')) + '</div>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap">' + priChoices + '</div>' +
+      '<div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">' + esc(t('form.cat')) + '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' + catChoices + '</div>' +
 
       '<div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">' + esc(t('form.repeat')) + '</div>' +
       '<div class="picker"><button class="picker-btn" data-act="repeatToggle" aria-haspopup="menu" aria-expanded="' + state.repeatOpen + '">' +
@@ -185,7 +189,10 @@ function openForm(id, ds) {
       // 유지된다. 하루 종일이던 항목의 시간을 켜면 새 항목과 같은 07:00–08:00 에서
       // 시작한다 (그 항목에는 지울 종료 시간이 애초에 없다).
       end: it.time ? (it.endTime || '') : '08:00',
-      pri: it.pri || 'none', repeat: it.repeat || 'none',
+      // 지워진 카테고리를 가리키던 항목은 '없음' 이 골라진 채로 열린다 — 화면과
+      // 같은 상태다(catOf 폴백). 그대로 저장하면 categoryId 가 '' 로 굳는다.
+      categoryId: (it.categoryId && state.cats.some((c) => c.id === it.categoryId)) ? it.categoryId : '',
+      repeat: it.repeat || 'none',
       // days 가 없는 옛 weekly 항목은 시작일 요일 하나가 켜진 채로 열린다 — 지금
       // 판정과 같은 상태다. 그대로 저장하면 days 가 생기지만 결과는 안 바뀐다.
       days: (it.days && it.days.length) ? it.days.slice()
@@ -213,7 +220,7 @@ function saveForm() {
   // 안 뜨고, 종료 ≤ 시작은 자정을 넘긴다.
   if (!formOk(f)) return;
   const base = Object.assign({ title: f.title.trim(), date: f.date }, formTimes(f), {
-    pri: f.pri, repeat: f.repeat,
+    categoryId: f.categoryId, repeat: f.repeat,
     // 오름차순으로 굳혀 둔다 — 판정과 라벨이 고른 순서에 안 흔들린다.
     // weekly 가 아니면 []. done/doneDates 와 같은 방식이다: 필드는 늘 있고
     // 어느 쪽을 읽을지는 repeat 이 정한다 (occursOn 은 weekly 에서만 days 를 본다).
@@ -233,7 +240,7 @@ function saveForm() {
   state.form = null;
   commit(items, () => fb.saveTodo(id, editing ? base
     : { title: fresh.title, date: fresh.date, time: fresh.time, endTime: fresh.endTime,
-        pri: fresh.pri, repeat: fresh.repeat, days: fresh.days, memo: fresh.memo,
+        categoryId: fresh.categoryId, repeat: fresh.repeat, days: fresh.days, memo: fresh.memo,
         done: false, doneDates: [] }));
 }
 
@@ -299,7 +306,9 @@ app.addEventListener('click', (e) => {
     state.selected = ds; state.cy = d.getFullYear(); state.cm = d.getMonth();
     return render();
   }
-  if ((el = hit('[data-pri]'))) { state.form.pri = el.dataset.pri; return render(); }
+  if ((el = hit('[data-cat]'))) { state.form.categoryId = el.dataset.cat; return render(); }
+  // 필터 칩. '' 는 전체 — state.filter 는 null 로 눕힌다(itemsOn 이 falsy 로 본다).
+  if ((el = hit('[data-filter]'))) { state.filter = el.dataset.filter || null; return render(); }
   if ((el = hit('[data-repeat]'))) {
     state.form.repeat = el.dataset.repeat;
     // '매주' 를 고르면 시작일 요일 하나가 켜진 채로 열린다 — 아무것도 더 안 고르고

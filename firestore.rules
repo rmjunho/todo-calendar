@@ -103,6 +103,36 @@ service cloud.firestore {
       allow delete: if (request.auth.uid == uid && hasProfile() && me().role != 'admin')
                     || (isAdmin() && request.auth.uid != uid);
 
+      // 카테고리. 할 일과 같은 자리·같은 권한이다.
+      //
+      // 할 일과 달리 필드를 좁혀 둔다. 이유는 색이 화면과 캔버스에 **문자열 그대로**
+      // 들어가기 때문이다 — pill()·일간 블록은 style="background:…" 안에 esc() 없이
+      // 넣으므로 큰따옴표 하나로 속성을 탈출할 수 있고, 캔버스 fillStyle 은 파싱 못
+      // 하는 값을 조용히 무시해서 색만 틀린 PNG 를 낸다. 집합으로 고정하면 둘 다
+      // 원리적으로 사라진다. ★ calendar.js 의 CAT_COLORS 와 같은 집합을 유지할 것.
+      //
+      // 개수 상한은 여기서 못 건다 — 규칙에 집계가 없어 컬렉션 문서 수를 셀 수 없다.
+      // 화면(CAT_MAX)에서만 막는다. 카운터 문서 + 트랜잭션은 개인용 앱에 과하다.
+      function catColor(c) {
+        return c in ['#FF3B30', '#FF9500', '#34C759', '#00C7BE', '#30B0C7',
+                     '#007AFF', '#5856D6', '#AF52DE', '#FF2D55', '#A2845E'];
+      }
+      function validCat(d) {
+        return d.keys().hasOnly(['name', 'color'])
+               && d.name is string && d.name.size() > 0 && d.name.size() <= 20
+               && catColor(d.color);
+      }
+      match /categories/{catId} {
+        allow read, delete: if signedIn() && request.auth.uid == uid && approved();
+        allow create, update: if signedIn() && request.auth.uid == uid && approved()
+                              && validCat(request.resource.data);
+        // todos 와 같은 이유로 관리자에게 연다 — 계정을 지울 때 서브컬렉션을 직접
+        // 훑어야 하는데 id 조회(list)가 곧 내용 조회라 read 없이 delete 만 줄 수 없다.
+        // ponytail: 관리자가 남의 카테고리 **이름**을 읽게 된다. 처리방침 7항의
+        // 관리자 접근 범위에 이 한 줄이 늘어난다 — 규칙을 조이거나 풀면 문구도 함께.
+        allow read, delete: if isAdmin();
+      }
+
       // 할 일은 본인 것만, 승인된 뒤에만.
       match /todos/{todoId} {
         allow read, write: if signedIn() && request.auth.uid == uid && approved();
