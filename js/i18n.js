@@ -177,7 +177,23 @@ const STR = {
     'jump.month': '월',
     'jump.go': '이동',
 
-    'pri.high': '높음', 'pri.med': '보통', 'pri.low': '낮음', 'pri.none': '없음',
+    // 카테고리. '없음' 을 데이터가 아니라 여기 두는 이유는 언어를 바꾸면 같이
+    // 바뀌어야 하기 때문이다 — 사용자가 만든 카테고리 이름은 번역하지 않는다.
+    'cat.none': '없음',
+    'cat.all': '전체',
+    'cat.title': '카테고리',
+    'cat.manage': '카테고리 관리',
+    'cat.add': '카테고리 추가',
+    'cat.namePh': '카테고리 이름',
+    'cat.empty': '아직 카테고리가 없습니다',
+    'cat.emptyHint': '이름과 색을 정해 만들어 보세요',
+    'cat.dupe': '같은 이름의 카테고리가 있습니다',
+    'cat.max': (n) => '카테고리는 최대 ' + n + '개까지 만들 수 있습니다',
+    // ★ 삭제해도 할 일은 안 지워진다는 걸 문장에서 분명히 한다 — 되돌릴 수 없는
+    //   조작이라 개수를 눈으로 보여 주는 것이 유일한 방어선이다.
+    'cat.delConfirm': (n) => n === 0
+      ? '이 카테고리를 지울까요?'
+      : '이 카테고리를 지웁니다. 할 일 ' + n + '개는 지워지지 않고 ‘없음’ 으로 바뀝니다.',
     'rep.none': '반복 안 함', 'rep.daily': '매일', 'rep.weekly': '매주', 'rep.monthly': '매월',
     // 요일 이름은 dow() 가 준다 — 여기서 정하는 건 잇는 방식뿐이다.
     'rep.weeklyDays': (n) => '매주 ' + n.join('·'),
@@ -194,7 +210,7 @@ const STR = {
     'form.timeStart': '시작',
     'form.timeEnd': '종료',
     'form.endBeforeStart': '종료 시간은 시작 시간보다 늦어야 합니다',
-    'form.pri': '우선순위',
+    'form.cat': '카테고리',
     'form.repeat': '반복',
     'form.days': '반복 요일',
     'form.daysEmpty': '요일을 하나 이상 골라 주세요',
@@ -373,7 +389,19 @@ const STR = {
     'jump.month': 'Month',
     'jump.go': 'Go',
 
-    'pri.high': 'High', 'pri.med': 'Medium', 'pri.low': 'Low', 'pri.none': 'None',
+    'cat.none': 'None',
+    'cat.all': 'All',
+    'cat.title': 'Categories',
+    'cat.manage': 'Manage categories',
+    'cat.add': 'Add category',
+    'cat.namePh': 'Category name',
+    'cat.empty': 'No categories yet',
+    'cat.emptyHint': 'Give one a name and a colour',
+    'cat.dupe': 'A category with that name already exists',
+    'cat.max': (n) => 'You can have at most ' + n + ' categories',
+    'cat.delConfirm': (n) => n === 0
+      ? 'Delete this category?'
+      : 'Deleting this category. ' + n + ' to-do(s) will not be deleted — they become “None”.',
     'rep.none': 'Does not repeat', 'rep.daily': 'Daily', 'rep.weekly': 'Weekly', 'rep.monthly': 'Monthly',
     'rep.weeklyDays': (n) => 'Every ' + n.join(', '),
     'rep.weeklyAll': 'Weekly (all days)',
@@ -388,7 +416,7 @@ const STR = {
     'form.timeStart': 'Start',
     'form.timeEnd': 'End',
     'form.endBeforeStart': 'The end time must be later than the start time',
-    'form.pri': 'Priority',
+    'form.cat': 'Category',
     'form.repeat': 'Repeat',
     'form.days': 'Repeat on',
     'form.daysEmpty': 'Pick at least one day',
