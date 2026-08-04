@@ -204,7 +204,7 @@ function exportFilename(view, ds, cy, cm) {
 function exRow(it, ds, includeMemo) {
   const r = {
     title: it.title || '',
-    color: (PRI[it.pri] || PRI.none).c,
+    color: catOf(it).color,
     time: it.time ? timeRange(it.time, it.endTime || '') : t('item.allDay'),
     allDay: !it.time,
     done: isDone(it, ds)
