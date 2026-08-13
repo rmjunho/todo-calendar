@@ -32,12 +32,15 @@ service cloud.firestore {
     function isAdmin() {
       return hasProfile() && me().status == 'approved' && me().role == 'admin';
     }
-    // 화면 설정(테마·언어). 값을 여기서 좁혀 두지 않으면 users 문서가 임의의 맵을
-    // 받는 통로가 된다 — 키 목록과 값 집합을 둘 다 고정한다.
+    // 화면 설정(테마·언어·첫 화면). 값을 여기서 좁혀 두지 않으면 users 문서가 임의의
+    // 맵을 받는 통로가 된다 — 키 목록과 값 집합을 둘 다 고정한다.
+    // ★ 키를 늘릴 때는 i18n.js 의 검증 함수(okTheme/okLang/okView)와 **같은 집합**을
+    //   유지할 것. 어긋나면 화면은 멀쩡한데 저장만 조용히 거부된다.
     function validSettings(s) {
-      return s.keys().hasOnly(['theme', 'lang'])
+      return s.keys().hasOnly(['theme', 'lang', 'view'])
              && s.theme in ['light', 'dark', 'system']
-             && s.lang in ['ko', 'en'];
+             && s.lang in ['ko', 'en']
+             && s.view in ['year', 'month', 'week', 'day'];
     }
 
     // 로그인 전에 이름 → 이메일을 찾기 위한 색인.
@@ -135,6 +138,30 @@ service cloud.firestore {
         // 훑어야 하는데 id 조회(list)가 곧 내용 조회라 read 없이 delete 만 줄 수 없다.
         // ponytail: 관리자가 남의 카테고리 **이름**을 읽게 된다. 처리방침 7항의
         // 관리자 접근 범위에 이 한 줄이 늘어난다 — 규칙을 조이거나 풀면 문구도 함께.
+        allow read, delete: if isAdmin();
+      }
+
+      // 목표(버킷리스트). 할 일과 **다른 컬렉션**이다 — 목표는 날짜 하나가 아니라
+      // 기간(그 해 안 / 그 달까지)이라서 occursOn 의 '한 항목 = 한 날' 전제에 안 맞는다.
+      // 섞으면 모든 렌더 경로가 목표를 걸러내야 하고, 한 곳만 빠뜨리면 목표가 365일
+      // 전부에 뜬다. 따로 두면 할 일 로직을 한 줄도 안 건드린다.
+      //
+      // 검증은 categories 보다 얕다. 색처럼 style/캔버스에 문자열로 들어가는 값이 없고
+      // 제목·메모는 todos 와 같이 esc() 를 지난다. 그래서 **키 목록**(임의 맵 방지)과
+      // 코드가 분기하는 **scope** 만 본다.
+      function validGoal(d) {
+        return d.keys().hasOnly(['title', 'scope', 'y', 'm', 'd', 'categoryId', 'memo', 'done'])
+               && d.title is string && d.title.size() > 0 && d.title.size() <= 100
+               && d.scope in ['year', 'month']
+               && d.y is int
+               && d.done is bool;
+      }
+      match /goals/{goalId} {
+        allow read, delete: if signedIn() && request.auth.uid == uid && approved();
+        allow create, update: if signedIn() && request.auth.uid == uid && approved()
+                              && validGoal(request.resource.data);
+        // todos·categories 와 같은 이유 — 계정 삭제 때 서브컬렉션을 직접 훑어야 하는데
+        // id 조회(list)가 곧 내용 조회라 read 없이 delete 만 줄 수 없다.
         allow read, delete: if isAdmin();
       }
 
