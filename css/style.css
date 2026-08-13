@@ -131,7 +131,11 @@ input:focus,textarea:focus{outline:2px solid var(--tint);outline-offset:-1px}
    글꼴이 폭을 못 흔든다. 그래서 캡슐이 스크롤되는 경우가 없다.
    ★ min-width·gap·글자 크기·+ 버튼 크기를 바꾸면 다시 잴 것. */
 .tabbar .seg{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
-  height:48px;min-width:54px;padding:0 9px;font-size:11px;border-radius:16px;
+  /* ★ 바깥 캡슐과 **동심**이어야 한다. 캡슐 반지름(높이 58 ÷ 2 = 29) − 세로 패딩 5
+     = 24 이고, 칩 높이 48 의 절반도 24 다 — 그래서 알약(capsule)으로 두면 곡률이
+     정확히 맞는다. 16px 처럼 임의의 값을 주면 둥근 판 안에 각진 판이 앉은 꼴이 된다.
+     캡슐 패딩이나 칩 높이를 바꾸면 이 등식이 깨지는지 다시 볼 것. */
+  height:48px;min-width:54px;padding:0 9px;font-size:11px;border-radius:var(--radius-capsule);
   /* tertiary(알파 .3)가 아니라 secondary 다 — 주 내비게이션 글자가 30% 불투명이면
      밝은 배경에서 대비가 안 나온다. 고른 것과의 구분은 tint 색과 판이 이미 만든다. */
   color:var(--label-secondary);background-color:transparent;background-image:none;box-shadow:none}

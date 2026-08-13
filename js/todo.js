@@ -1668,6 +1668,21 @@ if (location.search.includes('selftest')) {
   ok(onBg !== offBg, 'the selected tab is filled and the others are not', onBg + ' vs ' + offBg);
   ok(/(, *0\)|\/ *0\))/.test(offBg) || offBg === 'transparent',
     'an unselected tab has no chip behind it at all', offBg);
+  // 고른 탭의 판은 바깥 캡슐과 **동심**이어야 곡률이 이어져 보인다:
+  //   바깥 반지름 − 캡슐 세로 패딩 == 안쪽 반지름.
+  // ★ px 리터럴로 적지 않는다 — 브라우저 확대에서 셋이 같은 비율로 소수가 되므로
+  //   **등식**은 살아 있지만 숫자는 달라진다(CLAUDE.md). 관심사는 관계 하나다.
+  //   getComputedStyle 은 선언값(999px)을 주므로 CSS 명세의 축소 규칙을 적용해 쓴 값을 낸다.
+  const usedR = (el) => {
+    const r = el.getBoundingClientRect();
+    const d = parseFloat(getComputedStyle(el).borderTopLeftRadius);
+    return Math.min(d, d * Math.min(r.width / (d * 2), r.height / (d * 2)));
+  };
+  const padY = parseFloat(getComputedStyle(bar).paddingTop);
+  ok(Math.abs((usedR(bar) - padY) - usedR(bar.querySelector('.seg-on'))) < 0.6,
+    'the selected tab\'s pill is concentric with the capsule around it',
+    'outer ' + usedR(bar).toFixed(2) + ' - pad ' + padY + ' vs inner ' +
+      usedR(bar.querySelector('.seg-on')).toFixed(2));
   // 아이콘을 눌러도 탭이 먹혀야 한다 — 위임이 closest() 라 SVG 자식에서도 올라온다.
   bar.querySelector('[data-view="week"] svg').dispatchEvent(new MouseEvent('click', { bubbles: true }));
   eq(state.view, 'week', 'tapping the icon inside a tab switches the view, not just the label');
