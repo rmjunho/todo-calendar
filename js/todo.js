@@ -881,6 +881,71 @@ if (location.search.includes('selftest')) {
   ok(occursOn(emptyDays, '2026-01-12') && !occursOn(emptyDays, '2026-01-13'),
     'an empty days array falls back to the start weekday instead of disappearing');
 
+  // --- 매년 반복 ---
+  const y1 = { id: 'y1', date: '2026-03-14', repeat: 'yearly' };
+  ok(occursOn(y1, '2027-03-14') && occursOn(y1, '2030-03-14'),
+    'a yearly item repeats on the same month and day');
+  ok(!occursOn(y1, '2027-03-15') && !occursOn(y1, '2027-04-14'), 'and on no other day');
+  ok(!occursOn(y1, '2025-03-14'), 'and never before its start date');
+  const feb29 = { id: 'f29', date: '2028-02-29', repeat: 'yearly' };
+  ok(occursOn(feb29, '2032-02-29') && !occursOn(feb29, '2029-02-28'),
+    'Feb 29 lands only on leap years — the same rule monthly uses for the 31st');
+
+  // --- 기간 (span) ---
+  // ★ 기간은 **일정만** 갖는다. 할 일에 span 이 들어와도 하루로 본다 — 그래야
+  //   "5일짜리의 3일째에 체크하면 그 하루만 지워지는" 문제가 생길 자리가 없다.
+  const ev = (o) => Object.assign({ id: 'e', kind: 'event', date: '2026-08-05', repeat: 'none' }, o);
+  const e4 = ev({ span: 4 });                       // 2026-08-05(수) ~ 08-08(토)
+  ok([0, 1, 2, 3].every((i) => occursOn(e4, addDays('2026-08-05', i))),
+    'a four-day event covers four days');
+  ok(!occursOn(e4, '2026-08-04') && !occursOn(e4, '2026-08-09'),
+    'and not one day more at either end');
+  eq(spanOf({ kind: 'todo', span: 5 }), 1, 'a to-do is one day however long its span field claims');
+  eq(spanOf(ev({ span: 0 })), 1, 'a broken span falls back to one day rather than making it vanish');
+  eq(occStart(e4, '2026-08-07'), '2026-08-05',
+    'a day inside the span reports which occurrence it belongs to');
+  eq(occStart(e4, '2026-08-09'), null, 'a day outside reports nothing');
+
+  // ★ span 이 없는 항목은 occursOn 과 startsOn 이 **모든 날짜에서** 같아야 한다.
+  //   다르면 기간을 도입하면서 기존 반복 할 일의 동작을 건드린 것이다.
+  let sameAsStart = true;
+  [w, m, o, wd, sunOnly, allDays, emptyDays, y1].forEach((it) => {
+    for (let i = -3; i < 40; i++) {
+      const d = addDays('2026-01-05', i);
+      if (occursOn(it, d) !== startsOn(it, d)) sameAsStart = false;
+    }
+  });
+  ok(sameAsStart, 'without a span, occursOn is still exactly startsOn — no existing item moved');
+
+  // --- 주 격자의 막대 ---
+  // 2026-08-02 는 일요일이다. 칸 색인은 요일과 같다 (0=일 … 6=토).
+  const ws2 = '2026-08-02', ws3 = '2026-08-09', ws4 = '2026-08-16';
+  const b1 = weekBars(e4, ws2);
+  eq(b1.length, 1, 'an event that fits in one week draws one segment');
+  eq(b1[0].from + ',' + b1[0].to, '3,6', 'Wednesday through Saturday is columns 3 to 6');
+  ok(!b1[0].cutL && !b1[0].cutR, 'and neither end is marked as continuing');
+
+  const vac = ev({ id: 'v', date: '2026-08-13', span: 6 });   // 08-13(목) ~ 08-18(화)
+  const v3 = weekBars(vac, ws3)[0];
+  eq(v3.from + ',' + v3.to, '4,6', 'a span crossing a week boundary stops at Saturday');
+  ok(!v3.cutL && v3.cutR, 'with only its right end marked as continuing');
+  const v4 = weekBars(vac, ws4)[0];
+  eq(v4.from + ',' + v4.to, '0,2', 'and resumes at Sunday in the next week');
+  ok(v4.cutL && !v4.cutR, 'with only its left end marked');
+  eq(weekBars(vac, ws2).length, 0, 'a week the event never touches draws nothing');
+
+  // ★ 한 주에 회차가 둘 이상 들어올 수 있다 — 매주 월·목 2일짜리가 그렇다.
+  //   하나만 돌려주면 목·금 회차가 화면에서 조용히 사라진다.
+  const twice = ev({ id: 't2', date: '2026-08-03', span: 2, repeat: 'weekly', days: [1, 4] });
+  const bt = weekBars(twice, ws2);
+  eq(bt.length, 2, 'a weekly event on two weekdays draws two segments in the same week');
+  eq(bt.map((b) => b.from + '-' + b.to).join(), '1-2,4-5', 'Mon–Tue and Thu–Fri, not one merged bar');
+
+  // 층 배정. 안 겹치면 같은 층을 다시 쓰고, 겹치면 쌓는다 (dayLayout 과 같은 방식).
+  eq(laneBars([{ from: 1, to: 5 }, { from: 4, to: 6 }, { from: 0, to: 0 }])
+      .map((r) => r.from + ':' + r.lane).join(), '0:0,1:0,4:1',
+    'bars that do not overlap share a lane; overlapping ones stack');
+
   // ★ 옛 항목(days 없음)과, 편집 시트가 days 를 채워 저장한 뒤의 같은 항목이
   //   모든 날짜에서 한 칸도 다르지 않아야 한다. 이게 깨지면 기존 반복 할 일이
   //   편집 한 번에 다른 날로 옮겨간다.

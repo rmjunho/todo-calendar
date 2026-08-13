@@ -234,7 +234,21 @@ const STR = {
     // 12칸 요약의 개수. **그 달 목표만** 센다 — 일일 할 일은 여기 안 들어간다.
     'goal.count': (n) => n + '개',
 
+    // 할 일 / 일정. 일정은 여러 날에 걸치고 완료 체크가 없다.
+    'kind.todo': '할 일',
+    'kind.event': '일정',
+    'kind.all': '전체',
+    'kind.addEvent': '일정 추가',
+    'form.span': '기간',
+    'form.spanToggle': '여러 날',
+    'form.spanEnd': '종료 날짜',
+    'form.spanDays': (n) => n + '일간',
+    'form.spanOne': '하루',
+    // 회차가 자기 자신과 겹치는 것을 막는다 — 매주 8일짜리는 다음 회차와 포개진다.
+    'form.spanTooLong': (n) => '반복 주기보다 짧아야 합니다 (최대 ' + n + '일)',
+    'form.evTimeHint': '시작 시각은 첫날, 종료 시각은 마지막 날에 붙습니다',
     'rep.none': '반복 안 함', 'rep.daily': '매일', 'rep.weekly': '매주', 'rep.monthly': '매월',
+    'rep.yearly': '매년',
     // 요일 이름은 dow() 가 준다 — 여기서 정하는 건 잇는 방식뿐이다.
     'rep.weeklyDays': (n) => '매주 ' + n.join('·'),
     'rep.weeklyAll': '매주 (매일)',
@@ -467,7 +481,19 @@ const STR = {
     // 숫자만. 'n goals' 는 12칸 격자에서 접힌다.
     'goal.count': (n) => String(n),
 
+    'kind.todo': 'To-do',
+    'kind.event': 'Event',
+    'kind.all': 'All',
+    'kind.addEvent': 'Add an event',
+    'form.span': 'Duration',
+    'form.spanToggle': 'Spans several days',
+    'form.spanEnd': 'End date',
+    'form.spanDays': (n) => n + ' days',
+    'form.spanOne': 'One day',
+    'form.spanTooLong': (n) => 'Must be shorter than the repeat interval (max ' + n + ' days)',
+    'form.evTimeHint': 'The start time is on the first day, the end time on the last',
     'rep.none': 'Does not repeat', 'rep.daily': 'Daily', 'rep.weekly': 'Weekly', 'rep.monthly': 'Monthly',
+    'rep.yearly': 'Yearly',
     'rep.weeklyDays': (n) => 'Every ' + n.join(', '),
     'rep.weeklyAll': 'Weekly (all days)',
 

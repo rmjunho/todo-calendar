@@ -27,7 +27,23 @@ const catOf = (it) =>
 // 이름은 i18n 을 탄다 — '없음' 을 데이터로 들고 있으면 언어를 바꿔도 안 변한다.
 const catName = (c) => (c.id ? c.name : t('cat.none'));
 // 배열 순서가 곧 반복 메뉴의 순서다.
-const REP_KEYS = ['none', 'daily', 'weekly', 'monthly'];
+const REP_KEYS = ['none', 'daily', 'weekly', 'monthly', 'yearly'];
+
+// ------------------------------------------------------------- 할 일 / 일정
+// 같은 컬렉션(users/{uid}/todos)에 산다. 일정은 **달력에 그려야** 하는데 화면에
+// 항목을 꺼내는 통로가 itemsOn() 하나뿐이라, 따로 두면 월·주·일·하단 목록·
+// 내보내기 3곳에 두 번째 통로를 파야 한다. 목표(goals)를 따로 뺀 것과 반대 이유다.
+//   kind: 'event' 없으면 'todo'  ·  span: 며칠 동안, 없으면 1
+// ★ 규칙은 안 건드린다 — todos 는 카테고리·목표와 달리 필드를 잠가 두지 않았다.
+const isEvent = (it) => !!it && it.kind === 'event';
+// ★ 기간은 **일정만** 갖는다. 여러 날짜리 할 일을 허용하면 "5일짜리의 3일째에
+//   체크하면 그 하루만 지워지는" 문제가 생기는데(doneDates 는 날짜를 그대로 담는다),
+//   일정에는 완료 체크가 없어서 그 문제가 아예 성립하지 않는다. 그래서 isDone 은
+//   한 글자도 안 바뀐다.
+const spanOf = (it) => (isEvent(it) ? Math.max(1, Math.round(it.span) || 1) : 1);
+// 반복 간격(일). span 이 이보다 길면 회차가 자기 자신과 겹친다 — 저장에서 막는다.
+// 'none' 은 반복이 없으니 상한도 없다. monthly 는 제일 짧은 달(28), yearly 는 365.
+const REP_GAP = { none: Infinity, daily: 1, weekly: 7, monthly: 28, yearly: 365 };
 // 반복 이름. weekly 는 days 를 함께 넘기면 '매주 월·수·금' 이 된다 — days 가
 // 없거나 비면 예전처럼 '매주' 하나로 끝난다(옛 항목이 그대로 읽히는 지점).
 // 숫자 → 요일 이름 변환은 여기서만 한다. days 는 데이터, dow() 는 표시 전용이다.
@@ -89,7 +105,9 @@ const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate() + n); retu
 // ponytail: monthly recurrence matches on day-of-month, so a task on the 31st
 // simply skips shorter months. Switch to a clamped "last day of month" rule if
 // users report missed occurrences.
-function occursOn(it, ds) {
+// 회차가 **시작하는** 날인가. span 을 안 본다 — 기간이 생기기 전의 occursOn 과
+// 글자 하나까지 같은 함수이고, span 처리는 아래 occStart 가 이 위에 얹힌다.
+function startsOn(it, ds) {
   if (ds < it.date) return false;
   const rep = it.repeat || 'none';
   if (rep === 'none') return it.date === ds;
@@ -104,11 +122,71 @@ function occursOn(it, ds) {
     return days.includes(b.getDay());
   }
   if (rep === 'monthly') return a.getDate() === b.getDate();
+  // 매년: 같은 달·같은 날. 2/29 는 윤년에만 뜬다 — monthly 가 31일에 하는 것과 같다.
+  if (rep === 'yearly') return a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
   return false;
 }
+
+// 이 날을 덮고 있는 회차의 **시작일**. 없으면 null.
+// span 일만큼 거슬러 올라가며 시작일 후보를 본다 — span ≤ 반복 간격(REP_GAP)이라
+// 한 날을 덮는 회차는 최대 하나이므로 처음 찾은 것이 답이다.
+// ★ 막대를 그릴 때도 이 함수를 쓴다(weekBars). "뜨는가"와 "어느 회차인가"를 한
+//   함수로 답하게 해서 둘이 어긋날 자리를 없앴다.
+function occStart(it, ds) {
+  const n = spanOf(it);
+  for (let k = 0; k < n; k++) {
+    const s = addDays(ds, -k);
+    if (s < it.date) return null;      // s 는 계속 작아진다 — 더 볼 것이 없다
+    if (startsOn(it, s)) return s;
+  }
+  return null;
+}
+const occursOn = (it, ds) => !!occStart(it, ds);
 // Repeating tasks track completion per-date; one-off tasks use a single flag.
+// ★ 기간(span)은 여기 안 들어온다 — 기간은 일정만 갖고 일정에는 완료 체크가 없다.
+//   그래서 doneDates 가 담는 날짜는 지금도 앞으로도 "체크한 그 날" 하나다.
 function isDone(it, ds) {
   return (it.repeat && it.repeat !== 'none') ? (it.doneDates || []).includes(ds) : !!it.done;
+}
+
+// ------------------------------------------------------- 월·주 격자의 기간 막대
+// 아래 둘은 DOM 을 모른다 — dayRange/dayLayout 과 같은 이유로 ?selftest 가 좌표를
+// 직접 단언한다. 화면과 내보내기 캔버스가 **같은 계산**을 나눠 쓰는 자리이기도 하다.
+
+// ws(그 주 일요일) 기준으로 이 일정이 차지하는 칸 구간들. 칸 색인은 0(일)~6(토).
+// ★ 배열인 이유: 매주 반복 + 여러 요일이면 한 주에 회차가 둘 이상 들어온다
+//   (예: 매주 월·목, 2일짜리 → 월화 / 목금). 하나만 돌려주면 뒤엣것이 사라진다.
+// cutL/cutR 은 주 경계에서 잘렸다는 뜻이다 — 그 끝을 흐리게 그려 "계속된다"를 표시한다.
+function weekBars(it, ws) {
+  const we = addDays(ws, 6);
+  const out = [];
+  let i = 0;
+  while (i < 7) {
+    const s = occStart(it, addDays(ws, i));
+    if (!s) { i++; continue; }
+    const e = addDays(s, spanOf(it) - 1);
+    // 칸 색인은 요일이다 — ws 가 일요일 고정이라 getDay() 가 그대로 열 번호가 된다.
+    const to = e > we ? 6 : parse(e).getDay();
+    out.push({ id: it.id, start: s, end: e,
+      from: s < ws ? 0 : parse(s).getDay(), to: to, cutL: s < ws, cutR: e > we });
+    i = to + 1;              // 이 회차가 덮은 칸은 건너뛴다
+  }
+  return out;
+}
+
+// 겹치는 막대를 층으로 나눈다. 시작 칸 오름차순(같으면 긴 것 먼저) → 끝난 층 재사용,
+// 없으면 새 층. dayLayout 의 열 배정과 같은 탐욕 알고리즘이고, 여기는 1차원이라 더 쉽다.
+function laneBars(segs) {
+  const rows = segs.slice().sort((x, y) => (x.from - y.from) || (y.to - x.to));
+  const ends = [];
+  rows.forEach((r) => {
+    let c = 0;
+    while (c < ends.length && ends[c] >= r.from) c++;   // 그 층이 아직 이 칸을 쓰고 있다
+    if (c === ends.length) ends.push(-1);
+    ends[c] = r.to;
+    r.lane = c;
+  });
+  return rows;
 }
 // ------------------------------------------------------- 일간 뷰 (순수 함수)
 // 아래 다섯 함수는 DOM 을 모른다 — 그래야 ?selftest 가 좌표를 직접 단언한다.
@@ -257,10 +335,17 @@ function sortItems(list) {
 //   6곳을 다 고쳐야 하고, **하나만 빠뜨리면 그 화면에서 필터가 조용히 안 먹는다**
 //   (내보내기가 제일 놓치기 쉽다). 순수함을 잃는 대신 그 실수를 원천적으로 없앴다.
 // 필터가 걸리면 일간 뷰 시간축 범위(dayRange)도 따라 좁아진다 — 의도된 동작이다.
+// ★ 종류 필터(할 일 / 일정)는 **일간·연간 뷰에서 안 본다.** 하루치는 양이 적어서
+//   나눌 이유가 없고, 시간축은 원래 둘을 함께 놓는 자리다("일간에서는 둘 다 같이").
+//   값을 지우지 않고 여기서만 무시하는 이유: 지우면 월간으로 돌아왔을 때 고른 것이
+//   풀려 있다. 내보내기도 이 함수를 지나므로 이미지가 화면과 자동으로 같아진다.
+const kindFilter = () => (state.view === 'day' || state.view === 'year' ? null : state.kind);
+
 function itemsOn(items, ds, showCompleted) {
-  const f = state.filter;
+  const f = state.filter, k = kindFilter();
   return sortItems(items.filter((it) => occursOn(it, ds) && (showCompleted || !isDone(it, ds))
-    && (!f || (it.categoryId || '') === f)));
+    && (!f || (it.categoryId || '') === f)
+    && (!k || (it.kind === 'event' ? 'event' : 'todo') === k)));
 }
 
 // ------------------------------------------------------------------- 목표
@@ -310,6 +395,9 @@ const state = {
   // null = 전체. 아니면 categoryId 문자열. ★ 저장하지 않는다 — 새로고침하면 풀린다.
   // 남겨 두면 다음에 열었을 때 "할 일이 다 사라졌다" 로 읽힌다.
   filter: null,
+  // 종류 필터. null = 전체, 'todo' = 할 일만, 'event' = 일정만.
+  // ★ 월간·주간에서만 쓴다 (kindFilter 참고). filter 와 같이 저장하지 않는다.
+  kind: null,
   showCats: false,    // 카테고리 관리 시트
   catDraft: null,     // 그 안의 편집기 { id, name, color }. null 이면 목록 모드
   showForm: false,
