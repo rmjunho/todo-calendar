@@ -162,6 +162,10 @@ onAuthStateChanged(auth, async (u) => {
   if (!adoptSettings(data.settings)) {
     saveSettings().catch((e) => console.warn('설정 승격 실패 (로컬 값은 유효):', e));
   }
+  // ★ 첫 화면을 여기서 적용한다. state.view 는 로드 시점에 localStorage 값으로
+  //   세워져 있고, 원격 값이 이기는 자리가 여기다(테마·언어와 같은 지점).
+  //   이 핸들러는 로그인·세션 복원 때만 돌아서 "앱을 열었다" 와 시점이 같다.
+  state.view = SETTINGS.view;
   watch(state.user);
   render();
 });
@@ -205,7 +209,9 @@ function watch(user) {
 }
 
 // 화면 설정. 규칙이 hasOnly(['settings']) 를 보므로 다른 필드를 같이 보내면
-// 통째로 거부된다 — theme/lang 두 키만 담은 맵을 통으로 교체한다.
+// 통째로 거부된다 — theme/lang/view 세 키만 담은 맵을 통으로 교체한다.
+// ★ 키 집합은 firestore.rules 의 validSettings() · i18n.js 의 okTheme/okLang/okView
+//   와 **셋 다 같아야** 한다. 어긋나면 화면은 멀쩡한데 저장만 조용히 거부된다.
 //
 // 세션이 없으면 조용히 넘어간다. 로그아웃 직후·탈퇴 직후처럼 state.user 는 아직
 // 남아 있는데 auth.currentUser 가 먼저 비는 순간이 있는데, 여기서 currentUser.uid
@@ -215,7 +221,7 @@ function watch(user) {
 const saveSettings = () =>
   auth.currentUser
     ? updateDoc(doc(db, 'users', auth.currentUser.uid),
-        { settings: { theme: SETTINGS.theme, lang: SETTINGS.lang } })
+        { settings: { theme: SETTINGS.theme, lang: SETTINGS.lang, view: SETTINGS.view } })
     : Promise.resolve();
 
 // ---------------------------------------------------------------- 할 일 쓰기

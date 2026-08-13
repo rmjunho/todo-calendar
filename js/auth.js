@@ -51,6 +51,9 @@ function prefRow(label, key, opts) {
 const THEME_OPTS = () => [['light', t('set.themeLight')], ['dark', t('set.themeDark')], ['system', t('set.themeSystem')]];
 // 언어 이름은 번역하지 않는다 — 읽을 수 없는 언어로 적히면 고를 수가 없다.
 const LANG_OPTS = [['ko', '한국어'], ['en', 'English']];
+// 첫 화면. 라벨은 하단 탭 바와 **같은 문자열**을 쓴다 (view.year/month/week/day) —
+// 설정에서 고른 이름과 화면 아래 탭 이름이 다르면 같은 것으로 안 읽힌다.
+const VIEW_OPTS = () => VIEWS.map((v) => [v, t('view.' + v)]);
 
 // state.users 는 관리자로 로그인했을 때만 채워진다 (users 컬렉션 스냅샷).
 const pendingUsers = () => state.users.filter((u) => u.status === 'pending');
@@ -376,6 +379,10 @@ function renderSettingsSheet() {
         esc(t('set.display')) + '</div>' +
       prefRow(t('set.theme'), 'theme', THEME_OPTS()) +
       prefRow(t('set.lang'), 'lang', LANG_OPTS) +
+      // ★ 지금 화면을 바꾸지 않는다 — **다음에 열 때** 처음 뜨는 화면이다.
+      //   지금 보는 화면은 아래 탭 바로 바꾼다. setPref 가 state.view 를 안 건드리는
+      //   것이 이 뜻이고, 눌린 칩 자체가 저장됐다는 표시다.
+      prefRow(t('set.view'), 'view', VIEW_OPTS()) +
 
       // 카테고리 관리 진입점. ★ 여기가 **유일한 입구**다 — 카테고리가 0개면 헤더의
       // 필터 칩 줄 자체가 안 그려지므로, 이 줄을 지우면 아무도 카테고리를 못 만든다.

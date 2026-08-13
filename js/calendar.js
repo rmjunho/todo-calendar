@@ -275,8 +275,10 @@ const goalDue = (g) => (g.scope !== 'month' ? t('goal.dueYear')
 // ---------------------------------------------------------------- state
 const now0 = new Date();
 const state = {
-  // 'year' | 'month' | 'week' | 'day'. 첫 화면은 설정에서 바꾼다 (SETTINGS.view).
-  view: 'month',
+  // 'year' | 'month' | 'week' | 'day'. 첫 화면은 설정값이다 (i18n.js 의 SETTINGS.view,
+  // 기본 'month'). i18n.js 가 먼저 로드돼 loadSettings() 를 이미 돌렸으므로 여기서
+  // 바로 읽을 수 있다. 로그인하면 원격 값이 이긴다 — firebase.js 가 덮어쓴다.
+  view: SETTINGS.view,
   cy: now0.getFullYear(),
   cm: now0.getMonth(),
   selected: fmt(now0),

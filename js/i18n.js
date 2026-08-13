@@ -14,13 +14,18 @@
 const SETTINGS_KEY = 'todo-cal-settings-v1';
 const THEMES = ['light', 'dark', 'system'];
 const LANGS = ['ko', 'en'];
+// 앱을 열었을 때 처음 뜨는 화면. ★ firestore.rules 의 validSettings() 와 **같은
+// 집합을 유지할 것** — 어긋나면 화면은 멀쩡한데 저장만 조용히 거부된다.
+// 배열 순서가 곧 설정 시트의 버튼 순서이자 하단 탭 바의 순서다.
+const VIEWS = ['year', 'month', 'week', 'day'];
 
 // 이 객체가 단일 소스다. state 에 넣지 않는 이유는 terms/privacy/delete-account
 // 페이지에 state 가 없기 때문 — 그 세 페이지도 같은 값을 읽어야 한다.
-const SETTINGS = { theme: 'system', lang: 'ko' };
+const SETTINGS = { theme: 'system', lang: 'ko', view: 'month' };
 
 const okTheme = (v) => THEMES.indexOf(v) >= 0;
 const okLang = (v) => LANGS.indexOf(v) >= 0;
+const okView = (v) => VIEWS.indexOf(v) >= 0;
 
 // localStorage 는 로그인 전 임시 저장소이자, Firestore 를 읽을 수 없는 정적
 // 페이지들이 설정을 알아내는 유일한 창구다. 로그인 후에도 계속 미러로 쓴다.
@@ -29,6 +34,7 @@ function loadSettings() {
   try { raw = JSON.parse(localStorage.getItem(SETTINGS_KEY)); } catch (e) { raw = null; }
   if (raw && okTheme(raw.theme)) SETTINGS.theme = raw.theme;
   if (raw && okLang(raw.lang)) SETTINGS.lang = raw.lang;
+  if (raw && okView(raw.view)) SETTINGS.view = raw.view;
 }
 
 // 검증을 통과한 키만 반영한다. 서버 값이든 사용자 클릭이든 같은 문을 지난다.
@@ -36,6 +42,7 @@ function setSettings(patch) {
   const p = patch || {};
   if (okTheme(p.theme)) SETTINGS.theme = p.theme;
   if (okLang(p.lang)) SETTINGS.lang = p.lang;
+  if (okView(p.view)) SETTINGS.view = p.view;
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(SETTINGS)); } catch (e) { /* 사파리 시크릿 등 */ }
   applyTheme();
 }
@@ -48,9 +55,14 @@ function adoptSettings(remote) {
   const r = remote || {};
   setSettings({
     theme: okTheme(r.theme) ? r.theme : SETTINGS.theme,
-    lang: okLang(r.lang) ? r.lang : SETTINGS.lang
+    lang: okLang(r.lang) ? r.lang : SETTINGS.lang,
+    view: okView(r.view) ? r.view : SETTINGS.view
   });
-  return okTheme(r.theme) && okLang(r.lang);
+  // ★ view 를 여기 넣었으므로, settings.view 가 없는 **기존 계정은 전부** false 를
+  //   받아 다음 로그인에 한 번 승격 저장된다. 의도한 동작이다(옛 계정의 theme/lang
+  //   승격과 같은 경로). 규칙이 아직 view 를 모르면 그 쓰기만 거부되고 로그인은
+  //   막히지 않는다 — 호출부가 console.warn 으로만 처리한다.
+  return okTheme(r.theme) && okLang(r.lang) && okView(r.view);
 }
 
 // ---------------------------------------------------------------- 테마 적용
@@ -302,6 +314,8 @@ const STR = {
     'set.themeDark': '어두운',
     'set.themeSystem': '기기 설정',
     'set.lang': '언어',
+    // 지금 보고 있는 화면이 아니라 **다음에 열 때** 처음 뜨는 화면이다.
+    'set.view': '첫 화면',
     'set.danger': '위험 구역',
     'set.adminNoDelete': '관리자 계정은 여기에서 삭제할 수 없습니다. 다른 관리자에게 요청하거나, ' +
       'Firebase 콘솔에서 직접 처리하세요.',
@@ -528,6 +542,7 @@ const STR = {
     'set.themeDark': 'Dark',
     'set.themeSystem': 'System',
     'set.lang': 'Language',
+    'set.view': 'First screen',
     'set.danger': 'Danger zone',
     'set.adminNoDelete': 'An administrator account cannot be deleted here. Ask another administrator, ' +
       'or remove it from the Firebase console.',
