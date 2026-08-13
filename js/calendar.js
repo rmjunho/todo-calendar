@@ -196,9 +196,21 @@ const BAR_H = 17, BAR_GAP = 2, BAR_ROW = BAR_H + BAR_GAP;
 //    아래 날짜 원의 인라인 스타일에서 온 값이다. 셋 중 하나를 바꾸면 여기도 바꿔야 한다.
 //    ?selftest 가 그려진 DOM 에서 '첫 막대의 top == 날짜 원의 bottom' 을 직접 잰다.
 const BAR_TOP = 35.5;
-// 월간에서 그리는 층의 최대 개수. 넘친 막대는 **버리지 않고** 그 날의 `+N개` 로 넘긴다.
+// 그리는 층의 최대 개수. 넘친 막대는 **버리지 않고** 그 날의 `+N개` 로 넘긴다.
 // 상한이 없으면 겹치는 주의 높이가 그대로 늘어난다 — 그걸 막으려고 종류 필터를 만든 것이다.
-const MONTH_LANES = 3;
+// 주간이 더 깊은 이유는 그 화면이 한 주만 보여 주는 자리라서다(막대 띠가 칸 위에 따로 있다).
+const MONTH_LANES = 3, WEEK_LANES = 6;
+
+// 실제로 그려지는 층 수. shown 이 비면 0 — 그러면 막대 층 자체를 안 그린다.
+const lanesOf = (shown) => (shown.length ? Math.max.apply(null, shown.map((r) => r.lane)) + 1 : 0);
+// 상한을 넘긴 막대가 요일마다 몇 개인지. 이 값이 그 날의 `+N개` 에 더해진다.
+function barOverflow(rows, cap) {
+  const extra = [0, 0, 0, 0, 0, 0, 0];
+  rows.forEach((r) => {
+    if (r.lane >= cap) for (let i = r.from; i <= r.to; i++) extra[i]++;
+  });
+  return extra;
+}
 
 // 막대 하나. 주 경계에서 잘린 쪽은 모서리를 죽이고 여백을 없애 칸 끝까지 붙인다 —
 // "여기서 끝난 것이 아니라 이어진다" 를 화살표 없이도 읽히게.
@@ -755,12 +767,8 @@ function render() {
       const ws = fmt(new Date(state.cy, state.cm, 1 - startOffset + w * 7));
       const rows = weekEventBars(items, ws);
       const shown = rows.filter((r) => r.lane < MONTH_LANES);
-      const lanes = shown.length ? Math.max.apply(null, shown.map((r) => r.lane)) + 1 : 0;
-      // 층 상한을 넘은 막대는 **버리지 않고** 그 날들의 `+N개` 에 더한다.
-      const extra = [0, 0, 0, 0, 0, 0, 0];
-      rows.forEach((r) => {
-        if (r.lane >= MONTH_LANES) for (let i = r.from; i <= r.to; i++) extra[i]++;
-      });
+      const lanes = lanesOf(shown);
+      const extra = barOverflow(rows, MONTH_LANES);
 
       let cells = '';
       for (let i = 0; i < 7; i++) {
@@ -816,18 +824,29 @@ function render() {
     // 주 시작은 일요일 고정이다. Intl 은 이름만 주고 배열 순서는 getDay() 색인.
     const wdow = dow();
     const ws = addDays(sel, -selD.getDay());
-    let cols = '';
+    // ★ 열 하나가 [머리 + 본문] 을 통째로 들던 것을 [머리 줄] · [막대 띠] · [본문 줄]
+    //   셋으로 갈랐다 — 기간 막대는 열을 가로지르므로 열 안에 넣을 수가 없다.
+    //   막대가 없으면 띠 자체를 안 그려서 예전과 같은 화면이 된다.
+    const byId = {};
+    items.forEach((it) => { byId[it.id] = it; });
+    const wrows = weekEventBars(items, ws);
+    const wshown = wrows.filter((r) => r.lane < WEEK_LANES);
+    const wlanes = lanesOf(wshown);
+    const wextra = barOverflow(wrows, WEEK_LANES);
+
+    let heads = '', cols = '';
     for (let i = 0; i < 7; i++) {
       const ds = addDays(ws, i);
       const d = parse(ds);
       const isToday = ds === today, isSel = ds === sel;
+      const edge = i === 0 ? 'none' : '.5px solid var(--separator)';
       // 월간(3개)과 같은 이유로 접는다 — 안 접으면 17개짜리 날이 칸을 713px 로 늘린다.
       // 5인 근거(실측): 칸 min-height 320 에 헤더 64 · 항목 33 · gap 4 · `+N개` 12 라
       // 넓은 화면은 5개=273(여유 47) · 6개=310(여유 10뿐) · 7개=347(초과)이고,
       // 390px 에서는 열이 51px 라 시간 라벨이 두 줄로 접혀 항목이 48 → 5개라도 348 이다.
       // 좁은 쪽에서 한 줄이 48px 이라 6으로 올리면 거기서 50px 을 더 먹는다.
       // ★ 항목 높이·글꼴·시간 라벨 형식을 바꾸면 이 5를 다시 재야 한다.
-      const list = itemsOn(items, ds, SHOW_COMPLETED);
+      const list = cellItems(items, ds);
       const pills = list.slice(0, 5).map((it) => {
         const p = pill(it, ds);
         return '<div ' + openAttr(p, ds) + ' style="cursor:pointer;padding:4px 7px;border-radius:6px;background:' +
@@ -839,23 +858,35 @@ function render() {
       // ★ data-day 를 여기 직접 단다. 월간은 부모 .cell 이 들고 있어 `+N개` 가 공짜로
       //   날짜 선택이 되지만, 주간은 헤더에만 있어서 본문에 두면 눌러도 안 먹는다.
       //   동작은 월간과 같다 — 그 날을 고르고 하단 리스트만 바뀐다(뷰 전환 아님).
-      const more = list.length > 5
+      const hid = Math.max(0, list.length - 5) + wextra[i];
+      const more = hid
         ? '<div data-day="' + ds + '" style="cursor:pointer;font-size:10px;color:var(--label-tertiary);padding:0 7px">' +
-          esc(t('cell.more', list.length - 5)) + '</div>' : '';
-      cols += '<div style="min-height:320px;border-left:' + (i === 0 ? 'none' : '.5px solid var(--separator)') + '">' +
-        '<div data-day="' + ds + '" style="cursor:pointer;text-align:center;padding:10px 4px 8px;border-bottom:.5px solid var(--separator)">' +
+          esc(t('cell.more', hid)) + '</div>' : '';
+      heads += '<div data-day="' + ds + '" style="cursor:pointer;text-align:center;padding:10px 4px 8px;' +
+          'border-left:' + edge + ';border-bottom:.5px solid var(--separator)">' +
           '<div style="font-size:11px;font-weight:600;color:' +
             (i === 0 ? '#FF3B30' : i === 6 ? 'var(--tint)' : 'var(--label-secondary)') + '">' + esc(wdow[i]) + '</div>' +
           '<div style="width:28px;height:28px;margin:4px auto 0;border-radius:50%;display:flex;align-items:center;' +
             'justify-content:center;font-size:15px;font-weight:600;background:' +
             (isToday ? 'var(--tint)' : isSel ? 'var(--fill-tertiary)' : 'transparent') +
-            ';color:' + (isToday ? '#fff' : 'var(--label)') + '">' + d.getDate() + '</div></div>' +
-        '<div style="padding:6px 5px;display:flex;flex-direction:column;gap:4px">' + pills + more + '</div></div>';
+            ';color:' + (isToday ? '#fff' : 'var(--label)') + '">' + d.getDate() + '</div></div>';
+      // min-height 는 예전 320(머리+본문)에서 머리 몫을 뺀 값이다. 머리 줄이 밖으로
+      // 나갔으니 여기 320 을 그대로 두면 열이 통째로 64px 길어진다.
+      // ★ 64 는 실측이다 — 위 머리 줄의 padding 10+8 · 라벨 11px/600 한 줄 · 여백 4 · 원 28.
+      //   글꼴이나 저 숫자들을 바꾸면 다시 재서 이 256 을 고칠 것('5개' 근거가 여기 걸려 있다).
+      cols += '<div style="min-height:256px;border-left:' + edge +
+        ';padding:6px 5px;display:flex;flex-direction:column;gap:4px">' + pills + more + '</div>';
     }
+    // 막대 띠. 열 위에 가로로 눕는 별도 줄이다 — 하루짜리 일정도 여기 뜬다.
+    const wbars = wlanes ? '<div data-bars="' + ws + '" style="display:grid;padding:5px 0;' +
+      'grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:repeat(' + wlanes + ',' + BAR_ROW +
+      'px);border-bottom:.5px solid var(--separator)">' +
+      wshown.map((r) => barHtml(r, byId[r.id])).join('') + '</div>' : '';
     // ★ minmax(0,1fr) 이라야 한다. 1fr 이면 긴 제목(.trunc = nowrap)의 min-content 가
     //   그 열을 밀어내 목·금·토가 화면 밖으로 나가고, overflow:hidden 이라 스크롤도 안 된다.
-    body += '<div class="card" style="border:.5px solid var(--separator);' +
-      'overflow:hidden;display:grid;grid-template-columns:repeat(7,minmax(0,1fr))">' + cols + '</div>';
+    const g7 = '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr))">';
+    body += '<div class="card" style="border:.5px solid var(--separator);overflow:hidden">' +
+      g7 + heads + '</div>' + wbars + g7 + cols + '</div></div>';
   }
 
   // -- day view -------------------------------------------------------------
