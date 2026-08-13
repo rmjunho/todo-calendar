@@ -1,6 +1,11 @@
 rules_version = '2';
 
-// 배포: Firebase 콘솔 → Firestore Database → 규칙 에 붙여넣고 "게시".
+// 배포: firebase deploy --only firestore:rules
+//   firebase.json 의 "rules": "firestore.rules" 가 이 파일을 가리킨다.
+//   콘솔(Firestore Database → 규칙)에 붙여넣어도 되지만, 한 조각만 끼우면 match 중첩이
+//   어긋나도 "게시" 직전까지 안 보인다 — 콘솔로 할 때는 전체를 갈아 끼울 것.
+// ⚠️ 배포 순서는 변경 성격에 따라 갈린다 (CONTEXT.md §0). 새 필드를 *요구*하는 규칙은
+//    코드를 먼저, 권한을 *추가*만 하는 규칙은 규칙을 먼저.
 service cloud.firestore {
   match /databases/{database}/documents {
 
