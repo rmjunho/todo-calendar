@@ -216,6 +216,16 @@ function exRow(it, ds, includeMemo) {
 
 const exRemainLabel = (n) => (n === 0 ? t('list.allDone') : t('list.remain', n));
 
+// ★ 필터가 걸린 채로 내보내면 itemsOn() 이 그 카테고리만 흘려 준다. 제목에 이름을
+//   안 붙이면 "2026년 8월" 인데 항목이 몇 개뿐인 이미지가 남의 메신저로 나가서
+//   왜 비어 보이는지 알 수 없다. 제목은 이 이미지의 신분이라 여기 붙인다.
+//   지워진 카테고리를 가리키는 필터는 firebase.js 가 이미 풀어 두므로, find 가 못
+//   찾으면 접미 없이 지나간다(원래 제목 그대로).
+const exTitle = (base) => {
+  const c = state.filter && state.cats.find((k) => k.id === state.filter);
+  return c ? base + ' · ' + c.name : base;
+};
+
 // 상세를 붙이고 최종 높이를 확정한다. `days` 의 행은 이미 `exRow` 를 지나왔으므로
 // ★ [메모 포함] 을 끄면 여기 들어오는 행에 `memo` 키가 없다 — 상세도 자동으로
 //   메모 없이 그려진다. 두 토글이 따로 놀지 않는 지점이다.
@@ -248,7 +258,7 @@ function exportModel(view, items, sel, cy, cm, includeMemo, includeDetail, inclu
     // 흐려 둔 맥락일 뿐이고, 제목이 "2026년 7월" 인데 8월 항목을 나열하면 어긋난다.
     return {
       view: view, layout: exAttachDetail(L, days.filter((d) => d.inMonth), includeDetail),
-      days: days, title: monthTitle(cy, cm), sub: exRemainLabel(left)
+      days: days, title: exTitle(monthTitle(cy, cm)), sub: exRemainLabel(left)
     };
   }
   if (view === 'week') {
@@ -265,7 +275,7 @@ function exportModel(view, items, sel, cy, cm, includeMemo, includeDetail, inclu
     const start = parse(ws), end = parse(addDays(ws, 6));
     return {
       view: view, layout: exAttachDetail(L, days, includeDetail), days: days,
-      title: monthTitle(start.getFullYear(), start.getMonth()),
+      title: exTitle(monthTitle(start.getFullYear(), start.getMonth())),
       sub: dateLabel(start) + ' – ' + dateLabel(end)
     };
   }
@@ -273,7 +283,7 @@ function exportModel(view, items, sel, cy, cm, includeMemo, includeDetail, inclu
   // 이미 아젠다 형식이라 상세를 붙이지 않는다 (토글도 안 보여 준다).
   const rows = itemsOn(items, sel, SHOW_COMPLETED).map((it) => exRow(it, sel, includeMemo));
   const L = exDayLayout(rows.map((r) => D_ROW + (r.memo ? D_MEMO : 0)));
-  return { view: view, layout: L, rows: rows, title: dayTitle(parse(sel)), sub: exRemainLabel(remain(rows)) };
+  return { view: view, layout: L, rows: rows, title: exTitle(dayTitle(parse(sel))), sub: exRemainLabel(remain(rows)) };
 }
 
 // ---------------------------------------------------------------- 그리기
@@ -308,7 +318,10 @@ function exClip(ctx, s, x, y, maxW, font, color, strike) {
 }
 
 function exHeader(ctx, C, m) {
-  exText(ctx, m.title, EX_PAD, 68, exFont(700, 46), C.label);
+  // ★ exText 가 아니라 exClip 이다. 제목에 카테고리 이름이 붙을 수 있게 되면서
+  //   길이가 데이터에 달렸고, exText 는 폭을 안 보므로 캔버스 밖으로 그려진다
+  //   (캔버스는 넘친 부분을 조용히 버린다 — 잘린 티도 안 난다).
+  exClip(ctx, m.title, EX_PAD, 68, EX_GRID, exFont(700, 46), C.label);
   exText(ctx, m.sub, EX_PAD, 116, exFont(600, 26), C.label2);
 }
 function exFooter(ctx, C, h) {

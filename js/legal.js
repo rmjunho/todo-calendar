@@ -94,7 +94,8 @@ const LEGAL = {
       <td>로그인 인증. Firebase Authentication에 <strong>해시 형태로만</strong> 저장되며
           운영자와 서비스는 <strong>원문을 보관하지 않고 확인할 수도 없습니다.</strong></td>
       <td>필수</td></tr>
-  <tr><td>할 일·일정 데이터<br>(제목, 날짜, 시간, 우선순위, 반복, 메모, 완료 여부)</td>
+  <tr><td>할 일·일정 데이터<br>(제목, 날짜, 시간, 카테고리, 반복, 메모, 완료 여부)<br>
+          및 이용자가 만든 <strong>카테고리 이름·색</strong></td>
       <td>서비스 제공(기록·조회·기기 간 동기화)</td><td>필수</td></tr>
   <tr><td>약관 동의 내역<br>(동의 항목, 버전, 시각, 나이 구분)</td>
       <td>동의 사실의 증빙, 만 14세 미만 이용자 확인</td><td>필수</td></tr>
@@ -152,8 +153,8 @@ const LEGAL = {
   <li>Firestore 보안 규칙으로 <strong>본인의 데이터에만</strong> 접근할 수 있도록
       서버에서 차단합니다. 이용자끼리는 서로의 할 일을 조회할 수 없습니다.</li>
   <li>운영자(관리자)는 <strong>계정 삭제(탈퇴) 처리를 위해</strong> 이용자의 할 일
-      데이터에 접근할 수 있는 권한을 가집니다. 이 권한은 삭제 처리 외의 목적으로
-      사용하지 않습니다.</li>
+      데이터와 <strong>카테고리 이름·색</strong>에 접근할 수 있는 권한을 가집니다.
+      이 권한은 삭제 처리 외의 목적으로 사용하지 않습니다.</li>
   <li>계정은 운영자 승인제로 운영되어 무단 가입을 차단합니다.</li>
 </ul>
 
@@ -272,7 +273,8 @@ them for any other purpose.</p>
       <td>Sign-in authentication. Stored <strong>only as a hash</strong> in Firebase Authentication;
           neither the operator nor the Service <strong>keeps or can read the original.</strong></td>
       <td>Required</td></tr>
-  <tr><td>To-do and schedule data<br>(title, date, time, priority, repeat, note, completion)</td>
+  <tr><td>To-do and schedule data<br>(title, date, time, category, repeat, note, completion)<br>
+          and the <strong>category names and colours</strong> the user creates</td>
       <td>Providing the Service (recording, viewing, syncing across devices)</td><td>Required</td></tr>
   <tr><td>Consent records<br>(items agreed, version, time, age bracket)</td>
       <td>Evidence of consent; identifying users under 14</td><td>Required</td></tr>
@@ -330,6 +332,7 @@ to, correction of, deletion of, or suspension of processing of the child's perso
   <li>Firestore security rules restrict access to <strong>your own data</strong>, enforced on the
       server. Users cannot read each other's to-dos.</li>
   <li>The operator (administrator) holds permission to access users' to-do data
+      and <strong>category names and colours</strong>
       <strong>in order to process account deletion</strong>. This permission is not used for any
       other purpose.</li>
   <li>Accounts are approval-based, which blocks unauthorised sign-ups.</li>
