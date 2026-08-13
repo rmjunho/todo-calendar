@@ -443,8 +443,10 @@ function render() {
           icon('chevron.up.chevron.down', 17, 'var(--label-tertiary)') +
         '</div>' +
       '</button>' + (state.jump ? renderJumpPopover() : '') + '</div>' +
+      // ★ 년/월/주/일 선택은 여기 없다 — 화면 아래 떠 있는 캡슐 바로 옮겼다.
+      //   엄지가 닿는 자리이기도 하고, 좁은 화면에서 헤더가 두 줄로 접히던 것도
+      //   같이 사라진다. 아래 'floating tab bar' 블록이 같은 segments 를 쓴다.
       '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
-        '<div class="seg-wrap">' + segments + '</div>' +
         '<div data-raise="glass" style="display:flex;gap:8px;align-items:center">' +
           '<button class="btn btn-glass btn-sm btn-icon" data-nav="prev" aria-label="' + esc(t('nav.prev')) + '">' + icon('chevron.left', 15) + '</button>' +
           '<button class="btn btn-glass btn-sm" data-nav="today">' + esc(t('nav.today')) + '</button>' +
@@ -781,14 +783,23 @@ function render() {
 
   html += '</div>'; // /page
 
-  // -- floating add button --------------------------------------------------
+  // -- floating tab bar + add button ----------------------------------------
   // ★ 연간 뷰에서는 **목표**를 추가한다. 그 화면에 할 일을 넣으면 어느 날짜에
   //   붙는지 알 수 없고(연간 뷰에는 선택한 날이 없다), 넣어도 화면에 안 보인다.
   const addYear = state.view === 'year';
-  html += '<div data-raise="tint" style="position:fixed;right:24px;bottom:28px;z-index:60">' +
-    '<button class="btn btn-prominent btn-lg btn-icon" data-act="' + (addYear ? 'goalNew' : 'open') +
-    '" aria-label="' + esc(t(addYear ? 'goal.add' : 'item.add')) + '">' +
-    icon('plus', 20) + '</button></div>';
+  // + 는 캡슐 **밖**의 원이다. 안에 넣으면 '다섯 번째 뷰'처럼 보인다.
+  // ★ pointer-events 를 바깥 래퍼에서 끄고 두 조각에서만 켠다 — 래퍼는 가운데
+  //   정렬을 위해 화면 폭을 다 차지하므로, 안 끄면 하단 띠 전체가 탭을 먹어
+  //   그 자리에 있는 할 일 줄이 안 눌린다.
+  // ★ min-width:0 + overflow-x:auto — en 처럼 라벨이 길어져 캡슐이 좁은 화면에
+  //   안 들어가면 캡슐 **안에서** 가로로 흐른다(페이지는 안 밀린다).
+  html += '<div style="position:fixed;left:0;right:0;bottom:22px;z-index:60;display:flex;' +
+    'justify-content:center;align-items:center;gap:12px;padding:0 16px;pointer-events:none">' +
+    '<div class="tabbar" style="pointer-events:auto;min-width:0;overflow-x:auto">' + segments + '</div>' +
+    '<span data-raise="tint" style="pointer-events:auto;display:flex;flex:none">' +
+      '<button class="btn btn-prominent btn-lg btn-icon" data-act="' + (addYear ? 'goalNew' : 'open') +
+      '" aria-label="' + esc(t(addYear ? 'goal.add' : 'item.add')) + '">' +
+      icon('plus', 20) + '</button></span></div>';
 
   // -- form sheet -----------------------------------------------------------
   if (state.showForm) html += renderSheet();

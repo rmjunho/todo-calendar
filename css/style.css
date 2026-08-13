@@ -108,6 +108,17 @@ input:focus,textarea:focus{outline:2px solid var(--tint);outline-offset:-1px}
   background-color:var(--bg-secondary);background-image:var(--tc-sheen);box-shadow:var(--tc-raise-sm)}
 .seg:active{transform:scale(var(--press-scale))}
 .seg-on{color:var(--label);background-color:var(--bg);box-shadow:var(--tc-raise)}
+/* 하단에 떠 있는 탭 바(년/월/주/일). .seg-wrap 은 '눌린 홈'이라 그림자가 안쪽으로
+   나는데, 이건 공중에 뜬 판이라 밖으로 나야 한다 — 재질은 .picker-menu 와 같은
+   두꺼운 머티리얼 + 블러를 그대로 쓰고 모양만 캡슐이다. 알맹이는 .seg / .seg-on
+   그대로라 상태 표현에 새 규칙이 없다. */
+.tabbar{display:flex;gap:3px;padding:4px;border-radius:var(--radius-capsule);
+  background-color:var(--material-thick);
+  -webkit-backdrop-filter:blur(var(--blur-thick)) saturate(var(--backdrop-saturate));
+  backdrop-filter:blur(var(--blur-thick)) saturate(var(--backdrop-saturate));
+  box-shadow:inset 0 0 0 .5px var(--separator),var(--shadow-3)}
+/* 엄지로 누르는 자리라 헤더에 있던 32px 보다 키운다 (iOS 최소 타깃 44 에 맞춤). */
+.tabbar .seg{height:44px;padding:0 16px;font-size:14px}
 .pri{display:flex;align-items:center;gap:6px;border:none;cursor:pointer;padding:0 14px;height:36px;
   border-radius:999px;font-family:inherit;font-size:13px;font-weight:600;transition:all .15s ease;
   background-image:var(--tc-sheen);box-shadow:var(--tc-raise-sm)}
