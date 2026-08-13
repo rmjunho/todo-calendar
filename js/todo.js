@@ -6,14 +6,32 @@
 // state.items 로 흘려 넣는다 — 여기서는 쓰기만 한다.
 // ★ 새 항목의 기본 카테고리는 **지금 걸린 필터**다. 필터가 '업무' 인데 새 할 일이
 //   '없음' 으로 태어나면 저장하자마자 화면에서 사라진다(필터가 걸러낸다).
-const blankForm = (date) => ({ title: '', date, hasTime: false, time: '07:00', end: '08:00',
+// ★ 종류 기본값도 같은 이유로 지금 걸린 종류 필터다 — '일정' 만 보는 화면에서 새
+//   항목이 할 일로 태어나면 저장하자마자 화면에서 사라진다.
+const blankForm = (date, kind) => ({ title: '', date, kind: kind || 'todo',
+  hasSpan: false, endDate: date, hasTime: false, time: '07:00', end: '08:00',
   categoryId: state.filter || '', repeat: 'none', days: [], memo: '' });
+
+// 폼 → 기간(일). 일정이 아니거나 '여러 날' 이 꺼져 있으면 늘 1이다 — span 은 일정 전용이다.
+// 종료가 시작보다 빠르면 0 이하가, 날짜가 비면 NaN 이 나오고 spanOk() 가 저장을 막는다.
+const formSpan = (f) => (f.kind === 'event' && f.hasSpan ? daysBetween(f.date, f.endDate) + 1 : 1);
+// 회차가 자기 자신과 겹치면 안 된다 — '매주 8일짜리' 는 다음 회차와 포개져서
+// occStart() 의 "한 날을 덮는 회차는 최대 하나" 전제가 깨진다(막대가 사라지거나 겹친다).
+// 반복 안 함이면 REP_GAP 이 Infinity 라 상한이 없다.
+const spanOk = (f) => { const n = formSpan(f); return n >= 1 && n <= REP_GAP[f.repeat || 'none']; };
+// 아래 둘은 renderSheet 와 syncSheet 가 **같이** 쓴다 — 두 곳이 문자열을 따로 만들면
+// 입력하는 동안만 다른 문구가 뜬다.
+const spanLabel = (f) => { const n = formSpan(f); return n > 1 ? t('form.spanDays', n) : t('form.spanOne'); };
+const spanWarn = (f) => (formSpan(f) < 1 ? t('form.spanBefore')
+  : t('form.spanTooLong', REP_GAP[f.repeat || 'none']));
 
 // ★ 자정 넘김을 막는다. 종료가 시작보다 빠르거나 같으면 저장하지 않는다 —
 //   23:00 → 01:00 을 허용하면 "그 날 안"이라는 전제가 깨져서 반복 판정·정렬·
 //   일간 뷰가 전부 이틀에 걸친 항목을 다뤄야 한다. 'HH:MM' 은 사전순이 곧
 //   시간순이라 문자열 비교로 충분하다 (Date 를 만들면 타임존이 끼어든다).
-const endOk = (f) => !f.hasTime || !f.end || f.end > f.time;
+// ★ 여러 날 일정은 예외다 — 시작 시각은 첫날, 종료 시각은 **마지막 날**에 붙어서
+//   09:00 시작 / 08:00 종료도 자정을 안 넘는다. 하루로 줄이면 다시 걸린다.
+const endOk = (f) => !f.hasTime || !f.end || formSpan(f) > 1 || f.end > f.time;
 // 폼 → 저장값. 하루 종일이면 둘 다 비운다. weekly 의 days 와 같은 방식으로
 // endTime 은 **늘 쓴다** — 옛 문서엔 키가 없고, 읽는 쪽이 `|| ''` 로 폴백한다.
 const formTimes = (f) => (f.hasTime ? { time: f.time, endTime: f.end || '' } : { time: '', endTime: '' });
@@ -22,7 +40,8 @@ const formTimes = (f) => (f.hasTime ? { time: f.time, endTime: f.end || '' } : {
 //   마지막 가드가 **전부 이걸 본다**. 예전에는 입력 위임이 제목만 따로 검사해서,
 //   종료 < 시작인 상태에서 제목을 한 글자 치면 버튼이 다시 켜졌다 — 화면과 실제
 //   저장 판정이 어긋나면 "눌러도 아무 일이 없는 진한 파란 버튼"이 된다.
-const formOk = (f) => !!f.title.trim() && !(f.repeat === 'weekly' && !f.days.length) && endOk(f);
+const formOk = (f) => !!f.title.trim() && !(f.repeat === 'weekly' && !f.days.length)
+  && endOk(f) && spanOk(f);
 
 // 입력 위임은 render() 를 부르지 않는다 — 입력이 uncontrolled 라야 캐럿이 살고,
 // type="date"/"time" 은 **반쯤 입력한 상태에서도** input 이벤트를 쏘기 때문에 다시
@@ -38,6 +57,15 @@ function syncSheet() {
   if (wd) wd.textContent = f.date ? '(' + dow()[parse(f.date).getDay()] + ')' : '';
   const warn = document.getElementById('formEndWarn');
   if (warn) warn.hidden = endOk(f);
+  // 종료 날짜도 uncontrolled 라 여기서 파생 표시를 맞춘다 — 'N일간' 과 경고 문구.
+  const sd = document.getElementById('formSpanDays');
+  if (sd) sd.textContent = spanLabel(f);
+  const sw = document.getElementById('formSpanWarn');
+  if (sw) {
+    const bad = !spanOk(f);
+    sw.hidden = !bad;
+    if (bad) sw.textContent = spanWarn(f);
+  }
 }
 // 요일 반복의 기본값 = 시작일의 요일 하나. 아무것도 안 고치면 예전 '매주' 와
 // 결과가 같다. 색인은 getDay() 기준 0=일 (주 시작 일요일 고정 — CONTEXT §5).
@@ -108,15 +136,46 @@ function renderSheet() {
     '<input class="field" type="time" data-f="' + k + '" value="' + esc(v) +
       '" style="padding:11px 14px;font-size:15px"></div>';
 
+  const ev = f.kind === 'event';
   const timeBlock = f.hasTime
     ? '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
         timeField('time', f.time, 'form.timeStart') + timeField('end', f.end, 'form.timeEnd') + '</div>' +
       // 안내는 늘 그려 두고 hidden 만 토글한다 — syncSheet() 가 render() 없이
       // 껐다 켤 수 있어야 입력 도중에도 바로 따라온다.
       '<div id="formEndWarn"' + (endOk(f) ? ' hidden' : '') +
-        ' style="font-size:12px;color:#FF3B30;margin-top:6px">' + esc(t('form.endBeforeStart')) + '</div>'
+        ' style="font-size:12px;color:#FF3B30;margin-top:6px">' + esc(t('form.endBeforeStart')) + '</div>' +
+      // 여러 날 일정에서는 두 시각이 **다른 날**에 붙는다. 안 적으면 '09:00–18:00' 이
+      // 매일 반복되는 것으로 읽힌다.
+      (ev && f.hasSpan ? '<div style="font-size:12px;color:var(--label-tertiary);margin-top:6px">' +
+        esc(t('form.evTimeHint')) + '</div>' : '')
     : '<div style="padding:11px 14px;font-size:14px;color:var(--label-tertiary);background:var(--fill-quaternary);border-radius:12px">' +
       esc(t('item.allDay')) + '</div>';
+
+  // 종류. 할 일과 일정은 달력에서 다르게 그려지므로(알약 / 막대) 제일 먼저 고른다.
+  const kindRow = '<div class="seg-wrap" role="group" aria-label="' + esc(t('form.kind')) +
+    '" style="margin:12px 0 2px">' +
+    ['todo', 'event'].map((k) =>
+      '<button class="seg' + (f.kind === k ? ' seg-on' : '') + '" data-fkind="' + k +
+      '" aria-pressed="' + (f.kind === k) + '" style="flex:1;min-width:0">' +
+      esc(t('kind.' + k)) + '</button>').join('') + '</div>';
+
+  // 기간. 일정에서만 그린다 — 할 일은 늘 하루다(span 은 일정 전용, CONTEXT §3).
+  // 시간 토글과 같은 자리·같은 모양이다: 스위치 하나 + 켜면 나오는 칸.
+  const spanBlock = !ev ? '' :
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 6px">' +
+      '<span style="font-size:13px;font-weight:600;color:var(--label-secondary)">' + esc(t('form.span')) + '</span>' +
+      '<button class="sw" role="switch" data-act="toggleSpan" aria-checked="' + f.hasSpan +
+        '" aria-label="' + esc(t('form.spanToggle')) + '"><span></span></button></div>' +
+    (f.hasSpan
+      ? '<div style="display:flex;align-items:center;gap:10px">' +
+          '<input class="field" type="date" data-f="endDate" value="' + esc(f.endDate) +
+            '" style="flex:1;min-width:0;padding:11px 14px;font-size:15px">' +
+          '<span id="formSpanDays" style="flex:none;font-size:13px;font-weight:600;color:var(--label-secondary)">' +
+            esc(spanLabel(f)) + '</span></div>' +
+        '<div id="formSpanWarn"' + (spanOk(f) ? ' hidden' : '') +
+          ' style="font-size:12px;color:#FF3B30;margin-top:6px">' + esc(spanWarn(f)) + '</div>'
+      : '<div style="padding:11px 14px;font-size:14px;color:var(--label-tertiary);background:var(--fill-quaternary);border-radius:12px">' +
+        esc(t('form.spanOne')) + '</div>');
 
   return '<div data-act="close" style="position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.35);animation:tcFade .2s ease-out"></div>' +
     '<div style="position:fixed;left:0;right:0;bottom:0;z-index:101;display:flex;justify-content:center;pointer-events:none">' +
@@ -128,7 +187,7 @@ function renderSheet() {
         '<h3 style="margin:0;font-size:19px;font-weight:700">' + esc(t(state.editingId ? 'form.edit' : 'form.new')) + '</h3>' +
         '<button data-act="close" aria-label="' + esc(t('a.close')) + '" style="border:none;cursor:pointer;width:30px;height:30px;border-radius:50%;' +
           'background:var(--fill-tertiary);color:var(--label-secondary);display:flex;align-items:center;justify-content:center;padding:0">' +
-          icon('xmark', 14) + '</button></div>' +
+          icon('xmark', 14) + '</button></div>' + kindRow +
 
       '<div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">' + esc(t('form.title')) + '</div>' +
       '<input class="field" type="text" data-f="title" placeholder="' + esc(t('form.titlePh')) + '" value="' + esc(f.title) +
@@ -146,6 +205,7 @@ function renderSheet() {
       // value 는 'YYYY-MM-DD' 그대로다. type="date" 가 요구하는 형식이자 저장 키의
       // 형식이라 Intl 을 끼우면 안 된다 — 표시 형식은 브라우저가 로케일에 맞춘다.
       '<input class="field" type="date" data-f="date" value="' + esc(f.date) + '" style="padding:11px 14px;font-size:15px">' +
+      spanBlock +
 
       '<div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 6px">' +
         '<span style="font-size:13px;font-weight:600;color:var(--label-secondary)">' + esc(t('form.time')) + '</span>' +
@@ -179,12 +239,19 @@ function renderSheet() {
 // ---------------------------------------------------------------- interaction
 const app = document.getElementById('app');
 
-function openForm(id, ds) {
+function openForm(id, ds, kind) {
   if (id) {
     const it = state.items.find((x) => x.id === id);
     if (!it) return;
     state.editingId = id;
-    state.form = { title: it.title, date: ds || it.date, hasTime: !!it.time, time: it.time || '07:00',
+    state.form = { title: it.title, date: ds || it.date,
+      // kind 가 없는 옛 문서는 할 일이다 (isEvent 의 폴백과 같다).
+      kind: isEvent(it) ? 'event' : 'todo',
+      hasSpan: spanOf(it) > 1,
+      // ★ 기준은 it.date 가 아니라 **연 날짜**다. 반복 일정을 세 번째 회차에서
+      //   열면 ds 가 그 회차의 시작일이고, 종료도 그 회차 기준이라야 맞는다.
+      endDate: addDays(ds || it.date, spanOf(it) - 1),
+      hasTime: !!it.time, time: it.time || '07:00',
       // endTime 은 옛 항목에 아예 없다 — 없으면 '' 로 열려 '종료 없음' 이 그대로
       // 유지된다. 하루 종일이던 항목의 시간을 켜면 새 항목과 같은 07:00–08:00 에서
       // 시작한다 (그 항목에는 지울 종료 시간이 애초에 없다).
@@ -200,7 +267,7 @@ function openForm(id, ds) {
       memo: it.memo || '' };
   } else {
     state.editingId = null;
-    state.form = blankForm(state.selected);
+    state.form = blankForm(state.selected, kind);
   }
   state.showForm = true;
   state.repeatOpen = false;
@@ -225,6 +292,9 @@ function saveForm() {
     // weekly 가 아니면 []. done/doneDates 와 같은 방식이다: 필드는 늘 있고
     // 어느 쪽을 읽을지는 repeat 이 정한다 (occursOn 은 weekly 에서만 days 를 본다).
     days: f.repeat === 'weekly' ? f.days.slice().sort((a, b) => a - b) : [],
+    // 종류·기간. 읽는 쪽에 폴백이 있지만(kind 없음=할 일, span 없음=하루) 쓸 때는
+    // days/endTime 과 같은 방식으로 **늘 둘 다** 쓴다. 할 일이면 span 은 언제나 1이다.
+    kind: f.kind, span: formSpan(f),
     memo: (f.memo || '').trim() });
   // 새 항목의 id 는 Firestore 가 만든다 — 기기 간 충돌이 없고, 쓰기를 기다리지
   // 않고도 화면에 먼저 넣을 수 있다.
@@ -238,10 +308,11 @@ function saveForm() {
   state.showForm = false;
   state.editingId = null;
   state.form = null;
+  // ★ 새 항목의 쓰기값을 필드마다 손으로 적지 않는다. 예전에는 그렇게 적혀 있었는데
+  //   base 에 필드를 하나 늘릴 때마다 여기를 같이 안 고치면 **새 항목만** 그 필드가
+  //   빠진 채 저장된다(kind·span 을 붙이면서 실제로 걸릴 뻔했다). base 가 한 소스다.
   commit(items, () => fb.saveTodo(id, editing ? base
-    : { title: fresh.title, date: fresh.date, time: fresh.time, endTime: fresh.endTime,
-        categoryId: fresh.categoryId, repeat: fresh.repeat, days: fresh.days, memo: fresh.memo,
-        done: false, doneDates: [] }));
+    : Object.assign({}, base, { done: false, doneDates: [] })));
 }
 
 // ---------------------------------------------------------------- 카테고리 시트
@@ -662,6 +733,13 @@ app.addEventListener('click', (e) => {
   if ((el = hit('[data-gscope]'))) { state.goalDraft.scope = el.dataset.gscope; return render(); }
   if ((el = hit('[data-gm]'))) { state.goalDraft.m = Number(el.dataset.gm); return render(); }
   if ((el = hit('[data-gcat]'))) { state.goalDraft.categoryId = el.dataset.gcat; return render(); }
+  // 종류 seg(할 일 / 일정). 할 일로 돌아가면 기간을 끈다 — span 은 일정 전용이라
+  // 켠 채로 두면 화면에는 안 보이는데 저장값에는 남는다.
+  if ((el = hit('[data-fkind]'))) {
+    state.form.kind = el.dataset.fkind;
+    if (state.form.kind !== 'event') state.form.hasSpan = false;
+    return render();
+  }
   if ((el = hit('[data-repeat]'))) {
     state.form.repeat = el.dataset.repeat;
     // '매주' 를 고르면 시작일 요일 하나가 켜진 채로 열린다 — 아무것도 더 안 고르고
@@ -719,7 +797,9 @@ app.addEventListener('click', (e) => {
       case 'jumpToday': return jumpNow();
       case 'expShare': return shareImage();
       case 'expSave': return saveImage();
-      case 'open': return openForm(null);
+      // ★ '일정' 만 보고 있으면 + 는 일정을 만든다 — blankForm 의 카테고리 기본값과
+      //   같은 이유다. 할 일로 태어나면 저장하자마자 지금 화면에서 사라진다.
+      case 'open': return openForm(null, null, state.kind === 'event' ? 'event' : 'todo');
       case 'close': return closeForm();
       case 'save': return saveForm();
       case 'delete': {
@@ -730,6 +810,14 @@ app.addEventListener('click', (e) => {
         return commit(state.items.filter((it) => it.id !== id), () => fb.removeTodo(id));
       }
       case 'toggleTime': state.form.hasTime = !state.form.hasTime; return render();
+      case 'toggleSpan': {
+        const f = state.form;
+        f.hasSpan = !f.hasSpan;
+        // 켤 때 종료가 시작보다 앞이면(처음 켜면 둘이 같다) 다음 날로 맞춘다 —
+        // 스위치를 켜자마자 빨간 경고가 뜨는 화면은 고장으로 읽힌다.
+        if (f.hasSpan && f.date && !(f.endDate > f.date)) f.endDate = addDays(f.date, 1);
+        return render();
+      }
       case 'repeatToggle': state.repeatOpen = !state.repeatOpen; return render();
     }
   }

@@ -97,6 +97,9 @@ const pad = (n) => String(n).padStart(2, '0');
 const fmt = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
 const parse = (s) => { const p = s.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); };
 const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate() + n); return fmt(d); };
+// b - a 의 일수. 서머타임으로 하루가 23·25시간이 되는 나라에서도 반올림이 흡수한다.
+// 날짜가 비었거나 이상하면 NaN 이 나온다 — 부르는 쪽(spanOk)이 그걸로 저장을 막는다.
+const daysBetween = (a, b) => Math.round((parse(b) - parse(a)) / 86400000);
 
 // timeLabel() 은 i18n.js 로 옮겼다 — 오전/오후는 로케일 문자열이라
 // Intl.DateTimeFormat 이 준다. 여기 남은 fmt/parse 는 데이터 키 전용이다.
