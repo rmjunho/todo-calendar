@@ -1650,13 +1650,30 @@ if (location.search.includes('selftest')) {
   // 하단 캡슐 바. 헤더에 있던 사본이 남아 있으면 같은 탭이 두 벌 그려진다.
   state.view = 'month'; render();
   app5 = document.getElementById('app');
-  const bar = app5.querySelector('.tabbar');
+  let bar = app5.querySelector('.tabbar');
   eq([...bar.querySelectorAll('[data-view]')].map((b) => b.dataset.view).join(), 'year,month,week,day',
     'the bottom bar carries the four views, year first');
   eq(app5.querySelectorAll('[data-view]').length, 4,
     'and they exist exactly once — the header copy is gone');
   ok(!bar.querySelector('[data-act]'),
     'the + sits outside the capsule, not inside it as a fifth tab');
+  eq(bar.querySelectorAll('.seg > [aria-hidden="true"] svg').length, 4,
+    'every tab carries an icon, and it is hidden from screen readers so the label is not read twice');
+  // ★ 명시도 함정. `.seg-on`(0,1,0) 은 `.tabbar .seg`(0,2,0) 의 투명 배경을 못 이긴다 —
+  //   `.tabbar` 를 안 붙이면 **고른 탭의 tint 판이 조용히 사라지고** 넷이 똑같아 보인다.
+  //   색을 리터럴로 적지 않는다(테마·색 토큰이 바뀌면 낡는다). 다른지만 본다.
+  const onBg = getComputedStyle(bar.querySelector('.seg-on')).backgroundColor;
+  const offBg = getComputedStyle([...bar.querySelectorAll('.seg')]
+    .find((s) => !s.classList.contains('seg-on'))).backgroundColor;
+  ok(onBg !== offBg, 'the selected tab is filled and the others are not', onBg + ' vs ' + offBg);
+  ok(/(, *0\)|\/ *0\))/.test(offBg) || offBg === 'transparent',
+    'an unselected tab has no chip behind it at all', offBg);
+  // 아이콘을 눌러도 탭이 먹혀야 한다 — 위임이 closest() 라 SVG 자식에서도 올라온다.
+  bar.querySelector('[data-view="week"] svg').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  eq(state.view, 'week', 'tapping the icon inside a tab switches the view, not just the label');
+  state.view = 'month'; render();
+  app5 = document.getElementById('app');
+  bar = app5.querySelector('.tabbar');
   eq(bar.parentElement.querySelector('.btn').dataset.act, 'open',
     'in a calendar view the + adds a to-do');
   state.view = 'year'; render();

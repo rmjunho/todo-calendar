@@ -40,8 +40,27 @@ function repLabel(k, days) {
 }
 const SHOW_COMPLETED = true;
 
+// 하단 탭 바의 달력 아이콘 넷은 **같은 몸통**(테두리 + 머리줄 + 고리 둘)에 속만 다르다.
+// 몸통을 한 번만 적어 두면 넷의 획 굵기·모서리·비율이 어긋날 수가 없다 — 넷이 나란히
+// 붙어 있어서 1px 만 달라도 눈에 띈다.
+const CAL_BODY =
+  '<rect x="3" y="4.5" width="18" height="16.5" rx="3.5" fill="none" stroke="currentColor" stroke-width="1.7"/>' +
+  '<path d="M3 9.5h18M8 2.6v3.4M16 2.6v3.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>';
+
 // SF-Symbols-style glyphs, lifted verbatim from the design system's Icon.jsx
 const GLYPHS = {
+  // 년 = 한 해 전체를 가리키는 별. 월/주/일이 '얼마나 넓은 칸이냐'로 갈리는 데 반해
+  // 년만 성격이 달라서(목표 전용 화면) 격자가 아니라 표식을 넣는다.
+  'calendar.year': CAL_BODY +
+    '<path d="M12 11.6l1 2.2 2.2 1-2.2 1-1 2.2-1-2.2-2.2-1 2.2-1z" fill="currentColor"/>',
+  // 월 = 칸이 여럿, 주 = 한 줄, 일 = 한 칸. 채운 넓이가 곧 기간의 넓이다.
+  'calendar.month': CAL_BODY +
+    '<g fill="currentColor"><rect x="6.2" y="12" width="3" height="2.6" rx="1"/>' +
+    '<rect x="10.5" y="12" width="3" height="2.6" rx="1"/><rect x="14.8" y="12" width="3" height="2.6" rx="1"/>' +
+    '<rect x="6.2" y="16.2" width="3" height="2.6" rx="1"/><rect x="10.5" y="16.2" width="3" height="2.6" rx="1"/>' +
+    '<rect x="14.8" y="16.2" width="3" height="2.6" rx="1"/></g>',
+  'calendar.week': CAL_BODY + '<rect x="6.2" y="13.8" width="11.6" height="3.4" rx="1.7" fill="currentColor"/>',
+  'calendar.day': CAL_BODY + '<rect x="9.6" y="12.6" width="4.8" height="5.8" rx="1.7" fill="currentColor"/>',
   'checkmark': '<path d="M5 12.5l4.2 4.3L19 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>',
   'xmark': '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>',
   'plus': '<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>',
@@ -411,10 +430,16 @@ function render() {
     : monthTitle(selD.getFullYear(), selD.getMonth());
   const todayLabel = t('hdr.today', shortDay(todayD));
 
+  // 하단 탭 바 넷. 아이콘 + 라벨 두 줄이다.
+  // ★ svg 를 aria-hidden 으로 감싼다 — icon() 이 role="img" aria-label="calendar.month"
+  //   를 달고 나오는데, 바로 옆에 '월' 이라는 글자가 이미 있어서 안 감추면 스크린
+  //   리더가 "calendar.month, 월" 로 두 번 읽는다.
   const segments = ['year', 'month', 'week', 'day'].map((k) => {
     const on = state.view === k;
-    return '<button class="seg' + (on ? ' seg-on' : '') + '" data-view="' + k + '">' +
-      esc(t('view.' + k)) + '</button>';
+    return '<button class="seg' + (on ? ' seg-on' : '') + '" data-view="' + k +
+      '" aria-pressed="' + on + '">' +
+      '<span aria-hidden="true" style="display:flex">' + icon('calendar.' + k, 21) + '</span>' +
+      '<span>' + esc(t('view.' + k)) + '</span></button>';
   }).join('');
 
   const isAdmin = state.user.role === 'admin';
@@ -796,7 +821,7 @@ function render() {
   // ★ min-width:0 + overflow-x:auto — en 처럼 라벨이 길어져 캡슐이 좁은 화면에
   //   안 들어가면 캡슐 **안에서** 가로로 흐른다(페이지는 안 밀린다).
   html += '<div style="position:fixed;left:0;right:0;bottom:22px;z-index:60;display:flex;' +
-    'justify-content:center;align-items:center;gap:12px;padding:0 16px;pointer-events:none">' +
+    'justify-content:center;align-items:center;gap:12px;padding:0 10px;pointer-events:none">' +
     '<div class="tabbar" style="pointer-events:auto;min-width:0;overflow-x:auto">' + segments + '</div>' +
     '<span data-raise="tint" style="pointer-events:auto;display:flex;flex:none">' +
       '<button class="btn btn-prominent btn-lg btn-icon" data-act="' + (addYear ? 'goalNew' : 'open') +

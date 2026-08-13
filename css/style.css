@@ -112,20 +112,31 @@ input:focus,textarea:focus{outline:2px solid var(--tint);outline-offset:-1px}
    나는데, 이건 공중에 뜬 판이라 밖으로 나야 한다 — 재질은 .picker-menu 와 같은
    두꺼운 머티리얼 + 블러를 그대로 쓰고 모양만 캡슐이다. 알맹이는 .seg / .seg-on
    그대로라 상태 표현에 새 규칙이 없다. */
-.tabbar{display:flex;gap:3px;padding:4px;border-radius:var(--radius-capsule);
+.tabbar{display:flex;gap:8px;padding:5px 7px;border-radius:var(--radius-capsule);
   background-color:var(--material-thick);
   -webkit-backdrop-filter:blur(var(--blur-thick)) saturate(var(--backdrop-saturate));
   backdrop-filter:blur(var(--blur-thick)) saturate(var(--backdrop-saturate));
   box-shadow:inset 0 0 0 .5px var(--separator),var(--shadow-3)}
-/* 엄지로 누르는 자리라 헤더에 있던 32px 보다 키운다 (iOS 최소 타깃 44 에 맞춤).
-   ★ padding 12 · min-width 44 는 실측값이다. 360px(갤럭시 다수)에서 캡슐이 쓸 수
-   있는 폭은 360 - 16×2(래퍼 패딩) - 12(간격) - 50(+ 원) = 266 이고,
-     en  padding 16 → 277 필요 (11px 초과, 'Day' 가 잘려 스크롤됨)
-         padding 14 → 261 (여유 5px — 폰트가 폴백으로 바뀌면 다시 넘친다)
-         padding 12 → 245 (여유 21px)  ← 채택
-     ko  1글자 라벨이라 padding 만으로는 36px 뿐 → min-width 로 44 를 보장한다.
-   ★ 라벨·글꼴·글자 크기·+ 버튼 크기를 바꾸면 다시 잴 것. */
-.tabbar .seg{height:44px;min-width:44px;padding:0 12px;font-size:14px}
+/* 아이콘 위, 라벨 아래. ★ 안 고른 탭은 **칩이 아니다** — 배경도 그림자도 없앤다.
+   .seg 원본은 넷이 다 도드라진 칩이라 서로 맞닿아 답답해 보였다. 고른 하나만
+   옅은 tint 판을 깔면 여백이 실제로 안 늘어도 넉넉해 보이고, 지금 어디인지도
+   한눈에 읽힌다. 색 대비도 여기서 난다(안 고른 것 = tertiary, 고른 것 = tint).
+   ★ .tabbar .seg-on 은 .seg-on 보다 명시도가 높아야 한다 — .seg-on(0,1,0) 은
+   .tabbar .seg(0,2,0) 를 못 이겨서 배경이 도로 칩이 된다.
+
+   ★ 크기는 실측값이다. 360px(갤럭시 다수)에서 캡슐이 쓸 수 있는 폭은
+   360 − 10×2(래퍼 패딩) − 12(간격) − 50(+ 원) = 278 이고, 지금 값은 **254** 다
+   (4×54 + gap 8×3 + 캡슐 패딩 7×2). 여유 24px.
+   ko·en·serif 폴백이 **전부 같다** — 라벨(년/Year…)이 min-width 54 안에 들어와서
+   글꼴이 폭을 못 흔든다. 그래서 캡슐이 스크롤되는 경우가 없다.
+   ★ min-width·gap·글자 크기·+ 버튼 크기를 바꾸면 다시 잴 것. */
+.tabbar .seg{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  height:48px;min-width:54px;padding:0 9px;font-size:11px;border-radius:16px;
+  /* tertiary(알파 .3)가 아니라 secondary 다 — 주 내비게이션 글자가 30% 불투명이면
+     밝은 배경에서 대비가 안 나온다. 고른 것과의 구분은 tint 색과 판이 이미 만든다. */
+  color:var(--label-secondary);background-color:transparent;background-image:none;box-shadow:none}
+.tabbar .seg-on{color:var(--tint);background-image:none;box-shadow:none;
+  background-color:color-mix(in srgb,var(--tint) 13%,transparent)}
 .pri{display:flex;align-items:center;gap:6px;border:none;cursor:pointer;padding:0 14px;height:36px;
   border-radius:999px;font-family:inherit;font-size:13px;font-weight:600;transition:all .15s ease;
   background-image:var(--tc-sheen);box-shadow:var(--tc-raise-sm)}
