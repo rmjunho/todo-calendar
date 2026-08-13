@@ -708,7 +708,12 @@ function render() {
         (color ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;' +
           'margin-right:5px;background-color:' + color + '"></span>' : '') + esc(label) + '</button>';
     };
-    html += '<div class="seg-wrap" style="overflow-x:auto;max-width:100%;margin-bottom:16px">' +
+    // ★ width:max-content — 칩이 몇 개든 **딱 그만큼만** 차지한다. 이게 없으면 칩이
+    //   두어 개일 때 캡슐 오른쪽이 회색으로 길게 비어, 바로 위 종류 줄(3칩이 폭을
+    //   나눠 갖는다)과 나란히 놓였을 때 아래 줄만 덜 그려진 것처럼 보인다.
+    //   max-width:100% 가 캡슐을 화면 안에 가두고, 넘치면 overflow-x 가 흘린다 —
+    //   칩 11개(전체 + 팔레트 10)일 때의 동작은 그대로다.
+    html += '<div class="seg-wrap" style="width:max-content;overflow-x:auto;max-width:100%;margin-bottom:16px">' +
       chip('', t('cat.all'), '') +
       state.cats.map((c) => chip(c.id, c.name, c.color)).join('') + '</div>';
   }
