@@ -209,6 +209,8 @@ const barSpacer =
 // 상한이 없으면 겹치는 주의 높이가 그대로 늘어난다 — 그걸 막으려고 종류 필터를 만든 것이다.
 // 주간이 더 깊은 이유는 그 화면이 한 주만 보여 주는 자리라서다(막대 띠가 칸 위에 따로 있다).
 const MONTH_LANES = 3, WEEK_LANES = 6;
+// 주간 칸이 접기 전에 보여 주는 항목 수. 근거는 렌더 쪽 주석(실측).
+const WEEK_FIT = 7;
 
 // 실제로 그려지는 층 수. shown 이 비면 0 — 그러면 막대 층 자체를 안 그린다.
 const lanesOf = (shown) => (shown.length ? Math.max.apply(null, shown.map((r) => r.lane)) + 1 : 0);
@@ -572,11 +574,10 @@ function pill(it, ds) {
     // 시작 날짜가 3일째로 옮겨가면 안 된다. 기간이 없는 항목은 ds 와 같은 값이라
     // 지금까지의 동작이 한 글자도 안 바뀐다.
     openDs: occStart(it, ds) || ds,
-    timeLabel: it.time ? timeLabel(it.time) : t('item.allDay'),
-    // ★ 라벨이 둘인 이유: 주간 격자 칸은 390px 화면에서 51px 밖에 안 돼 지금도 시간
-    //   라벨이 두 줄로 접힌다(접기 기준 5의 근거 — 아래 주간 뷰 주석). 범위를 넣으면
-    //   3~4줄이 되므로 **좁은 격자는 timeLabel, 넓은 곳은 range** 를 쓴다.
-    //   endTime 이 없으면 둘은 같은 문자열이다.
+    // ★ 예전에는 시작만 적는 `timeLabel` 도 같이 들고 있었다 — 좁은 격자용이었다.
+    //   주간 칸에서 시간 라벨을 아예 뺐으므로(사용자 요청) 쓰는 곳이 없어 지웠다.
+    //   되살릴 일이 생기면 `timeLabel(it.time)` 한 줄이고, 그때 WEEK_FIT 를 다시 잴 것.
+    //   여기 남은 range 는 **넓은 곳 전용**이다 — 일간 뷰 블록이 쓴다.
     range: it.time ? timeRange(it.time, it.endTime || '') : t('item.allDay')
   };
 }
@@ -886,24 +887,29 @@ function render() {
       const isToday = ds === today, isSel = ds === sel;
       const edge = i === 0 ? 'none' : '.5px solid var(--separator)';
       // 월간(3개)과 같은 이유로 접는다 — 안 접으면 17개짜리 날이 칸을 713px 로 늘린다.
-      // 5인 근거(실측): 칸 min-height 320 에 헤더 64 · 항목 33 · gap 4 · `+N개` 12 라
-      // 넓은 화면은 5개=273(여유 47) · 6개=310(여유 10뿐) · 7개=347(초과)이고,
-      // 390px 에서는 열이 51px 라 시간 라벨이 두 줄로 접혀 항목이 48 → 5개라도 348 이다.
-      // 좁은 쪽에서 한 줄이 48px 이라 6으로 올리면 거기서 50px 을 더 먹는다.
-      // ★ 항목 높이·글꼴·시간 라벨 형식을 바꾸면 이 5를 다시 재야 한다.
+      // ★ 시간 라벨을 뺐다(사용자 요청). 폰에서 열이 51px 라 '하루 종일' 이 두 줄로
+      //   접혀 항목 하나가 48px 을 먹었고, 그 줄이 정보를 준 만큼 자리를 안 갚았다.
+      //   → 항목이 한 줄이 되면서 접기 기준을 5에서 다시 쟀다.
+      // WEEK_FIT=7 의 근거(실측, 360px · 본문 min-height 256 − padding 12 = **244** 가 한도):
+      //   항목 한 줄 = padding 4+4 + 11px 글자 한 줄. line-height 를 안 걸어서 글꼴이 정한다.
+      //     ko/en 기본 글꼴  항목 21 · `+N개` 12 → 7개 187 · 8개 212
+      //     serif 폴백(ko)   항목 24 · `+N개` 15 → 7개 211 · 8개 239
+      //     serif 폴백(en) ← 최악. **`+N개` 가 46.6px 열에서 두 줄로 접혀 30**
+      //                      항목 24 → 7개 **226** · 8개 **254(초과)**
+      //   → 세 조합 전부 통과하는 최대가 7이다. 8은 최악 조합에서만 10px 넘친다.
+      // ★ 글꼴·글자 크기·패딩을 바꾸거나 라벨을 되살리면 이 7을 **다시 잴 것**.
       const list = cellItems(items, ds);
-      const pills = list.slice(0, 5).map((it) => {
+      const pills = list.slice(0, WEEK_FIT).map((it) => {
         const p = pill(it, ds);
         return '<div ' + openAttr(p, ds) + ' style="cursor:pointer;padding:4px 7px;border-radius:6px;background:' +
           p.bg + ';opacity:' + p.op + '">' +
           '<div class="trunc" style="font-size:11px;font-weight:600;color:' + p.color + ';text-decoration:' + p.deco + '">' +
-          esc(p.title) + '</div>' +
-          '<div style="font-size:10px;font-weight:500;color:' + p.color + ';opacity:.75">' + esc(p.timeLabel) + '</div></div>';
+          esc(p.title) + '</div></div>';
       }).join('');
       // ★ data-day 를 여기 직접 단다. 월간은 부모 .cell 이 들고 있어 `+N개` 가 공짜로
       //   날짜 선택이 되지만, 주간은 헤더에만 있어서 본문에 두면 눌러도 안 먹는다.
       //   동작은 월간과 같다 — 그 날을 고르고 하단 리스트만 바뀐다(뷰 전환 아님).
-      const hid = Math.max(0, list.length - 5) + wextra[i];
+      const hid = Math.max(0, list.length - WEEK_FIT) + wextra[i];
       const more = hid
         ? '<div data-day="' + ds + '" style="cursor:pointer;font-size:10px;color:var(--label-tertiary);padding:0 7px">' +
           esc(t('cell.more', hid)) + '</div>' : '';

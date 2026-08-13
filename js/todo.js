@@ -1054,9 +1054,8 @@ if (location.search.includes('selftest')) {
   const e0 = { id: 'e0', title: '회의', date: '2026-01-05', repeat: 'none', time: '07:00', pri: 'none' };
   const e1 = Object.assign({}, e0, { id: 'e1', endTime: '08:00' });
   ok(timeRange('07:00', '') === timeLabel('07:00'), 'an empty end time renders exactly like the old start-only label');
-  ok(pill(e0, '2026-01-05').range === timeLabel('07:00') &&
-     pill(e0, '2026-01-05').timeLabel === timeLabel('07:00'),
-    'an item with no endTime key is unchanged in both grid labels');
+  ok(pill(e0, '2026-01-05').range === timeLabel('07:00'),
+    'an item with no endTime key still reads exactly as it did before endTime existed');
   ok(exRow(e0, '2026-01-05', false).time === timeLabel('07:00'),
     'and unchanged in the exported image');
   ok(timeRange('07:00', '08:00') === timeLabel('07:00') + ' – ' + timeLabel('08:00'),
@@ -1064,9 +1063,10 @@ if (location.search.includes('selftest')) {
   ok(pill(e1, '2026-01-05').range === timeRange('07:00', '08:00') &&
      exRow(e1, '2026-01-05', false).time === timeRange('07:00', '08:00'),
     'an item with an end time shows the range everywhere it is drawn wide');
-  // 주간 격자만 시작 시간을 유지한다 — 51px 칸에서 범위는 3~4줄로 접힌다.
-  ok(pill(e1, '2026-01-05').timeLabel === timeLabel('07:00'),
-    'the narrow week grid keeps the start-only label');
+  // ★ 주간 칸에는 시간을 아예 안 적는다(사용자 요청). 좁은 칸용이던 시작-only 라벨은
+  //   쓰는 곳이 없어져 pill() 에서 지웠다 — 다시 넣으면 WEEK_FIT 를 다시 재야 한다.
+  ok(pill(e1, '2026-01-05').timeLabel === undefined,
+    'pill() no longer carries a start-only label — nothing draws one');
   ok(pill({ id: 'a', date: '2026-01-05', repeat: 'none', time: '', pri: 'none' }, '2026-01-05').range
      === t('item.allDay'), 'an all-day item has no time at either end');
 
@@ -1996,6 +1996,21 @@ if (location.search.includes('selftest')) {
   ok(wBand.getBoundingClientRect().top >=
       APP().querySelector('[data-day="2026-08-05"]').getBoundingClientRect().bottom - 0.5,
     'the week bar band sits below the weekday header row, not on top of it');
+
+  // 주간 칸에는 시간을 아예 안 적는다. 46.6px 열에서 '하루 종일' 이 두 줄로 접혀
+  // 자리를 두 배 먹었고, 그 줄이 준 정보만큼 갚지 못했다(사용자 요청).
+  // 한 줄이 되면서 접기 기준을 5 → WEEK_FIT 로 다시 쟀다.
+  state.items = Array.from({ length: WEEK_FIT + 1 }, (_, i) => ({ id: 'w' + i, kind: 'todo',
+    span: 1, title: '항목' + i, date: '2026-08-05', time: '07:00', endTime: '08:00',
+    categoryId: 'c1', repeat: 'none', days: [], memo: '', done: false, doneDates: [] }));
+  render();
+  const wcard = APP().querySelector('[data-day="2026-08-05"]').closest('.card');
+  const wcol = [...wcard.querySelectorAll('[data-open]')];
+  eq(wcol.length, WEEK_FIT, 'a week column folds at WEEK_FIT items');
+  ok(wcard.textContent.indexOf(timeLabel('07:00')) < 0 && wcard.textContent.indexOf(t('item.allDay')) < 0,
+    'and no cell prints a time — the week grid shows titles only now');
+  ok(wcard.textContent.indexOf(t('cell.more', 1)) >= 0,
+    'the one that did not fit is counted, not dropped');
 
   // 일간: 첫날은 시작 시각 마커, 마지막 날은 종료 시각 마커, 가운데는 하루 종일.
   const trip = EV({ id: 'trip', span: 3, title: '출장', date: '2026-08-13', time: '09:00', endTime: '18:00' });
