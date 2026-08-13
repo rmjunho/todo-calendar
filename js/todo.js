@@ -1251,6 +1251,110 @@ if (location.search.includes('selftest')) {
   ok(timeRange('09:00', '') === timeLabel('09:00'),
     'and its label is byte-identical to the start-only label it has always had');
 
+  // --- 카테고리 + 필터: 조건 함수가 아니라 **그려진 화면**을 본다 ---
+  // ★ 이 기능의 핵심 약속은 "카테고리를 지워도 할 일은 안 지워진다" 하나다.
+  //   죽은 id 를 '없음' 으로 떨어뜨리는 폴백이 그 약속을 지키는 유일한 장치이고,
+  //   삭제는 되돌릴 수 없으니 사람 눈이 아니라 여기서 묶어 둔다.
+  //   위 kDay 블록이 이미 booting=false + 가짜 user + selected='2026-01-05' 를 세워 뒀다.
+  const kCat = { cats: state.cats, filter: state.filter,
+    showCats: state.showCats, catDraft: state.catDraft };
+  const cItem = (id, cid) => ({ id: id, title: id, date: '2026-01-05', time: '',
+    categoryId: cid, repeat: 'none', days: [], memo: '' });
+  const four = () => [cItem('work', 'c1'), cItem('run', 'c2'), cItem('bare', ''), cItem('dead', 'GONE')];
+  const drawCat = (list) => { state.items = list; render(); return document.getElementById('app'); };
+  const titles = (el) => [...el.querySelectorAll('.row-title')].map((x) => x.textContent);
+  const chips = (el) => [...el.querySelectorAll('[data-filter]')];
+
+  state.cats = [{ id: 'c1', name: '업무', color: '#007AFF' },
+                { id: 'c2', name: '운동', color: '#34C759' }];
+  state.filter = null;
+  state.view = 'month';
+  state.showCats = false;
+  state.catDraft = null;
+  let app3 = drawCat(four());
+
+  eq(catOf({ categoryId: 'GONE' }).color, CAT_NONE.color,
+    'an item pointing at a deleted category falls back to the none colour');
+  eq(catOf({ categoryId: '' }).color, CAT_NONE.color, 'so does an item with no category at all');
+  eq(catOf({ categoryId: 'c1' }).color, '#007AFF', 'a live category keeps its own colour');
+  eq(titles(app3).length, 4, 'all four items are drawn — a dead category id hides nothing');
+
+  // 칩은 '전체' + 카테고리 2개 = 3개. state.cats.length 로 적으면 항등식이 된다.
+  eq(chips(app3).length, 3, 'the filter row draws All plus one chip per category');
+  eq(chips(app3)[0].dataset.filter, '', 'the first chip is All and carries an empty filter value');
+
+  state.filter = 'c1';
+  eq(titles(drawCat(four())).join(), 'work',
+    'a category filter narrows the drawn list to that category');
+  // 아무 항목도 안 쓰는 id 로 필터가 걸리면 **아무것도** 안 그려야 한다. 전부
+  // 그리면 필터가 조용히 무시된 것이고, 그건 필터가 없는 것과 구분이 안 된다.
+  // ('GONE' 을 쓰면 안 된다 — 위 픽스처에 그 id 를 가진 항목이 실제로 있다.)
+  state.filter = 'NOBODY';
+  eq(titles(drawCat(four())).length, 0,
+    'filtering by an id no item carries draws nothing rather than everything');
+  state.filter = null;
+
+  // 카테고리가 0개면 줄 자체를 안 그린다 — '전체' 칩만 있는 줄은 정보가 0이다.
+  state.cats = [];
+  eq(chips(drawCat(four())).length, 0, 'with no categories the filter row is not drawn at all');
+
+  // --- 카테고리 시트 ---
+  state.cats = [{ id: 'c1', name: '업무', color: '#007AFF' }];
+  state.showCats = true;
+  let app4 = drawCat([]);
+  eq(app4.querySelectorAll('[data-catedit]').length, 1, 'the sheet lists one row per category');
+  ok(!!app4.querySelector('[data-act="catNew"]'), 'and offers the add button below it');
+
+  // 편집기. 저장 가능 여부는 catOk() 가 정하지만, 검사는 **그려진 버튼**을 본다 —
+  // 조건만 맞고 버튼이 안 따라오던 갤럭시 버그가 우선순위 시절에 실제로 있었다.
+  state.catDraft = { id: '', name: '', color: CAT_COLORS[0] };
+  app4 = drawCat([]);
+  eq(app4.querySelectorAll('[data-catcolor]').length, 10,
+    'the editor offers exactly the ten palette colours — there is no free colour input');
+  ok(document.getElementById('catSaveBtn').disabled, 'an empty name cannot be saved');
+  // 여기부터는 render() 를 부르지 않는다 — 이름 칸이 uncontrolled 라 입력 위임이
+  // syncCatSheet() 로 DOM 만 맞추는 경로를 그대로 탄다.
+  state.catDraft.name = '업무';
+  syncCatSheet();
+  ok(document.getElementById('catSaveBtn').disabled, 'a duplicate name cannot be saved either');
+  ok(!document.getElementById('catDupe').hidden,
+    'and the duplicate hint appears without a full re-render');
+  state.catDraft.name = '공부';
+  syncCatSheet();
+  ok(!document.getElementById('catSaveBtn').disabled, 'a fresh name enables the button');
+  ok(document.getElementById('catDupe').hidden, 'and clears the hint — again without a re-render');
+
+  // 상한. 규칙으로는 못 세니 화면이 유일한 방어선이다.
+  state.catDraft = null;
+  state.cats = CAT_COLORS.map((c, i) => ({ id: 'k' + i, name: 'c' + i, color: c }));
+  app4 = drawCat([]);
+  ok(!app4.querySelector('[data-act="catNew"]'), 'at the palette limit the add button is gone');
+  ok(app4.innerHTML.indexOf(esc(t('cat.max', CAT_MAX))) > 0,
+    'and the limit is spelled out in its place');
+
+  // ★ 삭제. fb 는 firebase.js(모듈)가 아직 안 떠서 undefined 다 — 쓰기만 흉내내고
+  //   원래대로 돌려놓는다. confirm 도 같이 갈아 두고 문구까지 확인한다.
+  const kFb = window.fb, kConfirm = window.confirm;
+  let asked = '';
+  window.fb = { removeCat: () => Promise.resolve(), fail: () => {} };
+  window.confirm = (m) => { asked = m; return true; };
+  state.cats = [{ id: 'c1', name: '업무', color: '#007AFF' }];
+  state.items = [cItem('work', 'c1'), cItem('bare', '')];
+  state.filter = 'c1';
+  state.showCats = true;
+  state.catDraft = { id: 'c1', name: '업무', color: '#007AFF' };
+  delCat();
+  window.fb = kFb;
+  window.confirm = kConfirm;
+  eq(state.items.length, 2, 'deleting a category does not delete the to-dos that used it');
+  eq(state.cats.length, 0, 'the category document itself is the only thing removed');
+  eq(state.filter, null, 'and the filter that was showing it falls back to All');
+  eq(catOf(state.items[0]).color, CAT_NONE.color,
+    'the orphaned item draws in the none colour from then on');
+  ok(asked.indexOf('1') >= 0,
+    'the confirmation names how many to-dos are affected', JSON.stringify(asked));
+
+  Object.assign(state, kCat);
   Object.assign(state, kDay);
   render();
 
