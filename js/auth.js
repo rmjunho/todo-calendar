@@ -377,6 +377,13 @@ function renderSettingsSheet() {
       prefRow(t('set.theme'), 'theme', THEME_OPTS()) +
       prefRow(t('set.lang'), 'lang', LANG_OPTS) +
 
+      // 카테고리 관리 진입점. ★ 여기가 **유일한 입구**다 — 카테고리가 0개면 헤더의
+      // 필터 칩 줄 자체가 안 그려지므로, 이 줄을 지우면 아무도 카테고리를 못 만든다.
+      '<div style="font-size:13px;font-weight:700;color:var(--label-secondary);margin:22px 4px 8px">' +
+        esc(t('cat.title')) + '</div>' +
+      '<button class="btn btn-gray btn-md" data-act="cats" style="width:100%">' +
+        esc(t('cat.manage')) + '</button>' +
+
       '<div style="font-size:13px;font-weight:700;color:#FF3B30;margin:22px 4px 8px">' +
         esc(t('set.danger')) + '</div>' +
       danger +

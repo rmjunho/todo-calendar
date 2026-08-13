@@ -244,6 +244,151 @@ function saveForm() {
         done: false, doneDates: [] }));
 }
 
+// ---------------------------------------------------------------- 카테고리 시트
+// 두 모드다: catDraft 가 null 이면 목록, 있으면 편집기. 입력 시트(openForm/saveForm/
+// closeForm)와 같은 모양이라 새 개념이 없다.
+//
+// ★ 이름 중복·길이 조건을 여기 한 곳에 모은다 — 저장 버튼 disabled · 안내 문구 ·
+//   saveCatDraft 가드가 전부 이것만 본다(formOk 와 같은 성격).
+const catNameOf = (d) => (d.name || '').trim();
+const catTaken = (d) => state.cats.some((c) => c.id !== d.id && c.name === catNameOf(d));
+const catOk = (d) => !!d && catNameOf(d).length > 0
+  && catNameOf(d).length <= CAT_NAME_MAX && !catTaken(d);
+
+// 새 카테고리의 기본 색 = 아직 안 쓴 팔레트 색. 열 때마다 같은 빨강을 주면
+// 열 개를 만들어도 전부 빨강이 된다.
+const freeColor = () =>
+  CAT_COLORS.find((c) => !state.cats.some((k) => k.color === c)) || CAT_COLORS[0];
+
+function openCats() {
+  state.showSettings = false;   // 설정 시트에서 들어온다 — 두 장이 겹치지 않게 닫는다
+  state.del = null;
+  state.showCats = true;
+  state.catDraft = null;
+  render();
+}
+function closeCats() {
+  state.showCats = false;
+  state.catDraft = null;
+  render();   // ★ sheetBusy() 로 밀려 있던 원격 스냅샷을 여기서 반영한다
+}
+function newCat() {
+  if (state.cats.length >= CAT_MAX) return;   // 화면에서도 버튼을 감추지만 한 번 더 본다
+  state.catDraft = { id: '', name: '', color: freeColor() };
+  render();
+}
+function editCat(id) {
+  const c = state.cats.find((x) => x.id === id);
+  if (!c) return;
+  state.catDraft = { id: c.id, name: c.name, color: c.color };
+  render();
+}
+// ★ 낙관적 업데이트. 시트가 열려 있는 동안은 sheetBusy() 가 원격 스냅샷 렌더를
+//   막으므로, state.cats 를 직접 고치지 않으면 **방금 만든 카테고리가 시트를 닫을
+//   때까지 목록에 안 나타난다**. 정렬 기준은 firebase.js 의 구독과 같게 유지할 것.
+function saveCatDraft() {
+  const d = state.catDraft;
+  if (!catOk(d)) return;
+  const name = catNameOf(d), color = d.color;
+  const id = d.id || fb.newCatId();
+  state.cats = state.cats.filter((c) => c.id !== id).concat({ id, name, color })
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  state.catDraft = null;
+  render();
+  fb.saveCat(id, name, color).catch((e) => fb.fail(t('err.save'), e));
+}
+// ★ 카테고리 문서 하나만 지운다. 그걸 쓰던 할 일은 **건드리지 않는다** — 죽은 id 는
+//   catOf() 가 '없음' 으로 떨어뜨린다(calendar.js). 되돌릴 수 없는 조작이라 개수를
+//   눈으로 보여 주는 확인창이 유일한 방어선이다. 지우지 말 것.
+function delCat() {
+  const d = state.catDraft;
+  if (!d || !d.id) return;
+  const n = state.items.filter((it) => (it.categoryId || '') === d.id).length;
+  if (!confirm(t('cat.delConfirm', n))) return;
+  state.cats = state.cats.filter((c) => c.id !== d.id);
+  if (state.filter === d.id) state.filter = null;   // 보고 있던 필터가 사라지면 전체로
+  state.catDraft = null;
+  render();
+  fb.removeCat(d.id).catch((e) => fb.fail(t('err.save'), e));
+}
+// 입력 위임이 render() 대신 부른다 — 이름 칸이 uncontrolled 라야 캐럿이 산다.
+// syncSheet() 와 같은 이유·같은 방식이다.
+function syncCatSheet() {
+  const d = state.catDraft;
+  if (!d) return;
+  const btn = document.getElementById('catSaveBtn');
+  if (btn) btn.disabled = !catOk(d);
+  const warn = document.getElementById('catDupe');
+  if (warn) warn.hidden = !catTaken(d);
+}
+
+function renderCatSheet() {
+  const d = state.catDraft;
+  let body;
+
+  if (d) {
+    const swatches = CAT_COLORS.map((c) => {
+      const on = d.color === c;
+      return '<button data-catcolor="' + c + '" aria-label="' + c + '" aria-pressed="' + on + '" ' +
+        'style="width:32px;height:32px;border-radius:50%;border:none;cursor:pointer;padding:0;' +
+        'background-color:' + c + (on ? ';box-shadow:0 0 0 2px var(--bg), 0 0 0 4px ' + c : '') + '"></button>';
+    }).join('');
+    body =
+      '<div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">' +
+        esc(t('cat.name')) + '</div>' +
+      '<input class="field" data-cn maxlength="' + CAT_NAME_MAX + '" ' +
+        'placeholder="' + esc(t('cat.namePh')) + '" value="' + esc(d.name) + '">' +
+      '<div id="catDupe" role="alert"' + (catTaken(d) ? '' : ' hidden') +
+        ' style="margin-top:8px;font-size:13px;font-weight:600;color:#FF3B30">' +
+        esc(t('cat.dupe')) + '</div>' +
+      '<div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:16px 0 8px">' +
+        esc(t('cat.color')) + '</div>' +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap">' + swatches + '</div>' +
+      '<div style="display:flex;gap:10px;align-items:center;margin-top:22px">' +
+        (d.id ? '<button class="btn btn-plain btn-md" data-act="catDel" style="color:#FF3B30">' +
+          esc(t('form.delete')) + '</button>' : '') +
+        '<div style="flex:1"></div>' +
+        '<button class="btn btn-gray btn-md" data-act="catCancel">' + esc(t('form.cancel')) + '</button>' +
+        '<span data-raise="tint" style="display:inline-flex">' +
+          '<button class="btn btn-prominent btn-md" id="catSaveBtn" data-act="catSave"' +
+          (catOk(d) ? '' : ' disabled') + '>' + esc(t('form.save')) + '</button></span>' +
+      '</div>';
+  } else if (state.cats.length) {
+    const rows = state.cats.map((c, i) =>
+      '<div data-catedit="' + esc(c.id) + '" style="display:flex;align-items:center;gap:12px;cursor:pointer;' +
+        'padding:13px 4px;border-top:' + (i === 0 ? 'none' : '.5px solid var(--separator)') + '">' +
+        '<span style="width:12px;height:12px;border-radius:50%;flex:none;background-color:' + c.color + '"></span>' +
+        '<span class="trunc" style="flex:1;font-size:15px;font-weight:600">' + esc(c.name) + '</span>' +
+        '<span style="color:var(--label-tertiary);display:flex">' + icon('chevron.right', 15) + '</span></div>'
+    ).join('');
+    body = rows + (state.cats.length >= CAT_MAX
+      ? '<div style="font-size:13px;color:var(--label-tertiary);padding:14px 4px 0">' +
+        esc(t('cat.max', CAT_MAX)) + '</div>'
+      : '<button class="btn btn-gray btn-md" data-act="catNew" style="width:100%;margin-top:16px">' +
+        esc(t('cat.add')) + '</button>');
+  } else {
+    body = '<div style="padding:26px 4px;text-align:center">' +
+        '<div style="font-size:15px;font-weight:600;color:var(--label-secondary)">' + esc(t('cat.empty')) + '</div>' +
+        '<div style="font-size:13px;color:var(--label-tertiary);margin-top:3px">' + esc(t('cat.emptyHint')) + '</div></div>' +
+      '<button class="btn btn-gray btn-md" data-act="catNew" style="width:100%">' + esc(t('cat.add')) + '</button>';
+  }
+
+  return '<div data-act="closeCats" style="position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.35);animation:tcFade .2s ease-out"></div>' +
+    '<div style="position:fixed;left:0;right:0;bottom:0;z-index:101;display:flex;justify-content:center;pointer-events:none">' +
+    '<div role="dialog" aria-modal="true" style="pointer-events:auto;width:min(560px,100vw);max-height:88vh;overflow:auto;' +
+      'background:var(--bg);border-radius:20px 20px 0 0;box-shadow:var(--shadow-3);padding:12px 20px 30px;' +
+      'animation:tcSheet .28s cubic-bezier(.32,.72,0,1)">' +
+      '<div style="width:38px;height:5px;border-radius:3px;background:var(--fill-secondary);margin:0 auto 12px"></div>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+        '<h3 style="margin:0;font-size:19px;font-weight:700">' +
+          esc(t(d ? (d.id ? 'cat.edit' : 'cat.add') : 'cat.manage')) + '</h3>' +
+        '<button data-act="closeCats" aria-label="' + esc(t('a.close')) + '" style="border:none;cursor:pointer;width:30px;height:30px;border-radius:50%;' +
+          'background:var(--fill-tertiary);color:var(--label-secondary);display:flex;align-items:center;justify-content:center;padding:0">' +
+          icon('xmark', 14) + '</button></div>' +
+      body +
+    '</div></div>';
+}
+
 app.addEventListener('click', (e) => {
   const t = e.target;
   const hit = (sel) => t.closest(sel);
@@ -309,6 +454,9 @@ app.addEventListener('click', (e) => {
   if ((el = hit('[data-cat]'))) { state.form.categoryId = el.dataset.cat; return render(); }
   // 필터 칩. '' 는 전체 — state.filter 는 null 로 눕힌다(itemsOn 이 falsy 로 본다).
   if ((el = hit('[data-filter]'))) { state.filter = el.dataset.filter || null; return render(); }
+  // 카테고리 시트: 목록 줄 탭 → 편집기, 색 스와치 탭 → 초안의 색만 바꾼다.
+  if ((el = hit('[data-catedit]'))) return editCat(el.dataset.catedit);
+  if ((el = hit('[data-catcolor]'))) { state.catDraft.color = el.dataset.catcolor; return render(); }
   if ((el = hit('[data-repeat]'))) {
     state.form.repeat = el.dataset.repeat;
     // '매주' 를 고르면 시작일 요일 하나가 켜진 채로 열린다 — 아무것도 더 안 고르고
@@ -335,6 +483,13 @@ app.addEventListener('click', (e) => {
       case 'closeAdmin': state.showAdmin = false; return render();
       case 'settings': state.showSettings = true; state.del = null; return render();
       case 'closeSettings': state.showSettings = false; state.del = null; return render();
+      // 카테고리 관리. 설정 시트에서 들어오고, 닫으면 밀린 스냅샷이 반영된다.
+      case 'cats': return openCats();
+      case 'closeCats': return closeCats();
+      case 'catNew': return newCat();
+      case 'catCancel': state.catDraft = null; return render();
+      case 'catSave': return saveCatDraft();
+      case 'catDel': return delCat();
       // 탈퇴는 두 단계다 — 버튼 한 번으로는 절대 지워지지 않는다.
       case 'askDelete': state.del = { pin: '', error: '', busy: false }; return render();
       case 'cancelDelete': state.del = null; return render();
@@ -379,6 +534,9 @@ app.addEventListener('input', (e) => {
   // 탈퇴 확인 PIN. state.auth 와 섞지 않는다 — 로그인 폼과 수명이 다르다.
   const del = e.target.closest('[data-d]');
   if (del) { if (state.del) state.del[del.dataset.d] = del.value; return; }
+  // 카테고리 이름. state.form 과 섞지 않는다 — 시트도 수명도 다르다.
+  const cn = e.target.closest('[data-cn]');
+  if (cn) { if (state.catDraft) { state.catDraft.name = cn.value; syncCatSheet(); } return; }
   const el = e.target.closest('[data-f]');
   if (!el || !state.form) return;
   state.form[el.dataset.f] = el.value;
@@ -395,6 +553,11 @@ document.addEventListener('keydown', (e) => {
     // 이미지 미리보기·점프는 다른 시트 위에 뜨지 않는다 — 본문 위에서만 열린다.
     if (state.exp) return closeExport();
     if (state.jump) return closeJump();
+    // 카테고리 시트는 두 겹이다 — 편집기가 열려 있으면 그것만 닫는다.
+    if (state.showCats) {
+      if (state.catDraft) { state.catDraft = null; return render(); }
+      return closeCats();
+    }
     if (state.showAdmin) { state.showAdmin = false; return render(); }
     // 삭제 중에는 Esc 로 닫지 않는다 — 진행 중인 요청을 취소하지 못한다.
     if (state.showSettings && !(state.del && state.del.busy)) {

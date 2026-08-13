@@ -257,6 +257,7 @@ const state = {
   // 남겨 두면 다음에 열었을 때 "할 일이 다 사라졌다" 로 읽힌다.
   filter: null,
   showCats: false,    // 카테고리 관리 시트
+  catDraft: null,     // 그 안의 편집기 { id, name, color }. null 이면 목록 모드
   showForm: false,
   editingId: null,
   form: null,
