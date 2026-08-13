@@ -24,6 +24,8 @@ const todosCol = () => collection(db, 'users', auth.currentUser.uid, 'todos');
 const todoRef = (id) => doc(db, 'users', auth.currentUser.uid, 'todos', id);
 const catsCol = () => collection(db, 'users', auth.currentUser.uid, 'categories');
 const catRef = (id) => doc(db, 'users', auth.currentUser.uid, 'categories', id);
+const goalsCol = () => collection(db, 'users', auth.currentUser.uid, 'goals');
+const goalRef = (id) => doc(db, 'users', auth.currentUser.uid, 'goals', id);
 
 function fail(msg, e) {
   console.error(e);
@@ -45,12 +47,13 @@ const SIGNUP_ERR = {
 // 회원가입 중에는 인증 상태 변화를 무시한다 — 계정 생성 직후 자동 로그인이
 // 걸리는데, 그 시점엔 users 문서가 아직 없어서 핸들러가 헛돈다.
 let busy = false;
-let unsubTodos = null, unsubUsers = null, unsubCats = null;
+let unsubTodos = null, unsubUsers = null, unsubCats = null, unsubGoals = null;
 
 function stopWatch() {
   if (unsubTodos) { unsubTodos(); unsubTodos = null; }
   if (unsubUsers) { unsubUsers(); unsubUsers = null; }
   if (unsubCats) { unsubCats(); unsubCats = null; }
+  if (unsubGoals) { unsubGoals(); unsubGoals = null; }
 }
 
 async function signIn(name, pin, remember) {
@@ -106,11 +109,13 @@ function applyLoggedOut() {
   state.users = [];
   state.items = [];
   state.cats = [];
+  state.goals = [];
   state.filter = null;
   state.showForm = false;
   state.showAdmin = false;
   state.showCats = false;
   state.catDraft = null;
+  state.goalDraft = null;   // ★ 안 비우면 sheetBusy() 가 영영 true 로 남는다
   state.booting = false;
   // ★ 열려 있던 시트를 전부 닫는다. 안 닫으면 sheetBusy() 가 영영 true 로 남아
   //   재로그인 후 원격 스냅샷이 화면에 절대 안 들어온다. exp 는 objectURL 도 샌다.
@@ -184,6 +189,14 @@ function watch(user) {
     if (!sheetBusy()) render();
   }, (e) => fail(t('err.loadTodos'), e));
 
+  // 목표. 정렬은 여기서 안 한다 — 카테고리와 달리 순서가 화면마다 다르고
+  // (goalsIn 이 마감순으로 세우고 12칸 요약은 아예 안 쓴다), 정렬 기준이 데이터에
+  // 없는 파생값(goalKey)이라 여기 두면 calendar.js 와 이중 소스가 된다.
+  unsubGoals = onSnapshot(goalsCol(), (snap) => {
+    state.goals = snap.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+    if (!sheetBusy()) render();
+  }, (e) => fail(t('err.loadTodos'), e));
+
   if (user.role !== 'admin') return;
   unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
     state.users = snap.docs.map((d) => Object.assign({ uid: d.id }, d.data()));
@@ -222,6 +235,18 @@ const newCatId = () => doc(catsCol()).id;
 const saveCat = (id, name, color) => setDoc(catRef(id), { name, color });
 const removeCat = (id) => deleteDoc(catRef(id));
 
+// 목표 쓰기. 카테고리와 같은 이유로 merge 를 쓰지 않는다 — 규칙의 validGoal() 이
+// hasOnly(['title','scope','y','m','d','categoryId','memo','done']) 를 보므로
+// 호출부(saveGoalDraft)가 여덟 키를 통으로 만들어 넘긴다.
+//
+// ★ setGoalDone 만 updateDoc 이다. 규칙은 update 때 **합쳐진 문서 전체**를
+//   validGoal() 로 다시 보므로, 저장된 문서에 여덟 키만 있으면 그대로 통과한다.
+//   완료 체크는 배열이 아니라 불리언 하나라 doneDates 처럼 lost update 가 없다.
+const newGoalId = () => doc(goalsCol()).id;
+const saveGoal = (id, data) => setDoc(goalRef(id), data);
+const removeGoal = (id) => deleteDoc(goalRef(id));
+const setGoalDone = (id, on) => updateDoc(goalRef(id), { done: on });
+
 // 완료 체크는 배열을 통째로 바꾸지 않는다. 두 기기에서 같은 날 체크하면 한쪽
 // 갱신이 사라지기(lost update) 때문에 arrayUnion / arrayRemove 를 쓴다.
 const setToggle = (id, ds, repeating, on) =>
@@ -254,6 +279,15 @@ async function deleteAccount(uid, name) {
     const cb = writeBatch(db);
     cats.docs.forEach((d) => cb.delete(d.ref));
     await cb.commit();
+  }
+  // ★ goals 도 서브컬렉션이라 같은 이유로 직접 훑어 지운다 — 빠뜨리면 계정을
+  //   지워도 목표 문서가 고아로 남는다. 카테고리와 달리 개수 상한이 없으므로
+  //   todos 와 같이 400개씩 나눠 커밋한다(writeBatch 는 500개가 한계다).
+  const goals = await getDocs(collection(db, 'users', uid, 'goals'));
+  for (let i = 0; i < goals.docs.length; i += 400) {
+    const chunk = writeBatch(db);
+    goals.docs.slice(i, i + 400).forEach((d) => chunk.delete(d.ref));
+    await chunk.commit();
   }
   // 계정 문서는 맨 마지막에 지운다. 중간에 끊겨도 목록에 남아 있어서 다시
   // 누르면 이어서 정리된다 — 먼저 지우면 흔적 없는 고아 데이터가 된다.
@@ -323,5 +357,6 @@ window.fb = {
   signIn, signUp, signOutNow: () => signOut(auth),
   newId, saveTodo, removeTodo, setToggle,
   newCatId, saveCat, removeCat,
+  newGoalId, saveGoal, removeGoal, setGoalDone,
   setStatus, resetPin, deleteAccount, deleteSelf, uploadLocal, saveSettings, fail
 };
