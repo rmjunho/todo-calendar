@@ -56,6 +56,10 @@ const EX_FOOT = 64;           // 워터마크 줄
 const EX_GRID = EX_W - EX_PAD * 2;
 
 const M_DOW = 56, M_ROW = 176;                        // 월: 요일 줄 · 주 한 줄
+// 기간 일정 막대. 알약과 **같은 높이·같은 간격**이다 — 그래야 막대가 몇 층이든
+// 그 아래 알약이 34 의 배수로만 밀리고, 칸 안의 좌표 계산이 하나 더 안 생긴다.
+const M_BAR_H = 30, M_BAR_ROW = 34;
+const W_BAR_H = 44, W_BAR_ROW = 52;                   // 주: 막대 띠 (칸이 커서 월과 따로다)
 
 // ★ 이미지 전체 높이 상한. 무제한으로 두면 안 된다 — 캔버스에는 브라우저별
 //   최대 크기가 있고 **넘으면 예외 없이 빈 이미지**가 나온다.
@@ -118,32 +122,49 @@ function exWrap(text, maxWidth, maxLines, measure) {
 // 월 격자. 높이가 데이터가 아니라 달력 자체의 함수라 5주/6주에 따라 변한다.
 // includeGrid 가 거짓이면 격자를 안 그리므로 그 높이가 통째로 빠진다 —
 // 제목(150)과 꼬리말(64)은 남는다. 제목까지 빠지면 무슨 달인지 알 수 없다.
-function exMonthLayout(cy, cm, includeGrid) {
+// ★ lanes 는 주마다 그릴 막대 층 수다. 안 넘기면 전부 0 — 그때는 예전과 한 픽셀도
+//   안 달라진다(기존 selftest 가 그 성질을 그대로 단언한다).
+function exMonthLayout(cy, cm, includeGrid, lanes) {
   // 생략(undefined)하면 켠 것으로 본다 — 격자가 기본값이고 끄는 쪽이 명시적이라야
   // 한다. ★ `!== false` 로 쓰지 말 것: 0 을 넘겨도 격자가 안 꺼진다.
   const on = includeGrid === undefined ? true : !!includeGrid;
   const offset = new Date(cy, cm, 1).getDay();
   const dim = new Date(cy, cm + 1, 0).getDate();
   const weeks = Math.ceil((offset + dim) / 7);
-  const gridH = on ? M_DOW + weeks * M_ROW : 0;
+  // 주마다 키가 다르다 — 막대 층이 있는 주만 그만큼 길어진다. 그래서 y 를 곱셈이
+  // 아니라 누적으로 낸다(rowY). 층이 없으면 rowH 가 전부 M_ROW 라 예전 식과 같다.
+  const ln = lanes || [];
+  const rowH = [], rowY = [];
+  let acc = EX_HEAD + M_DOW;
+  for (let w = 0; w < weeks; w++) {
+    rowY.push(acc);
+    rowH.push(M_ROW + (ln[w] || 0) * M_BAR_ROW);
+    acc += rowH[w];
+  }
+  const gridH = on ? M_DOW + rowH.reduce((a, b) => a + b, 0) : 0;
   return {
     w: EX_W, h: EX_HEAD + gridH + EX_FOOT, gridH: gridH, grid: on,
     weeks: weeks, offset: offset, dim: dim,
-    cellW: EX_GRID / 7, cellH: M_ROW,
+    cellW: EX_GRID / 7, cellH: M_ROW, rowH: rowH, rowY: rowY,
     gridTop: EX_HEAD + M_DOW
   };
 }
 
 // 주. 행 수가 달력이 아니라 **데이터**의 함수라 순수 가변은 위험하다 —
 // 빈 주는 텅 비고 바쁜 주는 잘린다. 클램프 한 줄로 둘 다 막는다.
-function exWeekLayout(maxItems, includeGrid) {
+// ★ lanes 는 막대 띠의 층 수다. 안 넘기면 0 — 그때는 예전과 한 픽셀도 안 달라진다.
+function exWeekLayout(maxItems, includeGrid, lanes) {
   const on = includeGrid === undefined ? true : !!includeGrid;      // 생략하면 켠 것으로 본다 (exMonthLayout 과 같다)
-  const want = W_DOW + Math.max(0, maxItems) * W_ITEM + 24;
+  // 막대 띠는 요일 줄과 본문 사이의 가로 줄이다 — 화면의 주간 뷰와 같은 자리.
+  // 층이 있으면 위아래 여백 24 를 같이 잡는다.
+  const bh = (lanes || 0) ? lanes * W_BAR_ROW + 24 : 0;
+  const want = W_DOW + bh + Math.max(0, maxItems) * W_ITEM + 24;
   const gridH = on ? Math.min(W_GRID_MAX, Math.max(W_GRID_MIN, want)) : 0;
   return {
     w: EX_W, h: EX_HEAD + gridH + EX_FOOT, gridH: gridH, grid: on,
-    bodyTop: EX_HEAD + W_DOW, bodyH: gridH - W_DOW,
-    colW: EX_GRID / 7, fit: Math.max(1, Math.floor((gridH - W_DOW - 24) / W_ITEM))
+    barTop: EX_HEAD + W_DOW, barH: bh,
+    bodyTop: EX_HEAD + W_DOW + bh, bodyH: gridH - W_DOW - bh,
+    colW: EX_GRID / 7, fit: Math.max(1, Math.floor((gridH - W_DOW - bh - 24) / W_ITEM))
   };
 }
 
@@ -214,6 +235,23 @@ function exRow(it, ds, includeMemo) {
   return r;
 }
 
+// 막대 한 칸 → 그리기용 값. exRow 와 같은 성격이다 — 캔버스는 이 객체만 본다.
+// 일정에는 완료가 없어서 done/취소선이 아예 안 들어간다.
+function exBar(b, items) {
+  const it = items.find((x) => x.id === b.id) || {};
+  return { from: b.from, to: b.to, lane: b.lane, cutL: b.cutL, cutR: b.cutR,
+    title: it.title || '', color: catOf(it).color };
+}
+// 한 주치 막대 층. 화면(render)과 **같은 함수**를 지난다 — weekEventBars · lanesOf ·
+// barOverflow 가 calendar.js 에 있고 여기서 그대로 부른다. 그래서 이미지가 화면과
+// 자동으로 같아진다(필터·종류 필터까지).
+function exWeekBars(items, ws, cap) {
+  const rows = weekEventBars(items, ws);
+  const shown = rows.filter((r) => r.lane < cap);
+  return { bars: shown.map((b) => exBar(b, items)), lanes: lanesOf(shown),
+    extra: barOverflow(rows, cap) };
+}
+
 const exRemainLabel = (n) => (n === 0 ? t('list.allDone') : t('list.remain', n));
 
 // ★ 필터가 걸린 채로 내보내면 itemsOn() 이 그 카테고리만 흘려 준다. 제목에 이름을
@@ -231,7 +269,10 @@ const exTitle = (base) => {
 //   메모 없이 그려진다. 두 토글이 따로 놀지 않는 지점이다.
 function exAttachDetail(L, days, includeDetail) {
   if (!includeDetail) return L;
-  const groups = days.filter((d) => d.rows.length).map((d) => ({ ds: d.ds, rows: d.rows }));
+  // ★ det 가 있으면 그쪽이다 — 격자는 일정을 막대로 그려서 rows 에서 빼지만,
+  //   상세 목록은 "그 날 있는 것 전부" 라 일정도 같이 실어야 한다.
+  const groups = days.map((d) => ({ ds: d.ds, rows: d.det || d.rows }))
+    .filter((d) => d.rows.length);
   const det = exDetailLayout(groups, EX_MAX_H - L.h - DT_GAP);
   if (!det.h) return L;
   L.detailTop = L.h - EX_FOOT + DT_GAP;
@@ -244,16 +285,28 @@ function exAttachDetail(L, days, includeDetail) {
 function exportModel(view, items, sel, cy, cm, includeMemo, includeDetail, includeGrid) {
   const remain = (rows) => rows.filter((r) => !r.done).length;
   if (view === 'month') {
-    const L = exMonthLayout(cy, cm, includeGrid);
+    // 층 수를 먼저 알아야 주마다의 키가 정해진다 — 그래서 레이아웃보다 막대가 먼저다.
+    const offset0 = new Date(cy, cm, 1).getDay();
+    const weeks0 = Math.ceil((offset0 + new Date(cy, cm + 1, 0).getDate()) / 7);
+    const bars = [];
+    for (let w = 0; w < weeks0; w++) {
+      bars.push(exWeekBars(items, fmt(new Date(cy, cm, 1 - offset0 + w * 7)), MONTH_LANES));
+    }
+    const L = exMonthLayout(cy, cm, includeGrid, bars.map((b) => b.lanes));
     const days = [];
     let left = 0;
     for (let i = 0; i < L.weeks * 7; i++) {
       const d = new Date(cy, cm, 1 - L.offset + i);
       const ds = fmt(d);
-      const rows = itemsOn(items, ds, SHOW_COMPLETED).map((it) => exRow(it, ds, includeMemo));
+      // 칸에는 일정을 안 넣는다(막대가 그린다). 상세 목록에는 넣는다 — 화면과 같다.
+      const rows = cellItems(items, ds).map((it) => exRow(it, ds, includeMemo));
+      const det = itemsOn(items, ds, SHOW_COMPLETED).map((it) => exRow(dayShape(it, ds), ds, includeMemo));
+      // '남음' 은 할 일만 센다 — 일정에는 완료가 없어서 같이 세면 영원히 안 줄어든다.
       if (d.getMonth() === cm) left += remain(rows);
-      days.push({ ds: ds, day: d.getDate(), dow: d.getDay(), inMonth: d.getMonth() === cm, rows: rows });
+      days.push({ ds: ds, day: d.getDate(), dow: d.getDay(), inMonth: d.getMonth() === cm,
+        rows: rows, det: det, more: bars[Math.floor(i / 7)].extra[i % 7] });
     }
+    L.bars = bars;
     // 상세는 **이 달의 날만** 싣는다. 앞뒤 달에서 넘어온 칸은 격자에서 35% 로
     // 흐려 둔 맥락일 뿐이고, 제목이 "2026년 7월" 인데 8월 항목을 나열하면 어긋난다.
     return {
@@ -263,15 +316,19 @@ function exportModel(view, items, sel, cy, cm, includeMemo, includeDetail, inclu
   }
   if (view === 'week') {
     const ws = addDays(sel, -parse(sel).getDay());
+    const wb = exWeekBars(items, ws, WEEK_LANES);
     const days = [];
     for (let i = 0; i < 7; i++) {
       const ds = addDays(ws, i);
       days.push({
         ds: ds, day: parse(ds).getDate(), dow: i,
-        rows: itemsOn(items, ds, SHOW_COMPLETED).map((it) => exRow(it, ds, includeMemo))
+        rows: cellItems(items, ds).map((it) => exRow(it, ds, includeMemo)),
+        det: itemsOn(items, ds, SHOW_COMPLETED).map((it) => exRow(dayShape(it, ds), ds, includeMemo)),
+        more: wb.extra[i]
       });
     }
-    const L = exWeekLayout(days.reduce((m, d) => Math.max(m, d.rows.length), 0), includeGrid);
+    const L = exWeekLayout(days.reduce((m, d) => Math.max(m, d.rows.length), 0), includeGrid, wb.lanes);
+    L.bars = wb.bars;
     const start = parse(ws), end = parse(addDays(ws, 6));
     return {
       view: view, layout: exAttachDetail(L, days, includeDetail), days: days,
@@ -281,9 +338,15 @@ function exportModel(view, items, sel, cy, cm, includeMemo, includeDetail, inclu
   }
   // day — 화면의 시간축을 옮기지 않는다. 6시~24시 눈금은 900px 을 먹고 정보는 0이다.
   // 이미 아젠다 형식이라 상세를 붙이지 않는다 (토글도 안 보여 준다).
-  const rows = itemsOn(items, sel, SHOW_COMPLETED).map((it) => exRow(it, sel, includeMemo));
+  // dayShape 를 지난다 — 화면의 일간 뷰와 같은 시각(첫날은 시작, 마지막 날은 종료,
+  // 가운데는 하루 종일)이 이미지에도 그대로 간다.
+  const dayItems = itemsOn(items, sel, SHOW_COMPLETED);
+  const rows = dayItems.map((it) => exRow(dayShape(it, sel), sel, includeMemo));
   const L = exDayLayout(rows.map((r) => D_ROW + (r.memo ? D_MEMO : 0)));
-  return { view: view, layout: L, rows: rows, title: exTitle(dayTitle(parse(sel))), sub: exRemainLabel(remain(rows)) };
+  // 화면의 하단 목록과 같은 규칙 — 남은 개수는 할 일만 센다.
+  const dayTodos = dayItems.filter((it) => !isEvent(it));
+  return { view: view, layout: L, rows: rows, title: exTitle(dayTitle(parse(sel))),
+    sub: dayTodos.length ? exRemainLabel(dayTodos.filter((it) => !isDone(it, sel)).length) : '' };
 }
 
 // ---------------------------------------------------------------- 그리기
@@ -347,9 +410,25 @@ function exDrawMonth(ctx, C, m) {
 
   for (let i = 0; i < m.days.length; i++) {
     const d = m.days[i];
-    const col = i % 7;
-    const x = EX_PAD + col * L.cellW, y = L.gridTop + Math.floor(i / 7) * M_ROW;
-    if (col === 0) exLine(ctx, EX_PAD, y, EX_PAD + EX_GRID, C.sep);
+    const col = i % 7, wk = Math.floor(i / 7);
+    // ★ 곱셈이 아니라 rowY 다 — 주마다 막대 층만큼 키가 달라서 y 가 누적값이다.
+    const x = EX_PAD + col * L.cellW, y = L.rowY[wk];
+    // 막대가 먹은 높이. 알약과 `+N개` 는 이만큼 아래에서 시작한다.
+    const off = L.rowH[wk] - M_ROW;
+    if (col === 0) {
+      exLine(ctx, EX_PAD, y, EX_PAD + EX_GRID, C.sep);
+      // 막대는 칸 경계를 가로지르므로 칸 루프 **밖의** 좌표계로 그린다.
+      // 잘린 쪽(cutL/cutR)은 여백 없이 칸 끝까지 붙여 "이어진다" 를 보여 준다.
+      (L.bars && L.bars[wk] ? L.bars[wk].bars : []).forEach((b) => {
+        const bx = EX_PAD + b.from * L.cellW + (b.cutL ? 0 : 5);
+        const bw = (b.to - b.from + 1) * L.cellW - (b.cutL ? 0 : 5) - (b.cutR ? 0 : 5);
+        const by = y + 52 + b.lane * M_BAR_ROW;
+        exRect(ctx, bx, by, bw, M_BAR_H, 7);
+        ctx.fillStyle = exAlpha(b.color, C.pillA);
+        ctx.fill();
+        exClip(ctx, b.title, bx + 7, by + 15, bw - 14, exFont(600, 19), b.color);
+      });
+    }
     ctx.save();
     if (!d.inMonth) ctx.globalAlpha = 0.35;
 
@@ -367,7 +446,7 @@ function exDrawMonth(ctx, C, m) {
     const shown = d.rows.slice(0, 3);
     for (let k = 0; k < shown.length; k++) {
       const r = shown[k];
-      const py = y + 52 + k * 34;
+      const py = y + 52 + off + k * 34;
       exRect(ctx, x + 5, py, L.cellW - 10, 30, 7);
       ctx.fillStyle = exAlpha(r.color, C.pillA);
       ctx.fill();
@@ -376,9 +455,9 @@ function exDrawMonth(ctx, C, m) {
       exClip(ctx, r.title, x + 12, py + 15, L.cellW - 24, exFont(600, 19), r.color, r.done);
       ctx.restore();
     }
-    if (d.rows.length > 3) {
-      exText(ctx, t('cell.more', d.rows.length - 3), x + 12, y + 166, exFont(600, 19), C.label3);
-    }
+    // 층 상한에 걸려 안 그린 막대(d.more)도 여기 더한다 — 화면의 `+N개` 와 같은 규칙.
+    const hid = Math.max(0, d.rows.length - 3) + (d.more || 0);
+    if (hid) exText(ctx, t('cell.more', hid), x + 12, y + 166 + off, exFont(600, 19), C.label3);
     ctx.restore();
   }
 }
@@ -395,7 +474,15 @@ function exDrawWeek(ctx, C, m) {
   for (let i = 0; i < 7; i++) {
     const d = m.days[i];
     const x = EX_PAD + i * L.colW, cx = x + L.colW / 2;
-    if (i > 0) { ctx.fillStyle = C.sep; ctx.fillRect(x, EX_HEAD + 12, 1, cardH - 24); }
+    // 세로 구분선은 막대 띠를 **가로지르지 않는다** — 막대가 열을 넘나드는 자리라
+    // 선이 그 위를 지나면 하나짜리 막대 여럿으로 읽힌다. 띠가 없으면 예전 그대로.
+    if (i > 0) {
+      ctx.fillStyle = C.sep;
+      if (L.barH) {
+        ctx.fillRect(x, EX_HEAD + 12, 1, L.barTop - EX_HEAD - 12);
+        ctx.fillRect(x, L.bodyTop, 1, EX_HEAD + cardH - 24 - L.bodyTop);
+      } else ctx.fillRect(x, EX_HEAD + 12, 1, cardH - 24);
+    }
     exText(ctx, names[i], cx, EX_HEAD + 30, exFont(600, 22), exDowColor(C, i), 'center');
     const isToday = d.ds === today;
     if (isToday) {
@@ -419,10 +506,24 @@ function exDrawWeek(ctx, C, m) {
       exClip(ctx, r.time, x + 13, y + 56, L.colW - 26, exFont(500, 19), exAlpha(r.color, 0.75));
       ctx.restore();
     }
-    if (d.rows.length > L.fit) {
-      exText(ctx, t('cell.more', d.rows.length - L.fit), x + 13,
+    const hid = Math.max(0, d.rows.length - L.fit) + (d.more || 0);
+    if (hid) {
+      exText(ctx, t('cell.more', hid), x + 13,
         L.bodyTop + 12 + L.fit * W_ITEM + 14, exFont(600, 19), C.label3);
     }
+  }
+  // 막대 띠. 요일 줄과 본문 사이의 가로 줄이다 — 화면의 주간 뷰와 같은 자리.
+  if (L.barH) {
+    (L.bars || []).forEach((b) => {
+      const bx = EX_PAD + b.from * L.colW + (b.cutL ? 0 : 5);
+      const bw = (b.to - b.from + 1) * L.colW - (b.cutL ? 0 : 5) - (b.cutR ? 0 : 5);
+      const by = L.barTop + 12 + b.lane * W_BAR_ROW;
+      exRect(ctx, bx, by, bw, W_BAR_H, 9);
+      ctx.fillStyle = exAlpha(b.color, C.pillA);
+      ctx.fill();
+      exClip(ctx, b.title, bx + 13, by + 22, bw - 26, exFont(600, 22), b.color);
+    });
+    exLine(ctx, EX_PAD, L.barTop, EX_PAD + EX_GRID, C.sep);
   }
   exLine(ctx, EX_PAD, L.bodyTop, EX_PAD + EX_GRID, C.sep);
 }
