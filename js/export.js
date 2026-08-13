@@ -2,7 +2,7 @@
 // 캘린더 이미지 내보내기 — Canvas 2D 로 직접 그린다. 외부 라이브러리 없음.
 //
 // 로드 순서: calendar.js 뒤 · todo.js 앞.
-//   - 뒤: fmt/parse/addDays/itemsOn/isDone/PRI/state 를 그대로 쓴다.
+//   - 뒤: fmt/parse/addDays/itemsOn/isDone/catOf/state 를 그대로 쓴다.
 //   - 앞: todo.js 는 끝에서 render() 로 앱을 띄운다. 그 뒤로 가면 첫 렌더 때
 //         renderExportSheet 가 아직 없다.
 // import/export 를 붙이지 말 것 — 전역 스코프 공유가 끊긴다.
