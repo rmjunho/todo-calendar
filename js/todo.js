@@ -986,15 +986,21 @@ if (location.search.includes('selftest')) {
   ok(okTheme('light') && okTheme('dark') && okTheme('system'), 'the three themes are accepted');
   ok(!okTheme('Dark') && !okTheme('') && !okTheme(null), 'unknown theme values are rejected');
   ok(okLang('ko') && okLang('en') && !okLang('jp'), 'only the two supported languages are accepted');
+  ok(okView('year') && okView('month') && okView('week') && okView('day'),
+    'the four first-screen values are accepted');
+  ok(!okView('Month') && !okView('decade') && !okView(''), 'unknown first-screen values are rejected');
 
   // 원격에 있는 키는 Firestore 가 이기고, 빠진 키는 로컬 값이 살아남는다 —
   // 로그인 화면에서 고른 언어가 첫 로그인 때 사라지지 않게 하는 규칙이다.
-  const keep = { theme: SETTINGS.theme, lang: SETTINGS.lang };
-  setSettings({ theme: 'dark', lang: 'en' });
-  ok(adoptSettings({ theme: 'light', lang: 'ko' }) === true &&
-     SETTINGS.theme === 'light' && SETTINGS.lang === 'ko', 'a complete remote settings map wins');
-  setSettings({ theme: 'dark', lang: 'en' });
-  ok(adoptSettings({ theme: 'light' }) === false && SETTINGS.lang === 'en',
+  // ★ '완전한 맵' 은 SETTINGS 의 키 전부다 — view 를 늘렸을 때 여기를 같이 안 고쳐서
+  //   실제로 이 검사가 깨졌다. 키를 늘리면 아래 세 픽스처를 다 손볼 것.
+  const keep = { theme: SETTINGS.theme, lang: SETTINGS.lang, view: SETTINGS.view };
+  setSettings({ theme: 'dark', lang: 'en', view: 'day' });
+  ok(adoptSettings({ theme: 'light', lang: 'ko', view: 'week' }) === true &&
+     SETTINGS.theme === 'light' && SETTINGS.lang === 'ko' && SETTINGS.view === 'week',
+    'a complete remote settings map wins');
+  setSettings({ theme: 'dark', lang: 'en', view: 'day' });
+  ok(adoptSettings({ theme: 'light' }) === false && SETTINGS.lang === 'en' && SETTINGS.view === 'day',
     'a missing remote key keeps the local value and asks to be promoted');
   ok(adoptSettings(undefined) === false, 'an account with no settings field asks to be promoted');
   ok(adoptSettings({ theme: 'neon', lang: 'jp' }) === false && SETTINGS.lang === 'en',
@@ -1577,6 +1583,125 @@ if (location.search.includes('selftest')) {
   ok(asked.indexOf('1') >= 0,
     'the confirmation names how many to-dos are affected', JSON.stringify(asked));
 
+  // --- 목표 + 연간 뷰: 조건 함수가 아니라 **그려진 화면**을 본다 ---
+  // ★ 이 기능의 약속은 둘이다 —
+  //   1) 연간 뷰에는 **목표만** 나온다. 일일 할 일이 새면 365일치가 한 화면에 쏟아진다.
+  //   2) 12칸 요약은 **그 달 목표만** 센다. 할 일이 섞이면 숫자가 조용히 부풀어
+  //      "이번 달 목표 40개" 처럼 읽히고, 화면만 봐서는 틀린 줄을 모른다.
+  //   반대 방향(목표가 월·주·일 달력으로 새는 것)도 같이 막는다 — occursOn 의
+  //   '한 항목 = 한 날' 전제가 목표에는 성립하지 않아서 365일 전부에 뜬다.
+  //
+  // ★ showCats 를 여기서 끈다. 위 카테고리 블록이 시트를 연 채로 끝나서(delCat 은
+  //   catDraft 만 지운다) 그냥 두면 아래 sheetBusy() 단언이 항상 참이 된다.
+  const kGoal = { goals: state.goals, goalDraft: state.goalDraft,
+    showCats: state.showCats, cy: state.cy, cm: state.cm };
+  state.showCats = false;
+  state.goalDraft = null;
+
+  const G = (id, scope, m, d, cid, done) => ({ id: id, title: id, scope: scope, y: 2026,
+    m: m, d: d, categoryId: cid || '', memo: '', done: !!done });
+  state.cats = [{ id: 'c1', name: '업무', color: '#007AFF' }];
+  state.filter = null;
+  state.cy = 2026; state.cm = 0;
+  state.goals = [
+    G('year1', 'year', null, null, ''),     // 기한 없음 → 맨 뒤
+    G('jun20', 'month', 5, 20, 'c1'),       // 6/20
+    G('jun', 'month', 5, null, ''),         // 6월 (날짜 없음) → 같은 달에선 뒤
+    G('mar', 'month', 2, null, ''),         // 3월
+    Object.assign(G('old', 'year', null, null, ''), { y: 2025 })   // 다른 해 → 안 나온다
+  ];
+  // 1월(state.cm)에 할 일 일곱 개. 12칸 요약이 이걸 세면 안 된다.
+  state.items = [1, 2, 3, 4, 5, 6, 7].map((n) => cItem('t' + n, ''));   // 전부 2026-01-05
+  state.view = 'year';
+  render();
+  let app5 = document.getElementById('app');
+  const gTitles = (el) => [...el.querySelectorAll('[data-goal] .row-title')].map((x) => x.textContent);
+  // 칸 글자에서 월 이름을 걷어내면 개수 부분만 남는다 — 로케일을 안 타는 비교다.
+  const ymCount = (el, i) =>
+    el.querySelector('[data-ym="' + i + '"]').textContent.replace(monthShort(i), '');
+
+  eq(gTitles(app5).join(), 'mar,jun20,jun,year1',
+    'goals sort by deadline, a dated one beats a month-only one, and no-deadline goes last');
+  eq(app5.querySelectorAll('[data-toggle]').length, 0,
+    'the year view draws no daily to-dos at all, however many the month holds');
+  eq(ymCount(app5, 5), t('goal.count', 2), 'the month summary counts that month\'s goals');
+  ok(!/\d/.test(ymCount(app5, 0)),
+    'and counts no to-dos — a month with seven to-dos and no goals shows no number',
+    JSON.stringify(ymCount(app5, 0)));
+
+  // 목표는 달력 세 뷰 어디에도 안 샌다.
+  ['month', 'week', 'day'].forEach((v) => {
+    state.view = v;
+    render();
+    const el = document.getElementById('app');
+    ok(el.querySelectorAll('[data-goal]').length === 0 && el.innerHTML.indexOf('jun20') < 0,
+      'a goal never appears in the ' + v + ' view — it is a period, not a date');
+  });
+
+  // 필터는 목록과 12칸 요약에 **같이** 걸린다. 한쪽만 걸리면 개수와 목록이 어긋난다.
+  state.view = 'year'; state.filter = 'c1';
+  render();
+  app5 = document.getElementById('app');
+  eq(gTitles(app5).join(), 'jun20', 'a category filter narrows the goal list');
+  eq(ymCount(app5, 5), t('goal.count', 1),
+    'and the summary follows the same filter instead of counting on its own');
+  state.filter = null;
+
+  // 하단 캡슐 바. 헤더에 있던 사본이 남아 있으면 같은 탭이 두 벌 그려진다.
+  state.view = 'month'; render();
+  app5 = document.getElementById('app');
+  const bar = app5.querySelector('.tabbar');
+  eq([...bar.querySelectorAll('[data-view]')].map((b) => b.dataset.view).join(), 'year,month,week,day',
+    'the bottom bar carries the four views, year first');
+  eq(app5.querySelectorAll('[data-view]').length, 4,
+    'and they exist exactly once — the header copy is gone');
+  ok(!bar.querySelector('[data-act]'),
+    'the + sits outside the capsule, not inside it as a fifth tab');
+  eq(bar.parentElement.querySelector('.btn').dataset.act, 'open',
+    'in a calendar view the + adds a to-do');
+  state.view = 'year'; render();
+  eq(document.getElementById('app').querySelector('.tabbar').parentElement.querySelector('.btn').dataset.act,
+    'goalNew', 'in the year view it adds a goal — a to-do there would have no date to land on');
+
+  // ★ 규칙(validGoal)이 hasOnly 를 보므로 여덟 키가 **정확히** 나가야 한다. 하나라도
+  //   빠지거나 늘면 저장이 통째로 거부되는데, 낙관적 업데이트가 화면에는 이미
+  //   그려 놔서 새로고침 전까지 아무도 모른다.
+  const kFb2 = window.fb;
+  let sent = null;
+  window.fb = { newGoalId: () => 'NEW', saveGoal: (id, d) => { sent = d; return Promise.resolve(); },
+    removeGoal: () => Promise.resolve(), setGoalDone: () => Promise.resolve(), fail: () => {} };
+  openGoal(null);
+  ok(sheetBusy(), 'an open goal sheet defers remote snapshot renders like every other sheet');
+  ok(document.getElementById('goalSaveBtn').disabled, 'an empty title cannot be saved');
+  state.goalDraft.title = '달리기';
+  syncGoalSheet();
+  ok(!document.getElementById('goalSaveBtn').disabled,
+    'a title enables the button without a full re-render');
+  Object.assign(state.goalDraft, { title: '  달리기  ', scope: 'month', m: 1, hasDay: true, d: 31 });
+  saveGoalDraft();
+  eq(Object.keys(sent).sort().join(), 'categoryId,d,done,m,memo,scope,title,y',
+    'a saved goal carries exactly the eight keys the security rule allows');
+  eq(sent.d, 28, 'the day is clamped to that month\'s last day — February never gets a 31st');
+  eq(sent.title, '달리기', 'and the title is trimmed before it is stored');
+  ok(!sheetBusy(), 'saving closes the sheet');
+
+  // 편집이 완료 상태를 잃으면, 제목 한 글자 고쳤다고 체크가 풀린다.
+  state.goals = [G('done1', 'year', null, null, '', true)];
+  openGoal('done1');
+  state.goalDraft.title = '고침';
+  saveGoalDraft();
+  eq(sent.done, true, 'editing a completed goal keeps it completed');
+  window.fb = kFb2;
+
+  // 첫 화면 설정. 값 집합은 firestore.rules 의 validSettings() 와 같아야 한다.
+  const kView = SETTINGS.view;
+  setSettings({ view: 'decade' });
+  eq(SETTINGS.view, kView, 'an unknown first-screen value is refused rather than stored');
+  ok(!adoptSettings({ theme: SETTINGS.theme, lang: SETTINGS.lang }),
+    'remote settings with no view read as incomplete, so an old account gets promoted once');
+  setSettings({ view: kView });
+
+  Object.assign(state, kGoal);
   Object.assign(state, kCat);
   Object.assign(state, kDay);
   render();
