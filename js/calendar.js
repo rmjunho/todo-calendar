@@ -340,6 +340,13 @@ const state = {
 const sheetBusy = () =>
   state.showForm || !!state.exp || !!state.jump || state.showCats || !!state.goalDraft;
 
+// 마지막으로 **그려진** 뷰. 진입 애니메이션을 뷰가 실제로 바뀐 렌더에만 걸기 위한 것이다.
+// ★ render() 는 탭 말고도 돈다 — 체크 한 번, 1분마다(일간 시계), 원격 스냅샷,
+//   창 크기 변경, darkMQ. 무조건 걸면 할 일 하나 체크할 때마다 화면이 깜빡인다.
+// ★ state 에 안 넣는다. 이건 앱의 상태가 아니라 **직전 그림의 흔적**이고,
+//   selftest 가 state 를 되돌릴 때 같이 되돌아가면 의미가 없다.
+let lastView = null;
+
 // ---------------------------------------------------------------- 년·월 점프
 // ★ 아래 셋은 순수 함수다 (?selftest 가 검증한다). Intl 을 안 쓴다 — 피커에
 //   보이는 년·월 **이름**만 표시용이고, 돌려주는 값은 숫자와 fmt() 문자열이다.
@@ -505,6 +512,15 @@ function render() {
       state.cats.map((c) => chip(c.id, c.name, c.color)).join('') + '</div>';
   }
 
+  // -- view body ------------------------------------------------------------
+  // 뷰 넷의 출력은 html 이 아니라 body 에 모은다 — 뷰가 바뀐 렌더에서만 진입
+  // 애니메이션을 걸려면 그 조각만 따로 감쌀 수 있어야 한다(위 lastView 주석).
+  // 아래 '선택한 날' 목록은 일부러 밖에 둔다: 뷰를 바꿔도 고른 날은 그대로라
+  // 같이 움직이면 안 바뀐 것이 바뀐 것처럼 보인다.
+  const viewChanged = lastView !== state.view;
+  lastView = state.view;
+  let body = '';
+
   // -- year view ------------------------------------------------------------
   // 목표만 그린다. 일일 할 일은 여기 안 들어온다 — 365일치를 한 화면에 올리면
   // 정작 "올해 안에 무엇을 이룰 것인가" 가 묻힌다. 아래 선택한 날 목록도 건너뛴다.
@@ -559,7 +575,7 @@ function render() {
           esc(n ? t('goal.count', n) : '–') + '</span></button>';
     }
 
-    html += '<div style="display:flex;align-items:baseline;justify-content:space-between;margin:0 4px 10px">' +
+    body += '<div style="display:flex;align-items:baseline;justify-content:space-between;margin:0 4px 10px">' +
         '<h2 style="margin:0;font-size:20px;font-weight:700">' + esc(t('goal.title')) + '</h2>' +
         '<span style="font-size:13px;font-weight:500;color:var(--label-secondary)">' + esc(gRemain) + '</span></div>' +
       '<div class="card" style="border-radius:16px;border:.5px solid var(--separator);overflow:hidden">' +
@@ -607,7 +623,7 @@ function render() {
     // 작아지지 못해, nowrap 제목 하나가 나머지 요일을 화면 밖으로 밀어낸다.
     // 월간은 .cell{overflow:hidden} 덕에 지금도 안 깨지지만 같은 요구사항이니
     // 같은 방식으로 적어 둔다 — .cell 을 건드려도 안 터지게.
-    html += '<div class="card" style="border:.5px solid var(--separator);overflow:hidden">' +
+    body += '<div class="card" style="border:.5px solid var(--separator);overflow:hidden">' +
       '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr))">' + heads + '</div>' +
       '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr))">' + cells + '</div></div>';
   }
@@ -655,7 +671,7 @@ function render() {
     }
     // ★ minmax(0,1fr) 이라야 한다. 1fr 이면 긴 제목(.trunc = nowrap)의 min-content 가
     //   그 열을 밀어내 목·금·토가 화면 밖으로 나가고, overflow:hidden 이라 스크롤도 안 된다.
-    html += '<div class="card" style="border:.5px solid var(--separator);' +
+    body += '<div class="card" style="border:.5px solid var(--separator);' +
       'overflow:hidden;display:grid;grid-template-columns:repeat(7,minmax(0,1fr))">' + cols + '</div>';
   }
 
@@ -753,9 +769,13 @@ function render() {
     }
 
     // ⚠️ 이 카드의 padding 16 은 DAY_PX.cardPad 와 같은 값이어야 한다(위 주석).
-    html += '<div class="card" style="border:.5px solid var(--separator);padding:16px 16px 20px">' + allDayBlock +
+    body += '<div class="card" style="border:.5px solid var(--separator);padding:16px 16px 20px">' + allDayBlock +
       axis + '</div>';
   }
+
+  // 감싸는 div 는 **늘** 있다. 애니메이션이 붙을 때만 생기게 하면 DOM 모양이 렌더마다
+  // 달라져서, 그 위치를 짚는 selftest·CSS 가 어느 쪽 기준인지 알 수 없게 된다.
+  html += '<div' + (viewChanged ? ' class="view-in"' : '') + '>' + body + '</div>';
 
   // -- selected day list ----------------------------------------------------
   const selAll = itemsOn(items, sel, true);
@@ -822,7 +842,8 @@ function render() {
   //   안 들어가면 캡슐 **안에서** 가로로 흐른다(페이지는 안 밀린다).
   html += '<div style="position:fixed;left:0;right:0;bottom:22px;z-index:60;display:flex;' +
     'justify-content:center;align-items:center;gap:12px;padding:0 10px;pointer-events:none">' +
-    '<div class="tabbar" style="pointer-events:auto;min-width:0;overflow-x:auto">' + segments + '</div>' +
+    '<div class="tabbar' + (viewChanged ? ' tabbar-anim' : '') +
+      '" style="pointer-events:auto;min-width:0;overflow-x:auto">' + segments + '</div>' +
     '<span data-raise="tint" style="pointer-events:auto;display:flex;flex:none">' +
       '<button class="btn btn-prominent btn-lg btn-icon" data-act="' + (addYear ? 'goalNew' : 'open') +
       '" aria-label="' + esc(t(addYear ? 'goal.add' : 'item.add')) + '">' +

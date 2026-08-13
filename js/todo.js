@@ -1662,9 +1662,11 @@ if (location.search.includes('selftest')) {
   // ★ 명시도 함정. `.seg-on`(0,1,0) 은 `.tabbar .seg`(0,2,0) 의 투명 배경을 못 이긴다 —
   //   `.tabbar` 를 안 붙이면 **고른 탭의 tint 판이 조용히 사라지고** 넷이 똑같아 보인다.
   //   색을 리터럴로 적지 않는다(테마·색 토큰이 바뀌면 낡는다). 다른지만 본다.
-  const onBg = getComputedStyle(bar.querySelector('.seg-on')).backgroundColor;
+  // 판은 버튼 배경이 아니라 ::before 다 — 애니메이션이 아이콘·글자를 안 건드리게 하려고
+  // 뺐다(style.css). 버튼 쪽 backgroundColor 를 보면 둘 다 투명이라 항상 통과한다.
+  const onBg = getComputedStyle(bar.querySelector('.seg-on'), '::before').backgroundColor;
   const offBg = getComputedStyle([...bar.querySelectorAll('.seg')]
-    .find((s) => !s.classList.contains('seg-on'))).backgroundColor;
+    .find((s) => !s.classList.contains('seg-on')), '::before').backgroundColor;
   ok(onBg !== offBg, 'the selected tab is filled and the others are not', onBg + ' vs ' + offBg);
   ok(/(, *0\)|\/ *0\))/.test(offBg) || offBg === 'transparent',
     'an unselected tab has no chip behind it at all', offBg);
@@ -1686,6 +1688,18 @@ if (location.search.includes('selftest')) {
   // 아이콘을 눌러도 탭이 먹혀야 한다 — 위임이 closest() 라 SVG 자식에서도 올라온다.
   bar.querySelector('[data-view="week"] svg').dispatchEvent(new MouseEvent('click', { bubbles: true }));
   eq(state.view, 'week', 'tapping the icon inside a tab switches the view, not just the label');
+
+  // ★ 애니메이션은 뷰가 **실제로 바뀐** 렌더에만 붙는다(calendar.js 의 lastView).
+  //   이 가드가 빠지면 할 일 하나 체크할 때마다(=render()) 본문이 통째로 다시 튀어
+  //   오른다 — 기능은 멀쩡한데 쓸 수 없는 앱이 된다. 조건식이 아니라 **그려진
+  //   클래스**를 본다. 감싸는 div 자체는 늘 있고, 클래스만 붙었다 말았다 한다.
+  state.view = 'day'; render();
+  ok(!!document.querySelector('.view-in') && !!document.querySelector('.tabbar-anim'),
+    'switching views animates the body and the tab pill');
+  render();
+  ok(!document.querySelector('.view-in') && !document.querySelector('.tabbar-anim'),
+    're-rendering the same view does not — otherwise every checkbox tap would flash the screen');
+
   state.view = 'month'; render();
   app5 = document.getElementById('app');
   bar = app5.querySelector('.tabbar');

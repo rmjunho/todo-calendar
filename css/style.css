@@ -138,9 +138,26 @@ input:focus,textarea:focus{outline:2px solid var(--tint);outline-offset:-1px}
   height:48px;min-width:54px;padding:0 9px;font-size:11px;border-radius:var(--radius-capsule);
   /* tertiary(알파 .3)가 아니라 secondary 다 — 주 내비게이션 글자가 30% 불투명이면
      밝은 배경에서 대비가 안 나온다. 고른 것과의 구분은 tint 색과 판이 이미 만든다. */
-  color:var(--label-secondary);background-color:transparent;background-image:none;box-shadow:none}
-.tabbar .seg-on{color:var(--tint);background-image:none;box-shadow:none;
+  color:var(--label-secondary);background-color:transparent;background-image:none;box-shadow:none;
+  position:relative}
+/* ★ 고른 탭의 판은 버튼 배경이 아니라 ::before 다. 버튼을 키우면 아이콘과 글자까지
+   같이 커져서 글자가 흐물거린다 — 판만 따로 두면 판이 톡 튀어나오는 동안 글자는
+   제자리에 선명하게 있다. border-radius:inherit 라 동심 관계도 그대로 따라온다. */
+.tabbar .seg > *{position:relative;z-index:1}
+.tabbar .seg-on{color:var(--tint);background-image:none;box-shadow:none}
+.tabbar .seg-on::before{content:"";position:absolute;inset:0;border-radius:inherit;
   background-color:color-mix(in srgb,var(--tint) 13%,transparent)}
+/* ★ 애니메이션은 **뷰가 실제로 바뀐 렌더에서만** 붙는다(calendar.js 의 lastView).
+   render() 는 체크 한 번에도, 1분마다도, 원격 스냅샷에도 도는데 무조건 걸면
+   할 일 하나 체크할 때마다 탭과 본문이 깜빡인다. */
+.tabbar-anim .seg-on::before{animation:tcTabOn var(--duration-base) var(--ease-spring)}
+.view-in{animation:tcViewIn var(--duration-base) var(--ease-decelerate)}
+@keyframes tcTabOn{from{opacity:0;transform:scale(.66)}to{opacity:1;transform:none}}
+@keyframes tcViewIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+/* 움직임을 줄이라고 설정한 사람에게는 걸지 않는다. 정보는 색과 위치가 이미 다 준다. */
+@media (prefers-reduced-motion:reduce){
+  .tabbar-anim .seg-on::before,.view-in{animation:none}
+}
 .pri{display:flex;align-items:center;gap:6px;border:none;cursor:pointer;padding:0 14px;height:36px;
   border-radius:999px;font-family:inherit;font-size:13px;font-weight:600;transition:all .15s ease;
   background-image:var(--tc-sheen);box-shadow:var(--tc-raise-sm)}
