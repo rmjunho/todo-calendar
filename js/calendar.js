@@ -194,11 +194,17 @@ function laneBars(segs) {
 
 // 막대 층의 치수. 글자는 .pill 과 같아서(10.5px/600) 높이도 알약과 같은 17px 이다.
 const BAR_H = 17, BAR_GAP = 2, BAR_ROW = BAR_H + BAR_GAP;
-// 막대 층이 시작하는 y. 칸의 border-top(.5) + padding-top(5) + 날짜 원(26) + 그 아래 여백(4).
-// ⚠️ **CSS 와 이중 소스다** — css/style.css 의 `.cell{padding:5px 4px;border-top:.5px}` 와
-//    아래 날짜 원의 인라인 스타일에서 온 값이다. 셋 중 하나를 바꾸면 여기도 바꿔야 한다.
-//    ?selftest 가 그려진 DOM 에서 '첫 막대의 top == 날짜 원의 bottom' 을 직접 잰다.
-const BAR_TOP = 35.5;
+// 막대 층이 시작하는 y 는 **숫자로 안 적는다.** 칸 위쪽(테두리 .5 + 패딩 5 + 날짜 원
+// 26 + 여백 4)을 더하면 35.5 지만, 브라우저는 .5px 테두리를 dpr 에 따라 0.5 로도 1 로도
+// 잡는다 — dpr 1 에서 실측해 보니 실제 자리는 36 이었다(0.5px 어긋남).
+// 그래서 **같은 모양의 빈 칸을 하나 그려서** 첫 줄 높이를 브라우저가 재게 한다.
+// 이러면 배율·dpr 이 뭐든 칸의 계산과 막대 층의 계산이 어긋날 수가 없다.
+const barSpacer =
+  '<div aria-hidden="true" style="grid-column:1/8;grid-row:1;visibility:hidden;' +
+    'border-top:.5px solid transparent;padding:5px 0 4px">' +
+  // padding-bottom 4 로 준다 — 자식의 margin-bottom 은 부모 밖으로 새어(마진 상쇄)
+  // 높이에 안 들어간다. 칸 쪽은 뒤에 형제가 있어서 그 4px 이 그대로 산다.
+  '<div style="height:26px"></div></div>';
 // 그리는 층의 최대 개수. 넘친 막대는 **버리지 않고** 그 날의 `+N개` 로 넘긴다.
 // 상한이 없으면 겹치는 주의 높이가 그대로 늘어난다 — 그걸 막으려고 종류 필터를 만든 것이다.
 // 주간이 더 깊은 이유는 그 화면이 한 주만 보여 주는 자리라서다(막대 띠가 칸 위에 따로 있다).
@@ -222,7 +228,8 @@ function barHtml(b, it) {
   const rL = b.cutL ? '2px' : '5px', rR = b.cutR ? '2px' : '5px';
   return '<div class="pill" ' + openAttr(p, b.start) +
     ' style="pointer-events:auto;cursor:pointer;align-self:start;line-height:13px;height:' + BAR_H +
-    'px;grid-column:' + (b.from + 1) + '/' + (b.to + 2) + ';grid-row:' + (b.lane + 1) +
+    // 1번 줄은 자리 맞추기용이라(barSpacer) 층은 2번 줄부터다.
+'px;grid-column:' + (b.from + 1) + '/' + (b.to + 2) + ';grid-row:' + (b.lane + 2) +
     ';margin-left:' + (b.cutL ? 0 : 3) + 'px;margin-right:' + (b.cutR ? 0 : 3) +
     'px;border-radius:' + rL + ' ' + rR + ' ' + rR + ' ' + rL +
     ';background-color:' + p.bg + ';color:' + p.color + ';text-decoration:' + p.deco +
@@ -826,9 +833,9 @@ function render() {
 
       // 막대 층. pointer-events 를 끄고 막대만 다시 켠다 — 막대 사이 빈 자리를 누르면
       // 아래 칸이 눌려야 한다(날짜 선택). 안 그러면 층이 칸의 절반을 덮어 먹는다.
-      const bars = lanes ? '<div data-bars="' + ws + '" style="position:absolute;left:0;right:0;top:' + BAR_TOP +
-        'px;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:repeat(' +
-        lanes + ',' + BAR_ROW + 'px);pointer-events:none">' +
+      const bars = lanes ? '<div data-bars="' + ws + '" style="position:absolute;left:0;right:0;top:0;' +
+        'display:grid;grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:auto repeat(' +
+        lanes + ',' + BAR_ROW + 'px);pointer-events:none">' + barSpacer +
         shown.map((r) => barHtml(r, byId[r.id])).join('') + '</div>' : '';
       grid += '<div style="position:relative">' +
         '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr))">' + cells + '</div>' +
@@ -902,8 +909,11 @@ function render() {
         ';padding:6px 5px;display:flex;flex-direction:column;gap:4px">' + pills + more + '</div>';
     }
     // 막대 띠. 열 위에 가로로 눕는 별도 줄이다 — 하루짜리 일정도 여기 뜬다.
+    // ★ 첫 줄이 0 인 이유: barHtml 이 월간의 자리 맞추기 줄(barSpacer) 때문에 2번
+    //   줄부터 쓴다. 여기는 맞출 것이 없으니 그 줄을 0 으로 접는다 — 막대 한 조각을
+    //   두 화면이 **같은 함수**로 그리게 하려고 치르는 값이다.
     const wbars = wlanes ? '<div data-bars="' + ws + '" style="display:grid;padding:5px 0;' +
-      'grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:repeat(' + wlanes + ',' + BAR_ROW +
+      'grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:0 repeat(' + wlanes + ',' + BAR_ROW +
       'px);border-bottom:.5px solid var(--separator)">' +
       wshown.map((r) => barHtml(r, byId[r.id])).join('') + '</div>' : '';
     // ★ minmax(0,1fr) 이라야 한다. 1fr 이면 긴 제목(.trunc = nowrap)의 min-content 가

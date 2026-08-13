@@ -1902,6 +1902,143 @@ if (location.search.includes('selftest')) {
     'remote settings with no view read as incomplete, so an old account gets promoted once');
   setSettings({ view: kView });
 
+  // ------------------------------------------------------- 기간 일정 (그려진 화면)
+  // ★ weekBars/laneBars 의 좌표는 위에서 이미 봤다. 여기서 보는 것은 "그 좌표가
+  //   실제로 그렇게 그려지는가" 다 — 조건 함수가 아니라 DOM 을 읽는다.
+  const kSpan = { view: state.view, items: state.items, cats: state.cats, cy: state.cy,
+    cm: state.cm, selected: state.selected, filter: state.filter, kind: state.kind };
+  const EV = (o) => Object.assign({ kind: 'event', span: 1, title: 'E', date: '2026-08-05',
+    time: '', endTime: '', categoryId: 'c1', repeat: 'none', days: [], memo: '',
+    done: false, doneDates: [] }, o);
+  const APP = () => document.getElementById('app');
+  state.cats = [{ id: 'c1', name: '업무', color: '#FF3B30' }];
+  state.cy = 2026; state.cm = 7; state.selected = '2026-08-13';
+  state.filter = null; state.kind = null; state.view = 'month';
+
+  // 일정이 하나도 없으면 예전 격자 그대로다 — 막대 층도, 그 자리도 안 생긴다.
+  state.items = [EV({ id: 'p', kind: 'todo', title: '할일' })];
+  render();
+  eq(APP().querySelectorAll('[data-bars]').length, 0, 'a month with no events draws no bar layer');
+  eq(APP().querySelectorAll('[data-barspace]').length, 0,
+    'and reserves no room for one — the grid is exactly the height it always was');
+
+  // 5일짜리(수~일)는 토요일에서 잘려 두 조각이 된다. 한 조각으로 그리면 그 줄이
+  // 다음 주까지 늘어져 격자를 뚫는다.
+  state.items = [EV({ id: 'v', span: 5, title: '휴가' })];
+  render();
+  eq([...APP().querySelectorAll('[data-bars] .pill')]
+      .map((b) => (b.getAttribute('style').match(/grid-column:([^;]+)/) || [])[1]).join(' | '),
+    '4/8 | 1/2', 'an event crossing Saturday is drawn as two pieces, one per week');
+  // ★ px 리터럴로 안 적는다. 막대 층의 시작 y 를 35.5 로 **적었다가** dpr 1 에서 실제
+  //   36 이라 0.5px 어긋난 적이 있다(.5px 테두리 반올림). 지금은 같은 모양의 빈 칸이
+  //   그 높이를 만들므로, 볼 것은 숫자가 아니라 "둘이 같은 자리에서 시작하는가" 다.
+  const bRect = APP().querySelector('[data-bars] .pill').getBoundingClientRect();
+  const sRect = APP().querySelector('[data-day="2026-08-05"] [data-barspace]').getBoundingClientRect();
+  ok(Math.abs(bRect.top - sRect.top) < 0.05,
+    'the bar layer starts exactly where the cell reserved room for it',
+    bRect.top + ' vs ' + sRect.top);
+  ok(bRect.bottom <= sRect.bottom + 0.05, 'and never spills onto the pills underneath');
+  const spH = [0, 1, 2, 3, 4, 5, 6].map((i) =>
+    APP().querySelector('[data-day="' + addDays('2026-08-02', i) + '"] [data-barspace]')
+      .getBoundingClientRect().height);
+  ok(spH.every((h) => Math.abs(h - spH[0]) < 0.05),
+    'every cell of that week reserves the same height, so the pill rows stay level');
+
+  // 칸은 할 일만, 막대는 일정만. 한 항목이 알약과 막대로 두 번 나오면 안 된다.
+  state.items = [EV({ id: 'v', span: 5, title: '휴가' }), EV({ id: 'td', kind: 'todo', title: '할일' })];
+  render();
+  eq([...APP().querySelectorAll('[data-day="2026-08-05"] .pill')].map((p) => p.textContent).join(),
+    '할일', 'a day cell lists to-dos only — the event is the bar above, not a second pill');
+
+  // 층 상한을 넘긴 막대는 **조용히 사라지지 않는다** — 그 날의 `+N개` 로 넘어간다.
+  state.items = [0, 1, 2, 3].map((i) => EV({ id: 'x' + i, span: 3, title: 'E' + i }));
+  render();
+  eq(APP().querySelectorAll('[data-bars] .pill').length, MONTH_LANES,
+    'a week draws at most MONTH_LANES rows of bars however many overlap');
+  ok(APP().querySelector('[data-day="2026-08-05"]').textContent.indexOf(t('cell.more', 1)) >= 0,
+    'and the one that did not fit is counted in that day\'s +N instead of vanishing');
+
+  // 종류 필터. 값은 지우지 않고 일간·연간에서만 무시한다(kindFilter).
+  state.items = [EV({ id: 'v', span: 3, title: '휴가' }), EV({ id: 'td', kind: 'todo', title: '할일' })];
+  state.kind = 'todo'; render();
+  eq(APP().querySelectorAll('[data-bars]').length, 0, 'showing only to-dos hides the bar layer');
+  ok(APP().querySelector('[data-day="2026-08-05"]').textContent.indexOf('할일') >= 0,
+    'and keeps the pills');
+  state.kind = 'event'; render();
+  eq(APP().querySelectorAll('[data-day="2026-08-05"] .pill').length, 0,
+    'showing only events empties the cells');
+  ok(APP().querySelectorAll('[data-bars] .pill').length > 0, 'and leaves the bars standing');
+  state.view = 'day'; render();
+  eq(APP().querySelectorAll('[data-kind]').length, 0, 'the kind row is not drawn in the day view');
+  eq(itemsOn(state.items, '2026-08-05', true).length, 2,
+    'and that view shows both kinds even while the filter still says events only');
+  state.kind = null;
+
+  // 주간: 막대 띠는 요일 줄 **아래**, 칸 **위**의 별도 줄이다.
+  state.view = 'week'; state.selected = '2026-08-05'; render();
+  const wBand = APP().querySelector('[data-bars]');
+  ok(wBand.getBoundingClientRect().top >=
+      APP().querySelector('[data-day="2026-08-05"]').getBoundingClientRect().bottom - 0.5,
+    'the week bar band sits below the weekday header row, not on top of it');
+
+  // 일간: 첫날은 시작 시각 마커, 마지막 날은 종료 시각 마커, 가운데는 하루 종일.
+  const trip = EV({ id: 'trip', span: 3, title: '출장', date: '2026-08-13', time: '09:00', endTime: '18:00' });
+  eq(dayShape(trip, '2026-08-13').endTime, '',
+    'on its first day a multi-day event has no end — a marker, not a block with an invented length');
+  eq(dayShape(trip, '2026-08-14').time, '', 'in the middle it is all-day');
+  eq(dayShape(trip, '2026-08-15').time, '18:00', 'and on the last day it sits at the end time');
+  eq(dayShape(EV({ span: 1, time: '09:00', endTime: '10:00' }), '2026-08-05').endTime, '10:00',
+    'a one-day event is handed back untouched');
+  eq(dayShape(Object.assign(EV({ span: 3, time: '09:00', endTime: '18:00' }), { kind: 'todo' }),
+    '2026-08-06').endTime, '18:00',
+    'and a to-do is never reshaped however long its span field claims');
+
+  // 하단 목록: 일정에는 체크가 없고, 남은 개수도 일정을 안 센다.
+  state.view = 'month'; state.selected = '2026-08-14';
+  state.items = [trip, EV({ id: 'td', kind: 'todo', title: '할일', date: '2026-08-14' })];
+  render();
+  eq(APP().querySelectorAll('[data-toggle]').length, 1,
+    'an event gets no completion circle — only the to-do can be checked');
+  ok([...APP().querySelectorAll('[data-open="trip"]')].every((e) => e.dataset.ds === '2026-08-13'),
+    'tapping the middle of a span opens the occurrence start, not the day that was tapped');
+  state.items = [trip];
+  render();
+  ok(APP().innerHTML.indexOf(t('list.remain', 1)) < 0 && APP().innerHTML.indexOf(t('list.allDone')) < 0,
+    'a day holding only events shows no remaining count — an event can never be finished');
+
+  // 입력 시트의 판정. 저장 버튼·안내·saveForm 이 전부 이 둘만 본다.
+  const F = (o) => Object.assign(blankForm('2026-08-05'), o);
+  eq(formSpan(F({ kind: 'event', hasSpan: true, endDate: '2026-08-09' })), 5,
+    'five calendar days inclusive is a span of five');
+  eq(formSpan(F({ kind: 'todo', hasSpan: true, endDate: '2026-08-09' })), 1,
+    'a to-do stays one day whatever the sheet still remembers');
+  ok(!spanOk(F({ kind: 'event', hasSpan: true, endDate: '2026-08-04' })),
+    'an end before the start cannot be saved');
+  ok(!spanOk(F({ kind: 'event', hasSpan: true, endDate: '' })),
+    'and neither can a cleared end date');
+  ok(!spanOk(F({ kind: 'event', hasSpan: true, endDate: '2026-08-13', repeat: 'weekly', days: [3] })),
+    'a nine-day weekly event would overlap its own next occurrence');
+  ok(spanOk(F({ kind: 'event', hasSpan: true, endDate: '2026-08-11', repeat: 'weekly', days: [3] })),
+    'seven days is exactly the weekly gap and still fits');
+  ok(!endOk(F({ hasTime: true, time: '09:00', end: '08:00' })),
+    'a one-day item may not end before it starts');
+  ok(endOk(F({ kind: 'event', hasSpan: true, endDate: '2026-08-07', hasTime: true, time: '09:00', end: '08:00' })),
+    'but a span may — that end time lands on the last day, not the first');
+
+  // 내보내기 레이아웃. 막대가 없으면 예전 이미지와 한 픽셀도 안 달라야 한다.
+  const exA = exMonthLayout(2026, 7, true);
+  eq(exMonthLayout(2026, 7, true, [0, 0, 0, 0, 0, 0]).h, exA.h,
+    'a month export with no bars is the exact size it always was');
+  eq(exMonthLayout(2026, 7, true, [1, 2, 0, 0, 0, 0]).h - exA.h, 3 * M_BAR_ROW,
+    'and grows by one bar row per lane, summed over every week');
+  const exC = exMonthLayout(2026, 7, true, [1, 0, 0, 0, 0, 0]);
+  eq(exC.rowY[1] - exC.rowY[0], M_ROW + M_BAR_ROW,
+    'the second week starts below the first week\'s bars — the rows stack, they are not multiplied');
+  const wA = exWeekLayout(3, true), wB = exWeekLayout(3, true, 2);
+  eq(exWeekLayout(3, true, 0).h, wA.h, 'the week export is untouched when there are no bars');
+  eq(wB.bodyTop - wA.bodyTop, wB.barH, 'and its columns start below the bar band');
+
+  Object.assign(state, kSpan);
   Object.assign(state, kGoal);
   Object.assign(state, kCat);
   Object.assign(state, kDay);

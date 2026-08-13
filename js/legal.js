@@ -94,7 +94,7 @@ const LEGAL = {
       <td>로그인 인증. Firebase Authentication에 <strong>해시 형태로만</strong> 저장되며
           운영자와 서비스는 <strong>원문을 보관하지 않고 확인할 수도 없습니다.</strong></td>
       <td>필수</td></tr>
-  <tr><td>할 일·일정 데이터<br>(제목, 날짜, 시간, 카테고리, 반복, 메모, 완료 여부),<br>
+  <tr><td>할 일·일정 데이터<br>(제목, 종류, 날짜, 기간, 시간, 카테고리, 반복, 메모, 완료 여부),<br>
           <strong>목표 데이터</strong>(제목, 기한, 카테고리, 메모, 달성 여부),<br>
           및 이용자가 만든 <strong>카테고리 이름·색</strong></td>
       <td>서비스 제공(기록·조회·기기 간 동기화)</td><td>필수</td></tr>
@@ -275,7 +275,7 @@ them for any other purpose.</p>
       <td>Sign-in authentication. Stored <strong>only as a hash</strong> in Firebase Authentication;
           neither the operator nor the Service <strong>keeps or can read the original.</strong></td>
       <td>Required</td></tr>
-  <tr><td>To-do and schedule data<br>(title, date, time, category, repeat, note, completion),<br>
+  <tr><td>To-do and schedule data<br>(title, kind, date, duration, time, category, repeat, note, completion),<br>
           <strong>goal data</strong> (title, deadline, category, note, completion),<br>
           and the <strong>category names and colours</strong> the user creates</td>
       <td>Providing the Service (recording, viewing, syncing across devices)</td><td>Required</td></tr>
