@@ -244,15 +244,48 @@ function itemsOn(items, ds, showCompleted) {
     && (!f || (it.categoryId || '') === f)));
 }
 
+// ------------------------------------------------------------------- 목표
+// 목표는 **할 일과 다른 컬렉션**이다 (users/{uid}/goals). 날짜 하나가 아니라 기간이라
+// occursOn 의 '한 항목 = 한 날' 전제에 안 맞는다 — 섞으면 월·주·일 렌더 경로가 전부
+// 목표를 걸러내야 하고, 한 곳만 빠뜨리면 목표가 365일 전부에 뜬다.
+//   { title, scope:'year'|'month', y, m:0-11|null, d:1-31|null, categoryId, memo, done }
+// scope 'year' = '올해 안에'(기한 없음), 'month' = 그 달까지(d 가 있으면 그 날짜까지).
+//
+// 정렬 키. 이른 마감이 먼저, 기한 없는 '올해 안에' 는 맨 뒤다.
+// d 가 없으면 그 달의 아무 날보다 뒤(99)로 둔다 — 같은 달이면 날짜를 정한 쪽이 먼저다.
+const goalKey = (g) => (g.scope === 'month' ? (g.m || 0) * 100 + (g.d || 99) : 999999);
+// ★ itemsOn 과 같은 이유로 state.filter 를 직접 읽는다 — 목록과 12칸 요약이 같은
+//   통로를 지나야 필터가 한쪽에서만 조용히 빠지지 않는다.
+function goalsIn(y) {
+  const f = state.filter;
+  return state.goals
+    .filter((g) => g.y === y && (!f || (g.categoryId || '') === f))
+    .sort((a, b) => {
+      const ka = goalKey(a), kb = goalKey(b);
+      if (ka !== kb) return ka - kb;
+      // sortItems 와 같은 이유로 localeCompare 를 안 쓴다 (Intl 경계, CONTEXT §5).
+      const x = a.title || '', z = b.title || '';
+      return x < z ? -1 : x > z ? 1 : 0;
+    });
+}
+// 마감 배지. Intl 이 만든 월·일 이름에 조사만 붙인다 — 저장값으로 되돌아가지 않는다.
+const goalDue = (g) => (g.scope !== 'month' ? t('goal.dueYear')
+  : t('goal.by', g.d ? monthDay(new Date(g.y, g.m, g.d)) : monthShort(g.m)));
+
 // ---------------------------------------------------------------- state
 const now0 = new Date();
 const state = {
+  // 'year' | 'month' | 'week' | 'day'. 첫 화면은 설정에서 바꾼다 (SETTINGS.view).
   view: 'month',
   cy: now0.getFullYear(),
   cm: now0.getMonth(),
   selected: fmt(now0),
   items: [],
   cats: [],           // users/{uid}/categories 스냅샷. 이름순 정렬은 firebase.js 가 한다
+  goals: [],          // users/{uid}/goals 스냅샷. 정렬은 goalsIn() 이 그릴 때 한다
+  // 목표 시트. null 이면 닫힘 — exp·jump 와 같은 방식이라 여는 플래그가 따로 없다.
+  // { id, title, scope, y, m, hasDay, d, categoryId, memo }. id 가 '' 면 새 목표.
+  goalDraft: null,
   // null = 전체. 아니면 categoryId 문자열. ★ 저장하지 않는다 — 새로고침하면 풀린다.
   // 남겨 두면 다음에 열었을 때 "할 일이 다 사라졌다" 로 읽힌다.
   filter: null,
@@ -282,7 +315,9 @@ const state = {
 // ★ showCats 도 여기 든다 — 카테고리 시트에는 이름 입력칸(uncontrolled)이 있어서
 //   원격 스냅샷이 render() 를 돌리면 타이핑하던 캐럿이 날아간다. showSettings·
 //   showAdmin 이 여기 없는 이유는 그쪽에 입력칸이 없기 때문이다.
-const sheetBusy = () => state.showForm || !!state.exp || !!state.jump || state.showCats;
+// ★ goalDraft 도 여기 든다 — 목표 시트에 제목·메모 입력칸(uncontrolled)이 있다.
+const sheetBusy = () =>
+  state.showForm || !!state.exp || !!state.jump || state.showCats || !!state.goalDraft;
 
 // ---------------------------------------------------------------- 년·월 점프
 // ★ 아래 셋은 순수 함수다 (?selftest 가 검증한다). Intl 을 안 쓴다 — 피커에
@@ -368,12 +403,13 @@ function render() {
 
   // -- header ---------------------------------------------------------------
   // 월·요일 이름은 Intl 이 만든다. 여기 들어오는 값은 전부 화면용이다.
-  const monthLabel = state.view === 'month'
-    ? monthTitle(state.cy, state.cm)
+  // 연간 뷰의 축은 state.cy 하나다 — 월간처럼 selected 를 안 본다.
+  const monthLabel = state.view === 'year' ? yearLabel(state.cy)
+    : state.view === 'month' ? monthTitle(state.cy, state.cm)
     : monthTitle(selD.getFullYear(), selD.getMonth());
   const todayLabel = t('hdr.today', shortDay(todayD));
 
-  const segments = ['month', 'week', 'day'].map((k) => {
+  const segments = ['year', 'month', 'week', 'day'].map((k) => {
     const on = state.view === k;
     return '<button class="seg' + (on ? ' seg-on' : '') + '" data-view="' + k + '">' +
       esc(t('view.' + k)) + '</button>';
@@ -414,8 +450,12 @@ function render() {
           '<button class="btn btn-glass btn-sm" data-nav="today">' + esc(t('nav.today')) + '</button>' +
           '<button class="btn btn-glass btn-sm btn-icon" data-nav="next" aria-label="' + esc(t('nav.next')) + '">' + icon('chevron.right', 15) + '</button>' +
           // 현재 뷰(월/주/일)를 그대로 이미지로 내보낸다. 버튼 하나가 세 뷰를 다 맡는다.
-          '<button class="btn btn-glass btn-sm" data-act="export" aria-label="' + esc(t('exp.title')) + '">' +
-            esc(t('exp.btn')) + '</button>' +
+          // ★ 연간 뷰에서는 안 그린다 — export.js 의 drawExport 는 month/week/day 세
+          //   갈래뿐이라 'year' 가 들어오면 주간 격자를 그린다(조용히 틀린 이미지).
+          //   연간 내보내기를 붙일 때 이 조건을 지울 것.
+          (state.view === 'year' ? '' :
+            '<button class="btn btn-glass btn-sm" data-act="export" aria-label="' + esc(t('exp.title')) + '">' +
+            esc(t('exp.btn')) + '</button>') +
         '</div>' +
       '</div>' +
     '</div>';
@@ -434,6 +474,71 @@ function render() {
     html += '<div class="seg-wrap" style="overflow-x:auto;max-width:100%;margin-bottom:16px">' +
       chip('', t('cat.all'), '') +
       state.cats.map((c) => chip(c.id, c.name, c.color)).join('') + '</div>';
+  }
+
+  // -- year view ------------------------------------------------------------
+  // 목표만 그린다. 일일 할 일은 여기 안 들어온다 — 365일치를 한 화면에 올리면
+  // 정작 "올해 안에 무엇을 이룰 것인가" 가 묻힌다. 아래 선택한 날 목록도 건너뛴다.
+  if (state.view === 'year') {
+    const gl = goalsIn(state.cy);
+    const gLeft = gl.filter((g) => !g.done).length;
+    const gRemain = gl.length === 0 ? '' : gLeft === 0 ? t('goal.allDone') : t('goal.remain', gLeft);
+
+    // 줄 모양은 아래 '선택한 날' 목록과 같다 — 체크 · 제목/메모 · 배지 · 화살표.
+    // 새 CSS 규칙 없이 .row-title / .trunc / .card 를 그대로 쓴다.
+    const goalRows = gl.length ? gl.map((g, i) => {
+      const c = catOf(g).color;
+      const done = !!g.done;
+      const open = 'data-goal="' + esc(g.id) + '"';
+      return '<div style="display:flex;align-items:center;gap:12px;padding:13px 16px;border-top:' +
+        (i === 0 ? 'none' : '.5px solid var(--separator)') + '">' +
+        '<button data-gtoggle="' + esc(g.id) + '" aria-label="' + esc(t('goal.check')) + '" aria-pressed="' + done + '" ' +
+          'style="width:24px;height:24px;border-radius:50%;flex:none;cursor:pointer;padding:0;display:flex;' +
+          'align-items:center;justify-content:center;border:2px solid ' + (done ? c : 'var(--label-quaternary)') +
+          ';background-color:' + (done ? c : 'transparent') + ';transition:all .15s ease">' +
+          (done ? icon('checkmark', 13, '#ffffff') : '') + '</button>' +
+        '<div ' + open + ' style="flex:1;min-width:0;cursor:pointer">' +
+          '<div class="row-title" style="text-decoration:' + (done ? 'line-through' : 'none') +
+            ';opacity:' + (done ? 0.45 : 1) + '">' + esc(g.title) + '</div>' +
+          (g.memo ? '<div class="trunc" style="font-size:13px;color:var(--label-secondary);margin-top:1px">' +
+            esc(g.memo) + '</div>' : '') +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;flex:none">' +
+          '<span style="font-size:11px;font-weight:600;color:' + c + ';padding:3px 8px;border-radius:999px;' +
+            'background-color:color-mix(in srgb, ' + c + ' 16%, transparent)">' + esc(goalDue(g)) + '</span>' +
+          '<span ' + open + ' style="cursor:pointer;color:var(--label-tertiary);display:flex">' +
+            icon('chevron.right', 15) + '</span>' +
+        '</div></div>';
+    }).join('')
+      : '<div style="padding:34px 16px;text-align:center">' +
+        '<div style="font-size:15px;font-weight:600;color:var(--label-secondary)">' + esc(t('goal.empty')) + '</div>' +
+        '<div style="font-size:13px;color:var(--label-tertiary);margin-top:3px">' + esc(t('goal.emptyHint')) + '</div></div>';
+
+    // 12칸 요약. **그 달 목표만** 센다 — 일일 할 일은 한 개도 안 들어간다.
+    // 완료한 목표도 센다: "그 달 전체 목표" 가 개수의 뜻이다.
+    // ★ 눌러도 뷰만 월간으로 바뀐다. 목표는 월간 달력에 안 나오므로 여기서
+    //   가는 곳은 그 달의 **할 일** 화면이다 — 목표는 이 목록에서만 본다.
+    let months = '';
+    for (let i = 0; i < 12; i++) {
+      const n = gl.filter((g) => g.scope === 'month' && g.m === i).length;
+      months += '<button data-ym="' + i + '" style="border:none;cursor:pointer;font-family:inherit;' +
+        'padding:14px 6px;border-radius:14px;display:flex;flex-direction:column;align-items:center;gap:3px;' +
+        'background-color:' + (n ? 'color-mix(in srgb, var(--tint) 9%, transparent)' : 'var(--fill-quaternary)') + '">' +
+        '<span class="trunc" style="max-width:100%;font-size:13px;font-weight:600;color:var(--label)">' +
+          esc(monthShort(i)) + '</span>' +
+        '<span style="font-size:12px;font-weight:600;color:' + (n ? 'var(--tint)' : 'var(--label-tertiary)') + '">' +
+          esc(n ? t('goal.count', n) : '–') + '</span></button>';
+    }
+
+    html += '<div style="display:flex;align-items:baseline;justify-content:space-between;margin:0 4px 10px">' +
+        '<h2 style="margin:0;font-size:20px;font-weight:700">' + esc(t('goal.title')) + '</h2>' +
+        '<span style="font-size:13px;font-weight:500;color:var(--label-secondary)">' + esc(gRemain) + '</span></div>' +
+      '<div class="card" style="border-radius:16px;border:.5px solid var(--separator);overflow:hidden">' +
+        goalRows + '</div>' +
+      '<div style="margin:22px 4px 10px;font-size:20px;font-weight:700">' + esc(t('goal.months')) + '</div>' +
+      // minmax(0,1fr) — 월 이름이 긴 로케일에서도 4열이 화면 밖으로 안 밀린다.
+      '<div class="card" style="border:.5px solid var(--separator);padding:12px;display:grid;' +
+        'grid-template-columns:repeat(4,minmax(0,1fr));gap:8px">' + months + '</div>';
   }
 
   // -- month view -----------------------------------------------------------
@@ -665,7 +770,9 @@ function render() {
       '<div style="font-size:13px;color:var(--label-tertiary);margin-top:3px">' + esc(t('list.emptyHint')) + '</div></div>';
   }
 
-  html += '<div style="margin-top:22px">' +
+  // ★ 연간 뷰에는 이 목록을 안 붙인다 — 그 화면은 목표 전용이고 일일 할 일이
+  //   한 개도 들어가지 않는다(위 year view 주석). 위 계산은 그대로 두는 게 싸다.
+  if (state.view !== 'year') html += '<div style="margin-top:22px">' +
     '<div style="display:flex;align-items:baseline;justify-content:space-between;margin:0 4px 10px">' +
       '<h2 style="margin:0;font-size:20px;font-weight:700">' + esc(selectedTitle) + '</h2>' +
       '<span style="font-size:13px;font-weight:500;color:var(--label-secondary)">' + esc(remainLabel) + '</span></div>' +
@@ -675,8 +782,12 @@ function render() {
   html += '</div>'; // /page
 
   // -- floating add button --------------------------------------------------
+  // ★ 연간 뷰에서는 **목표**를 추가한다. 그 화면에 할 일을 넣으면 어느 날짜에
+  //   붙는지 알 수 없고(연간 뷰에는 선택한 날이 없다), 넣어도 화면에 안 보인다.
+  const addYear = state.view === 'year';
   html += '<div data-raise="tint" style="position:fixed;right:24px;bottom:28px;z-index:60">' +
-    '<button class="btn btn-prominent btn-lg btn-icon" data-act="open" aria-label="' + esc(t('item.add')) + '">' +
+    '<button class="btn btn-prominent btn-lg btn-icon" data-act="' + (addYear ? 'goalNew' : 'open') +
+    '" aria-label="' + esc(t(addYear ? 'goal.add' : 'item.add')) + '">' +
     icon('plus', 20) + '</button></div>';
 
   // -- form sheet -----------------------------------------------------------
@@ -684,6 +795,7 @@ function render() {
   if (state.showAdmin && isAdmin) html += renderAdminSheet();
   if (state.showSettings) html += renderSettingsSheet();
   if (state.showCats) html += renderCatSheet();
+  if (state.goalDraft) html += renderGoalSheet();
   if (state.exp) html += renderExportSheet();
   // 점프는 바텀 시트가 아니라 제목 아래 팝오버다 — 위 헤더 안에 이미 들어가 있다.
   // 백드롭만 여기서 덧붙인다 (팝오버보다 뒤에 와야 z-index 없이도 순서가 맞다).
