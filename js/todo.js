@@ -389,6 +389,190 @@ function renderCatSheet() {
     '</div></div>';
 }
 
+// ---------------------------------------------------------------- 목표 시트
+// 입력 시트(openForm/saveForm/closeForm)와 같은 모양이다. 다른 점이 셋 있다 —
+//   1) 날짜가 아니라 **기한**이다: 올해 안에 / 그 달까지 / 그 달 며칠까지.
+//   2) 년(y)을 고르지 않는다. 지금 보고 있는 해(state.cy)에 붙는다 — 연간 뷰가
+//      해마다 하나라서, 년을 따로 고르게 하면 저장한 목표가 다른 해로 사라진다.
+//   3) 반복이 없다. 목표는 기간 자체라 '매주'가 성립하지 않는다.
+//
+// ★ 100자는 firestore.rules 의 validGoal() 과 **같은 값**이어야 한다. 어긋나면
+//   화면은 멀쩡한데 저장만 조용히 거부된다 (validSettings 와 같은 성격).
+const GOAL_TITLE_MAX = 100;
+const goalTitleOf = (g) => (g.title || '').trim();
+const goalOk = (g) => !!g && goalTitleOf(g).length > 0 && goalTitleOf(g).length <= GOAL_TITLE_MAX;
+// 그 달의 말일. 2월에 31을 저장하면 goalDue() 의 new Date(y,1,31) 이 3월 3일로 샌다.
+const lastDayOf = (y, m) => new Date(y, m + 1, 0).getDate();
+const goalDay = (g) => Math.min(Math.max(1, Number(g.d) || 1), lastDayOf(g.y, g.m));
+
+// 기본은 '올해 안에' — 버킷리스트의 기본값이고 더 고를 것이 없다. 월·일은
+// '월까지' 로 켰을 때 쓸 값만 오늘 기준으로 미리 채워 둔다.
+// ★ 카테고리 기본값은 blankForm 과 같은 이유로 지금 걸린 필터다 — '업무' 필터에서
+//   만든 목표가 '없음' 으로 태어나면 저장하자마자 화면에서 사라진다.
+function blankGoal() {
+  const n = new Date();
+  return { id: '', title: '', scope: 'year', y: state.cy,
+    m: state.cy === n.getFullYear() ? n.getMonth() : 0, hasDay: false, d: n.getDate(),
+    categoryId: state.filter || '', memo: '' };
+}
+
+function openGoal(id) {
+  const g = id && state.goals.find((x) => x.id === id);
+  state.goalDraft = g
+    ? { id: g.id, title: g.title, scope: g.scope === 'month' ? 'month' : 'year',
+        // m 이 null 인 'year' 목표를 '월까지' 로 바꿔도 고를 달이 있어야 한다.
+        y: g.y, m: g.m == null ? 0 : g.m, hasDay: g.d != null, d: g.d || 1,
+        // 지워진 카테고리를 가리키면 '없음' 이 골라진 채로 열린다 — 화면과 같은
+        // 상태다(catOf 폴백). 그대로 저장하면 categoryId 가 '' 로 굳는다.
+        categoryId: (g.categoryId && state.cats.some((c) => c.id === g.categoryId)) ? g.categoryId : '',
+        memo: g.memo || '' }
+    : blankGoal();
+  render();
+}
+function closeGoal() {
+  state.goalDraft = null;
+  render();   // ★ sheetBusy() 로 밀려 있던 원격 스냅샷을 여기서 반영한다
+}
+
+// ★ 낙관적 업데이트. 시트가 열려 있는 동안 sheetBusy() 가 원격 스냅샷 렌더를 막으므로
+//   state.goals 를 직접 고치지 않으면 방금 만든 목표가 시트를 닫을 때까지 안 보인다
+//   (saveCatDraft 와 같은 이유).
+// ★ 규칙이 hasOnly + done is bool 을 보므로 **여덟 키를 전부** 실어 보낸다.
+//   done 은 편집 때 기존 값을 이어받는다 — 안 그러면 제목만 고쳐도 체크가 풀린다.
+function saveGoalDraft() {
+  const g = state.goalDraft;
+  if (!goalOk(g)) return;
+  const month = g.scope === 'month';
+  const prev = g.id && state.goals.find((x) => x.id === g.id);
+  const data = {
+    title: goalTitleOf(g), scope: g.scope, y: g.y,
+    m: month ? g.m : null,
+    d: (month && g.hasDay) ? goalDay(g) : null,
+    categoryId: g.categoryId, memo: (g.memo || '').trim(), done: prev ? !!prev.done : false
+  };
+  const id = g.id || fb.newGoalId();
+  state.goals = state.goals.filter((x) => x.id !== id).concat(Object.assign({ id: id }, data));
+  state.goalDraft = null;
+  render();
+  fb.saveGoal(id, data).catch((e) => fb.fail(t('err.save'), e));
+}
+
+// 할 일 삭제(case 'delete')와 같다 — 확인창이 없다. 카테고리와 달리 목표를 지워도
+// 다른 문서가 딸려 가지 않아서, 되돌릴 수 없는 것은 그 한 줄뿐이다.
+function delGoal() {
+  const g = state.goalDraft;
+  if (!g || !g.id) return;
+  state.goals = state.goals.filter((x) => x.id !== g.id);
+  state.goalDraft = null;
+  render();
+  fb.removeGoal(g.id).catch((e) => fb.fail(t('err.save'), e));
+}
+
+function toggleGoal(id) {
+  const g = state.goals.find((x) => x.id === id);
+  if (!g) return;
+  const on = !g.done;
+  state.goals = state.goals.map((x) => (x.id === id ? Object.assign({}, x, { done: on }) : x));
+  render();
+  fb.setGoalDone(id, on).catch((e) => fb.fail(t('err.save'), e));
+}
+
+// 입력 위임이 render() 대신 부른다 — 제목·메모·일 칸이 uncontrolled 라야 캐럿이 산다
+// (syncSheet / syncCatSheet 와 같은 이유·같은 방식).
+function syncGoalSheet() {
+  const btn = document.getElementById('goalSaveBtn');
+  if (btn) btn.disabled = !goalOk(state.goalDraft);
+}
+
+function renderGoalSheet() {
+  const g = state.goalDraft;
+
+  // 기한은 2단이다: 먼저 올해 안 / 월까지, '월까지' 를 고르면 달과 (선택) 날짜.
+  const scopeRow = '<div class="seg-wrap" role="group" aria-label="' + esc(t('goal.due')) + '">' +
+    [['year', 'goal.dueYear'], ['month', 'goal.dueMonth']].map((p) =>
+      '<button class="seg' + (g.scope === p[0] ? ' seg-on' : '') + '" data-gscope="' + p[0] +
+      '" aria-pressed="' + (g.scope === p[0]) + '" style="flex:1;min-width:0;padding:0">' +
+      esc(t(p[1])) + '</button>').join('') + '</div>';
+
+  // 12칸 달 격자. .seg 를 그대로 쓴다 (새 CSS 규칙 0개 — 요일 선택 줄과 같은 방식).
+  // 6열 × 2줄인 이유: 390px 시트에서 12열이면 한 칸이 28px 이라 '12월' 이 잘린다.
+  const monthGrid = g.scope !== 'month' ? '' :
+    '<div role="group" aria-label="' + esc(t('goal.dueMonth')) + '" style="display:grid;' +
+      'grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;margin-top:10px">' +
+    Array.from({ length: 12 }, (x, i) =>
+      '<button class="seg' + (g.m === i ? ' seg-on' : '') + '" data-gm="' + i +
+      '" aria-pressed="' + (g.m === i) + '" style="padding:0">' + esc(monthShort(i)) + '</button>').join('') +
+    '</div>' +
+    // '며칠까지' — 할 일의 '시간 지정' 스위치와 같은 자리·같은 모양이다.
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 6px">' +
+      '<span style="font-size:13px;font-weight:600;color:var(--label-secondary)">' + esc(t('goal.dueDay')) + '</span>' +
+      '<button class="sw" role="switch" data-act="goalDayToggle" aria-checked="' + g.hasDay +
+        '" aria-label="' + esc(t('goal.dueDay')) + '"><span></span></button></div>' +
+    (g.hasDay
+      // max 는 그 달의 말일이다 — 2월에 31을 못 넣는다. 브라우저의 max 는 강제가
+      // 아니라 힌트라서, 넘겨 적어도 goalDay() 가 저장 직전에 다시 조인다.
+      ? '<input class="field" type="number" inputmode="numeric" data-g="d" min="1" max="' +
+        lastDayOf(g.y, g.m) + '" value="' + goalDay(g) + '" style="padding:11px 14px;font-size:15px">'
+      : '<div style="padding:11px 14px;font-size:14px;color:var(--label-tertiary);' +
+        'background-color:var(--fill-quaternary);border-radius:12px">' +
+        esc(t('goal.by', monthShort(g.m))) + '</div>');
+
+  // 카테고리 칩. 입력 시트와 같은 .pri 를 쓴다 — 다만 data-cat 은 state.form 을
+  // 고치므로 이름을 달리한다(시트 둘이 같이 열리진 않지만 위임이 하나다).
+  const catChoices = [CAT_NONE].concat(state.cats).map((c) => {
+    const on = (g.categoryId || '') === c.id;
+    return '<button class="pri" data-gcat="' + esc(c.id) + '" style="background-color:' +
+      (on ? 'color-mix(in srgb, ' + c.color + ' 16%, transparent)' : 'var(--fill-tertiary)') +
+      ';color:' + (on ? c.color : 'var(--label-secondary)') +
+      (on ? ';box-shadow:inset 0 0 0 1.5px ' + c.color + ', var(--tc-raise-sm)' : '') + '">' +
+      '<span style="width:9px;height:9px;border-radius:50%;background-color:' + c.color + '"></span>' +
+      esc(catName(c)) + '</button>';
+  }).join('');
+
+  return '<div data-act="closeGoal" style="position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.35);animation:tcFade .2s ease-out"></div>' +
+    '<div style="position:fixed;left:0;right:0;bottom:0;z-index:101;display:flex;justify-content:center;pointer-events:none">' +
+    '<div role="dialog" aria-modal="true" style="pointer-events:auto;width:min(560px,100vw);max-height:88vh;overflow:auto;' +
+      'background:var(--bg);border-radius:20px 20px 0 0;box-shadow:var(--shadow-3);padding:12px 20px 30px;' +
+      'animation:tcSheet .3s cubic-bezier(.34,1.3,.64,1)">' +
+      '<div style="width:38px;height:5px;border-radius:3px;background:var(--fill-secondary);margin:0 auto 12px"></div>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+        '<h3 style="margin:0;font-size:19px;font-weight:700">' + esc(t(g.id ? 'goal.edit' : 'goal.new')) + '</h3>' +
+        '<button data-act="closeGoal" aria-label="' + esc(t('a.close')) + '" style="border:none;cursor:pointer;width:30px;height:30px;border-radius:50%;' +
+          'background:var(--fill-tertiary);color:var(--label-secondary);display:flex;align-items:center;justify-content:center;padding:0">' +
+          icon('xmark', 14) + '</button></div>' +
+
+      '<div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">' +
+        esc(t('form.title')) + '</div>' +
+      '<input class="field" type="text" data-g="title" maxlength="' + GOAL_TITLE_MAX + '" placeholder="' +
+        esc(t('goal.titlePh')) + '" value="' + esc(g.title) + '" style="padding:12px 14px;font-size:16px">' +
+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 6px">' +
+        '<span style="font-size:13px;font-weight:600;color:var(--label-secondary)">' + esc(t('goal.due')) + '</span>' +
+        // 년은 안 고른다 — 지금 보고 있는 해에 붙는다는 것을 여기서 밝힌다.
+        '<span style="font-size:13px;font-weight:600;color:var(--label-tertiary)">' +
+          esc(yearLabel(g.y)) + '</span></div>' +
+      scopeRow + monthGrid +
+
+      '<div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">' +
+        esc(t('form.cat')) + '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' + catChoices + '</div>' +
+
+      '<div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">' +
+        esc(t('form.memo')) + '</div>' +
+      '<textarea class="field" rows="2" data-g="memo" placeholder="' + esc(t('form.memoPh')) + '" ' +
+        'style="padding:12px 14px;font-size:15px;resize:vertical">' + esc(g.memo) + '</textarea>' +
+
+      '<div style="display:flex;gap:10px;margin-top:20px;align-items:center">' +
+        (g.id ? '<button class="btn btn-plain btn-md" data-act="goalDel" style="color:#FF3B30">' +
+          esc(t('form.delete')) + '</button>' : '') +
+        '<div style="flex:1"></div>' +
+        '<button class="btn btn-gray btn-md" data-act="closeGoal">' + esc(t('form.cancel')) + '</button>' +
+        '<span data-raise="tint" style="display:inline-flex">' +
+          '<button class="btn btn-prominent btn-md" id="goalSaveBtn" data-act="goalSave"' +
+          (goalOk(g) ? '' : ' disabled') + '>' + esc(t('form.save')) + '</button></span>' +
+      '</div></div></div>';
+}
+
 app.addEventListener('click', (e) => {
   const t = e.target;
   const hit = (sel) => t.closest(sel);
@@ -428,6 +612,14 @@ app.addEventListener('click', (e) => {
   if ((el = hit('[data-jy]'))) { state.jump.y = Number(el.dataset.jy); return render(); }
   if ((el = hit('[data-jm]'))) { state.jump.m = Number(el.dataset.jm); return render(); }
   if ((el = hit('[data-view]'))) { state.view = el.dataset.view; return render(); }
+  // 연간 뷰의 12칸 요약. 그 달의 **할 일** 화면으로 간다 — 목표는 연간 뷰에만 있다.
+  // [data-day] 와 같이 cy/cm/selected 셋을 함께 옮긴다(안 그러면 하단 목록이 어긋난다).
+  if ((el = hit('[data-ym]'))) {
+    state.cm = Number(el.dataset.ym);
+    state.selected = fmt(new Date(state.cy, state.cm, 1));
+    state.view = 'month';
+    return render();
+  }
   if ((el = hit('[data-nav]'))) {
     const dir = el.dataset.nav;
     if (dir === 'today') {
@@ -435,7 +627,10 @@ app.addEventListener('click', (e) => {
       state.cy = n.getFullYear(); state.cm = n.getMonth(); state.selected = fmt(n);
     } else {
       const step = dir === 'prev' ? -1 : 1;
-      if (state.view === 'month') {
+      // 연간 뷰의 축은 cy 하나다 — 월·선택한 날은 그대로 두고 해만 넘긴다.
+      if (state.view === 'year') {
+        state.cy += step;
+      } else if (state.view === 'month') {
         const m = new Date(state.cy, state.cm + step, 1);
         state.cy = m.getFullYear(); state.cm = m.getMonth();
       } else {
@@ -457,6 +652,14 @@ app.addEventListener('click', (e) => {
   // 카테고리 시트: 목록 줄 탭 → 편집기, 색 스와치 탭 → 초안의 색만 바꾼다.
   if ((el = hit('[data-catedit]'))) return editCat(el.dataset.catedit);
   if ((el = hit('[data-catcolor]'))) { state.catDraft.color = el.dataset.catcolor; return render(); }
+  // 목표: 줄 탭 → 편집 시트, 체크 버튼 → 완료 토글.
+  // ★ [data-gtoggle] 이 [data-goal] 보다 먼저다 — 체크 버튼이 줄 안에 들어 있어서
+  //   순서가 뒤집히면 체크할 때마다 시트가 열린다(할 일의 toggle/open 과 같은 함정).
+  if ((el = hit('[data-gtoggle]'))) { e.stopPropagation(); return toggleGoal(el.dataset.gtoggle); }
+  if ((el = hit('[data-goal]'))) { e.stopPropagation(); return openGoal(el.dataset.goal); }
+  if ((el = hit('[data-gscope]'))) { state.goalDraft.scope = el.dataset.gscope; return render(); }
+  if ((el = hit('[data-gm]'))) { state.goalDraft.m = Number(el.dataset.gm); return render(); }
+  if ((el = hit('[data-gcat]'))) { state.goalDraft.categoryId = el.dataset.gcat; return render(); }
   if ((el = hit('[data-repeat]'))) {
     state.form.repeat = el.dataset.repeat;
     // '매주' 를 고르면 시작일 요일 하나가 켜진 채로 열린다 — 아무것도 더 안 고르고
@@ -490,6 +693,12 @@ app.addEventListener('click', (e) => {
       case 'catCancel': state.catDraft = null; return render();
       case 'catSave': return saveCatDraft();
       case 'catDel': return delCat();
+      // 목표. 연간 뷰의 + 버튼이 goalNew 로 들어온다 (월/주/일에서는 open 이다).
+      case 'goalNew': return openGoal(null);
+      case 'closeGoal': return closeGoal();
+      case 'goalSave': return saveGoalDraft();
+      case 'goalDel': return delGoal();
+      case 'goalDayToggle': state.goalDraft.hasDay = !state.goalDraft.hasDay; return render();
       // 탈퇴는 두 단계다 — 버튼 한 번으로는 절대 지워지지 않는다.
       case 'askDelete': state.del = { pin: '', error: '', busy: false }; return render();
       case 'cancelDelete': state.del = null; return render();
@@ -537,6 +746,18 @@ app.addEventListener('input', (e) => {
   // 카테고리 이름. state.form 과 섞지 않는다 — 시트도 수명도 다르다.
   const cn = e.target.closest('[data-cn]');
   if (cn) { if (state.catDraft) { state.catDraft.name = cn.value; syncCatSheet(); } return; }
+  // 목표 시트의 제목·메모·일. state.form 과 섞지 않는다 — 시트도 수명도 다르다.
+  // 일 칸만 숫자다: 지우는 도중 '' 가 오는데, 그때 NaN 을 넣으면 goalDay() 가
+  // Number(NaN)||1 로 1을 돌려주므로 화면과 저장이 둘 다 안 깨진다.
+  const gf = e.target.closest('[data-g]');
+  if (gf) {
+    if (state.goalDraft) {
+      const k = gf.dataset.g;
+      state.goalDraft[k] = k === 'd' ? Number(gf.value) : gf.value;
+      syncGoalSheet();
+    }
+    return;
+  }
   const el = e.target.closest('[data-f]');
   if (!el || !state.form) return;
   state.form[el.dataset.f] = el.value;
@@ -550,6 +771,8 @@ document.addEventListener('keydown', (e) => {
     // 약관 모달이 제일 위에 뜬다 — 먼저 닫는다.
     if (state.legal) { state.legal = null; return render(); }
     if (state.showForm) return closeForm();
+    // 목표 시트도 본문 위에서만 열린다 — 입력 시트와 같은 층이라 바로 닫는다.
+    if (state.goalDraft) return closeGoal();
     // 이미지 미리보기·점프는 다른 시트 위에 뜨지 않는다 — 본문 위에서만 열린다.
     if (state.exp) return closeExport();
     if (state.jump) return closeJump();
