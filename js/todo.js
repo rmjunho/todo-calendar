@@ -649,6 +649,8 @@ app.addEventListener('click', (e) => {
   if ((el = hit('[data-cat]'))) { state.form.categoryId = el.dataset.cat; return render(); }
   // 필터 칩. '' 는 전체 — state.filter 는 null 로 눕힌다(itemsOn 이 falsy 로 본다).
   if ((el = hit('[data-filter]'))) { state.filter = el.dataset.filter || null; return render(); }
+  // 종류 칩(전체/할 일/일정). filter 와 같은 방식이다 — '' 를 null 로 눕힌다.
+  if ((el = hit('[data-kind]'))) { state.kind = el.dataset.kind || null; return render(); }
   // 카테고리 시트: 목록 줄 탭 → 편집기, 색 스와치 탭 → 초안의 색만 바꾼다.
   if ((el = hit('[data-catedit]'))) return editCat(el.dataset.catedit);
   if ((el = hit('[data-catcolor]'))) { state.catDraft.color = el.dataset.catcolor; return render(); }

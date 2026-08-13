@@ -188,6 +188,32 @@ function laneBars(segs) {
   });
   return rows;
 }
+
+// 막대 층의 치수. 글자는 .pill 과 같아서(10.5px/600) 높이도 알약과 같은 17px 이다.
+const BAR_H = 17, BAR_GAP = 2, BAR_ROW = BAR_H + BAR_GAP;
+// 막대 층이 시작하는 y. 칸의 border-top(.5) + padding-top(5) + 날짜 원(26) + 그 아래 여백(4).
+// ⚠️ **CSS 와 이중 소스다** — css/style.css 의 `.cell{padding:5px 4px;border-top:.5px}` 와
+//    아래 날짜 원의 인라인 스타일에서 온 값이다. 셋 중 하나를 바꾸면 여기도 바꿔야 한다.
+//    ?selftest 가 그려진 DOM 에서 '첫 막대의 top == 날짜 원의 bottom' 을 직접 잰다.
+const BAR_TOP = 35.5;
+// 월간에서 그리는 층의 최대 개수. 넘친 막대는 **버리지 않고** 그 날의 `+N개` 로 넘긴다.
+// 상한이 없으면 겹치는 주의 높이가 그대로 늘어난다 — 그걸 막으려고 종류 필터를 만든 것이다.
+const MONTH_LANES = 3;
+
+// 막대 하나. 주 경계에서 잘린 쪽은 모서리를 죽이고 여백을 없애 칸 끝까지 붙인다 —
+// "여기서 끝난 것이 아니라 이어진다" 를 화살표 없이도 읽히게.
+function barHtml(b, it) {
+  const p = pill(it, b.start);            // 색·취소선은 회차 **시작일** 기준이다
+  const rL = b.cutL ? '2px' : '5px', rR = b.cutR ? '2px' : '5px';
+  return '<div class="pill" ' + openAttr(p, b.start) +
+    ' style="pointer-events:auto;cursor:pointer;align-self:start;line-height:13px;height:' + BAR_H +
+    'px;grid-column:' + (b.from + 1) + '/' + (b.to + 2) + ';grid-row:' + (b.lane + 1) +
+    ';margin-left:' + (b.cutL ? 0 : 3) + 'px;margin-right:' + (b.cutR ? 0 : 3) +
+    'px;border-radius:' + rL + ' ' + rR + ' ' + rR + ' ' + rL +
+    ';background-color:' + p.bg + ';color:' + p.color + ';text-decoration:' + p.deco +
+    ';opacity:' + p.op + '">' + esc(p.title) + '</div>';
+}
+
 // ------------------------------------------------------- 일간 뷰 (순수 함수)
 // 아래 다섯 함수는 DOM 을 모른다 — 그래야 ?selftest 가 좌표를 직접 단언한다.
 // 자정 넘김은 endOk(todo.js)가 저장에서 막으므로 end > start 를 전제로 둔다.
@@ -341,11 +367,31 @@ function sortItems(list) {
 //   풀려 있다. 내보내기도 이 함수를 지나므로 이미지가 화면과 자동으로 같아진다.
 const kindFilter = () => (state.view === 'day' || state.view === 'year' ? null : state.kind);
 
-function itemsOn(items, ds, showCompleted) {
+// 날짜와 무관한 조건(카테고리·종류)만 뽑아 둔다. itemsOn 과 막대 층(weekEventBars)이
+// **같은 함수**를 지나야 한다 — 알약은 걸러지는데 막대는 안 걸러지는 일이 없게.
+function passes(it) {
   const f = state.filter, k = kindFilter();
-  return sortItems(items.filter((it) => occursOn(it, ds) && (showCompleted || !isDone(it, ds))
-    && (!f || (it.categoryId || '') === f)
-    && (!k || (it.kind === 'event' ? 'event' : 'todo') === k)));
+  return (!f || (it.categoryId || '') === f)
+    && (!k || (it.kind === 'event' ? 'event' : 'todo') === k);
+}
+
+function itemsOn(items, ds, showCompleted) {
+  return sortItems(items.filter((it) =>
+    occursOn(it, ds) && (showCompleted || !isDone(it, ds)) && passes(it)));
+}
+
+// 월·주 격자의 **칸**에 들어가는 것 = 일정을 뺀 나머지. 일정은 칸이 아니라 막대 층이
+// 그린다(한 항목이 여러 칸에 걸치므로). 하단 목록·일간 뷰·연간 뷰는 이걸 안 쓴다 —
+// 거기서는 둘이 같이 보여야 한다.
+const cellItems = (items, ds) => itemsOn(items, ds, SHOW_COMPLETED).filter((it) => !isEvent(it));
+
+// ws 주의 일정 막대들 — 층 배정까지 끝난 것. 정렬을 먼저 하는 이유는 층이 매번 같은
+// 자리에 오게 하기 위해서다(스냅샷이 오는 순서에 층이 흔들리면 막대가 위아래로 튄다).
+function weekEventBars(items, ws) {
+  const segs = [];
+  sortItems(items.filter((it) => isEvent(it) && passes(it)))
+    .forEach((it) => weekBars(it, ws).forEach((b) => segs.push(b)));
+  return laneBars(segs);
 }
 
 // ------------------------------------------------------------------- 목표
@@ -584,6 +630,21 @@ function render() {
       '</div>' +
     '</div>';
 
+  // -- kind filter (할 일 / 일정) --------------------------------------------
+  // 월간·주간에서만 그린다. 일간은 시간축에 둘을 같이 놓는 자리고, 연간은 목표만 그려서
+  // 나눌 것이 없다 — kindFilter() 가 그 둘에서 state.kind 를 무시하므로 화면과 일치한다.
+  // 칸 높이를 늘리는 대신 이 줄로 나눠 보는 것이 기간 일정의 밀림에 대한 답이다.
+  // 3개 고정이라 flex:1 로 균등 분할한다(카테고리 줄은 최대 11개라 가로로 흘린다).
+  if (state.view === 'month' || state.view === 'week') {
+    const kchip = (v, label) => {
+      const on = (state.kind || '') === v;
+      return '<button class="seg' + (on ? ' seg-on' : '') + '" data-kind="' + v +
+        '" aria-pressed="' + on + '" style="flex:1;min-width:0">' + esc(label) + '</button>';
+    };
+    html += '<div class="seg-wrap" style="margin-bottom:10px">' +
+      kchip('', t('kind.all')) + kchip('todo', t('kind.todo')) + kchip('event', t('kind.event')) + '</div>';
+  }
+
   // -- category filter ------------------------------------------------------
   // 카테고리가 하나도 없으면 줄 자체를 안 그린다 — '전체' 칩만 있는 줄은 정보가 0이다.
   // .seg-wrap / .seg 를 그대로 재사용한다 (새 CSS 규칙 0개 — 요일 선택 줄과 같은 방식).
@@ -683,29 +744,63 @@ function render() {
     const startOffset = new Date(state.cy, state.cm, 1).getDay();
     const dim = new Date(state.cy, state.cm + 1, 0).getDate();
     const weeks = Math.ceil((startOffset + dim) / 7);
-    let cells = '';
-    for (let i = 0; i < weeks * 7; i++) {
-      const d = new Date(state.cy, state.cm, 1 - startOffset + i);
-      const ds = fmt(d);
-      const inM = d.getMonth() === state.cm;
-      const isToday = ds === today, isSel = ds === sel;
-      const list = itemsOn(items, ds, SHOW_COMPLETED);
-      const pills = list.slice(0, 3).map((it) => {
-        const p = pill(it, ds);
-        return '<div class="pill" ' + openAttr(p, ds) + ' style="cursor:pointer;background:' + p.bg + ';color:' + p.color +
-          ';text-decoration:' + p.deco + ';opacity:' + p.op + '">' + esc(p.title) + '</div>';
-      }).join('');
-      const more = list.length > 3
-        ? '<div style="font-size:10px;color:var(--label-tertiary);padding:0 6px">' +
-          esc(t('cell.more', list.length - 3)) + '</div>' : '';
-      cells += '<div class="cell" data-day="' + ds + '" style="background:' +
-        (isSel ? 'color-mix(in srgb, var(--tint) 7%, transparent)' : 'transparent') + ';opacity:' + (inM ? 1 : 0.35) + '">' +
-        '<div style="width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;' +
-          'font-size:13px;margin:0 auto 4px;font-weight:' + (isToday || isSel ? 700 : 500) +
-          ';background:' + (isToday ? 'var(--tint)' : 'transparent') +
-          ';color:' + (isToday ? '#fff' : d.getDay() === 0 ? '#FF3B30' : d.getDay() === 6 ? 'var(--tint)' : 'var(--label)') + '">' +
-          d.getDate() + '</div>' +
-        '<div style="display:flex;flex-direction:column;gap:2px">' + pills + more + '</div></div>';
+    // ★ 42칸 한 격자가 아니라 **주마다 한 덩어리**다. 기간 일정 막대가 여러 칸에 걸치는데,
+    //   한 격자로는 그 위에 겹칠 층을 붙일 자리가 없다(칸은 .cell{overflow:hidden}).
+    //   주 덩어리 = position:relative 안에 [7칸 격자] + [그 위에 겹치는 막대 층].
+    const byId = {};
+    items.forEach((it) => { byId[it.id] = it; });
+
+    let grid = '';
+    for (let w = 0; w < weeks; w++) {
+      const ws = fmt(new Date(state.cy, state.cm, 1 - startOffset + w * 7));
+      const rows = weekEventBars(items, ws);
+      const shown = rows.filter((r) => r.lane < MONTH_LANES);
+      const lanes = shown.length ? Math.max.apply(null, shown.map((r) => r.lane)) + 1 : 0;
+      // 층 상한을 넘은 막대는 **버리지 않고** 그 날들의 `+N개` 에 더한다.
+      const extra = [0, 0, 0, 0, 0, 0, 0];
+      rows.forEach((r) => {
+        if (r.lane >= MONTH_LANES) for (let i = r.from; i <= r.to; i++) extra[i]++;
+      });
+
+      let cells = '';
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(state.cy, state.cm, 1 - startOffset + w * 7 + i);
+        const ds = fmt(d);
+        const inM = d.getMonth() === state.cm;
+        const isToday = ds === today, isSel = ds === sel;
+        const list = cellItems(items, ds);
+        const pills = list.slice(0, 3).map((it) => {
+          const p = pill(it, ds);
+          return '<div class="pill" ' + openAttr(p, ds) + ' style="cursor:pointer;background:' + p.bg + ';color:' + p.color +
+            ';text-decoration:' + p.deco + ';opacity:' + p.op + '">' + esc(p.title) + '</div>';
+        }).join('');
+        const hid = Math.max(0, list.length - 3) + extra[i];
+        const more = hid
+          ? '<div style="font-size:10px;color:var(--label-tertiary);padding:0 6px">' +
+            esc(t('cell.more', hid)) + '</div>' : '';
+        // ★ 막대 자리를 칸 안에 **실제 높이로** 비운다. 한 주의 7칸이 같은 값을 비우므로
+        //   알약 시작 줄이 안 어긋나고, 막대 층의 높이(lanes×BAR_ROW)와도 정확히 같다.
+        //   일정이 없는 주는 lanes=0 → 이 div 자체가 없어 예전 화면과 픽셀까지 같다.
+        cells += '<div class="cell" data-day="' + ds + '" style="background:' +
+          (isSel ? 'color-mix(in srgb, var(--tint) 7%, transparent)' : 'transparent') + ';opacity:' + (inM ? 1 : 0.35) + '">' +
+          '<div style="width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;' +
+            'font-size:13px;margin:0 auto 4px;font-weight:' + (isToday || isSel ? 700 : 500) +
+            ';background:' + (isToday ? 'var(--tint)' : 'transparent') +
+            ';color:' + (isToday ? '#fff' : d.getDay() === 0 ? '#FF3B30' : d.getDay() === 6 ? 'var(--tint)' : 'var(--label)') + '">' +
+            d.getDate() + '</div>' +
+          (lanes ? '<div data-barspace style="height:' + (lanes * BAR_ROW) + 'px"></div>' : '') +
+          '<div style="display:flex;flex-direction:column;gap:2px">' + pills + more + '</div></div>';
+      }
+
+      // 막대 층. pointer-events 를 끄고 막대만 다시 켠다 — 막대 사이 빈 자리를 누르면
+      // 아래 칸이 눌려야 한다(날짜 선택). 안 그러면 층이 칸의 절반을 덮어 먹는다.
+      const bars = lanes ? '<div data-bars="' + ws + '" style="position:absolute;left:0;right:0;top:' + BAR_TOP +
+        'px;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:repeat(' +
+        lanes + ',' + BAR_ROW + 'px);pointer-events:none">' +
+        shown.map((r) => barHtml(r, byId[r.id])).join('') + '</div>' : '';
+      grid += '<div style="position:relative">' +
+        '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr))">' + cells + '</div>' +
+        bars + '</div>';
     }
     // 7열은 minmax(0,1fr). 1fr(=minmax(auto,1fr))은 열이 자식의 min-content 보다
     // 작아지지 못해, nowrap 제목 하나가 나머지 요일을 화면 밖으로 밀어낸다.
@@ -713,7 +808,7 @@ function render() {
     // 같은 방식으로 적어 둔다 — .cell 을 건드려도 안 터지게.
     body += '<div class="card" style="border:.5px solid var(--separator);overflow:hidden">' +
       '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr))">' + heads + '</div>' +
-      '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr))">' + cells + '</div></div>';
+      grid + '</div>';
   }
 
   // -- week view ------------------------------------------------------------
