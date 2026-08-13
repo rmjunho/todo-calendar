@@ -1944,6 +1944,22 @@ if (location.search.includes('selftest')) {
   ok(spH.every((h) => Math.abs(h - spH[0]) < 0.05),
     'every cell of that week reserves the same height, so the pill rows stay level');
 
+  // 하루짜리 일정은 판 없이 글자만. ★ 기준이 "이 주에서 한 칸" 이 아니라 "회차가
+  //   하루" 다 — 이틀짜리가 토/일로 갈리면 각 주에서 한 칸이지만 아직 안 끝났으므로
+  //   판이 남아야 한다. 이걸 `from === to` 로 적으면 그 막대가 조용히 글자만 된다.
+  const bgOf = (sel) => getComputedStyle(APP().querySelector(sel)).backgroundColor;
+  const clear = (v) => /(, *0\)|\/ *0\))/.test(v) || v === 'transparent';
+  state.items = [EV({ id: 'one', span: 1, title: '회의' })];
+  render();
+  ok(clear(bgOf('[data-bars] .pill')), 'a one-day event is drawn as bare text, with no chip behind it',
+    bgOf('[data-bars] .pill'));
+  state.items = [EV({ id: 'two', span: 2, title: '연수', date: '2026-08-08' })];   // 토→일
+  render();
+  eq(APP().querySelectorAll('[data-bars] .pill').length, 2,
+    'a two-day event across Saturday becomes one piece per week');
+  ok([...APP().querySelectorAll('[data-bars] .pill')].every((b) => !clear(getComputedStyle(b).backgroundColor)),
+    'and both halves keep their chip — each covers one column, but the event is not over');
+
   // 칸은 할 일만, 막대는 일정만. 한 항목이 알약과 막대로 두 번 나오면 안 된다.
   state.items = [EV({ id: 'v', span: 5, title: '휴가' }), EV({ id: 'td', kind: 'todo', title: '할일' })];
   render();

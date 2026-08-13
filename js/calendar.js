@@ -223,16 +223,25 @@ function barOverflow(rows, cap) {
 
 // 막대 하나. 주 경계에서 잘린 쪽은 모서리를 죽이고 여백을 없애 칸 끝까지 붙인다 —
 // "여기서 끝난 것이 아니라 이어진다" 를 화살표 없이도 읽히게.
+// ★ 하루짜리 일정(barOne)은 **판을 안 깐다 — 색 글자만.** 판은 "여기서 여기까지
+//   이어진다" 는 뜻이라 하루짜리에까지 깔면 그 뜻이 흐려진다.
+//   기준이 `from === to` 가 아니라 `start === end` 인 이유: 이틀짜리가 주 경계에서
+//   잘리면 그 주에서는 한 칸만 차지하지만 **아직 안 끝났으므로** 판이 있어야 한다.
+//   (start === end 면 그 회차 전체가 이 주 안에 있으므로 cutL/cutR 은 자동으로 거짓이다.)
+const barOne = (b) => b.start === b.end;
 function barHtml(b, it) {
   const p = pill(it, b.start);            // 색·취소선은 회차 **시작일** 기준이다
+  const one = barOne(b);
   const rL = b.cutL ? '2px' : '5px', rR = b.cutR ? '2px' : '5px';
   return '<div class="pill" ' + openAttr(p, b.start) +
     ' style="pointer-events:auto;cursor:pointer;align-self:start;line-height:13px;height:' + BAR_H +
     // 1번 줄은 자리 맞추기용이라(barSpacer) 층은 2번 줄부터다.
 'px;grid-column:' + (b.from + 1) + '/' + (b.to + 2) + ';grid-row:' + (b.lane + 2) +
-    ';margin-left:' + (b.cutL ? 0 : 3) + 'px;margin-right:' + (b.cutR ? 0 : 3) +
-    'px;border-radius:' + rL + ' ' + rR + ' ' + rR + ' ' + rL +
-    ';background-color:' + p.bg + ';color:' + p.color + ';text-decoration:' + p.deco +
+    ';margin-left:' + (b.cutL ? 0 : 3) + 'px;margin-right:' + (b.cutR ? 0 : 3) + 'px' +
+    // 패딩·높이는 그대로 둔다 — 판만 빠지고 글자 자리는 여러 날 막대와 같은 줄에 선다.
+    (one ? ';background-color:transparent'
+         : ';border-radius:' + rL + ' ' + rR + ' ' + rR + ' ' + rL + ';background-color:' + p.bg) +
+    ';color:' + p.color + ';text-decoration:' + p.deco +
     ';opacity:' + p.op + '">' + esc(p.title) + '</div>';
 }
 

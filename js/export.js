@@ -239,7 +239,9 @@ function exRow(it, ds, includeMemo) {
 // 일정에는 완료가 없어서 done/취소선이 아예 안 들어간다.
 function exBar(b, items) {
   const it = items.find((x) => x.id === b.id) || {};
-  return { from: b.from, to: b.to, lane: b.lane, cutL: b.cutL, cutR: b.cutR,
+  // one = 하루짜리. 화면과 **같은 판정**(barOne)을 쓴다 — 이미지에서만 판이 깔리면
+  // 화면과 다른 그림이 남의 메신저로 나간다.
+  return { from: b.from, to: b.to, lane: b.lane, cutL: b.cutL, cutR: b.cutR, one: barOne(b),
     title: it.title || '', color: catOf(it).color };
 }
 // 한 주치 막대 층. 화면(render)과 **같은 함수**를 지난다 — weekEventBars · lanesOf ·
@@ -423,9 +425,12 @@ function exDrawMonth(ctx, C, m) {
         const bx = EX_PAD + b.from * L.cellW + (b.cutL ? 0 : 5);
         const bw = (b.to - b.from + 1) * L.cellW - (b.cutL ? 0 : 5) - (b.cutR ? 0 : 5);
         const by = y + 52 + b.lane * M_BAR_ROW;
-        exRect(ctx, bx, by, bw, M_BAR_H, 7);
-        ctx.fillStyle = exAlpha(b.color, C.pillA);
-        ctx.fill();
+        // 하루짜리는 판 없이 글자만 (barOne). 글자 자리는 그대로라 줄이 안 어긋난다.
+        if (!b.one) {
+          exRect(ctx, bx, by, bw, M_BAR_H, 7);
+          ctx.fillStyle = exAlpha(b.color, C.pillA);
+          ctx.fill();
+        }
         exClip(ctx, b.title, bx + 7, by + 15, bw - 14, exFont(600, 19), b.color);
       });
     }
@@ -518,9 +523,11 @@ function exDrawWeek(ctx, C, m) {
       const bx = EX_PAD + b.from * L.colW + (b.cutL ? 0 : 5);
       const bw = (b.to - b.from + 1) * L.colW - (b.cutL ? 0 : 5) - (b.cutR ? 0 : 5);
       const by = L.barTop + 12 + b.lane * W_BAR_ROW;
-      exRect(ctx, bx, by, bw, W_BAR_H, 9);
-      ctx.fillStyle = exAlpha(b.color, C.pillA);
-      ctx.fill();
+      if (!b.one) {                       // 하루짜리는 판 없이 글자만 (barOne)
+        exRect(ctx, bx, by, bw, W_BAR_H, 9);
+        ctx.fillStyle = exAlpha(b.color, C.pillA);
+        ctx.fill();
+      }
       exClip(ctx, b.title, bx + 13, by + 22, bw - 26, exFont(600, 22), b.color);
     });
     exLine(ctx, EX_PAD, L.barTop, EX_PAD + EX_GRID, C.sep);
