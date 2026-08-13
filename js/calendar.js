@@ -229,6 +229,23 @@ function barHtml(b, it) {
     ';opacity:' + p.op + '">' + esc(p.title) + '</div>';
 }
 
+// 일간 뷰가 그릴 모양으로 바꾼 **사본**. 원본은 안 건드린다.
+//   첫날      = 시작 시각에 얇은 마커 (그 날 안에 끝나지 않으니 길이를 지어내지 않는다)
+//   마지막 날 = 종료 시각에 얇은 마커
+//   가운데 날 = 하루 종일 (시간축이 아니라 위쪽 칩 줄에 뜬다)
+// ★ 새 개념을 안 만든다 — dayRange/dayLayout 은 '종료 없음 = 마커', '시각 없음 =
+//   하루 종일' 을 이미 알고 있다. 그 규칙에 맞는 사본을 넘기는 것이 전부다.
+// ★ 종류 필터는 여기 안 온다: 일간에서는 할 일과 일정이 늘 같이 보인다(kindFilter).
+function dayShape(it, ds) {
+  if (!isEvent(it) || spanOf(it) === 1) return it;
+  const s = occStart(it, ds);
+  if (ds === s) return Object.assign({}, it, { endTime: '' });
+  if (ds === addDays(s, spanOf(it) - 1)) {
+    return Object.assign({}, it, { time: it.endTime || '', endTime: '' });
+  }
+  return Object.assign({}, it, { time: '', endTime: '' });
+}
+
 // ------------------------------------------------------- 일간 뷰 (순수 함수)
 // 아래 다섯 함수는 DOM 을 모른다 — 그래야 ?selftest 가 좌표를 직접 단언한다.
 // 자정 넘김은 endOk(todo.js)가 저장에서 막으므로 end > start 를 전제로 둔다.
@@ -535,6 +552,10 @@ function pill(it, ds) {
     bg: 'color-mix(in srgb, ' + c + ' 16%, transparent)',
     deco: done ? 'line-through' : 'none',
     op: done ? 0.5 : 1,
+    // 편집으로 열 날짜 = 그 **회차의 시작일**. 5일짜리 일정의 3일째를 눌렀다고
+    // 시작 날짜가 3일째로 옮겨가면 안 된다. 기간이 없는 항목은 ds 와 같은 값이라
+    // 지금까지의 동작이 한 글자도 안 바뀐다.
+    openDs: occStart(it, ds) || ds,
     timeLabel: it.time ? timeLabel(it.time) : t('item.allDay'),
     // ★ 라벨이 둘인 이유: 주간 격자 칸은 390px 화면에서 51px 밖에 안 돼 지금도 시간
     //   라벨이 두 줄로 접힌다(접기 기준 5의 근거 — 아래 주간 뷰 주석). 범위를 넣으면
@@ -545,7 +566,7 @@ function pill(it, ds) {
 }
 // data-open carries the id + the date the row was rendered for, so editing a
 // repeating task opens it on the occurrence the user actually tapped.
-const openAttr = (p, ds) => 'data-open="' + esc(p.id) + '" data-ds="' + ds + '"';
+const openAttr = (p, ds) => 'data-open="' + esc(p.id) + '" data-ds="' + (p.openDs || ds) + '"';
 
 // ---------------------------------------------------------------- render
 function render() {
@@ -894,7 +915,8 @@ function render() {
 
   // -- day view -------------------------------------------------------------
   if (state.view === 'day') {
-    const dayList = itemsOn(items, sel, SHOW_COMPLETED);
+    // 여러 날 일정은 그 날이 회차의 어디냐에 따라 모양이 다르다 — dayShape() 참고.
+    const dayList = itemsOn(items, sel, SHOW_COMPLETED).map((it) => dayShape(it, sel));
     const allDay = dayList.filter((it) => !it.time).map((it) => {
       const p = pill(it, sel);
       return '<div ' + openAttr(p, sel) + ' style="cursor:pointer;font-size:12px;font-weight:600;padding:5px 11px;' +
@@ -997,23 +1019,35 @@ function render() {
   // -- selected day list ----------------------------------------------------
   const selAll = itemsOn(items, sel, true);
   const selShown = SHOW_COMPLETED ? selAll : selAll.filter((it) => !isDone(it, sel));
-  const remaining = selAll.filter((it) => !isDone(it, sel)).length;
+  // ★ 남은 개수는 **할 일만** 센다. 일정에는 완료 체크가 없어서(=영원히 안 끝난다)
+  //   같이 세면 일정만 있는 날이 "2개 남음" 으로 굳는다. 일정뿐인 날은 라벨이 없다.
+  const selTodos = selAll.filter((it) => !isEvent(it));
+  const remaining = selTodos.filter((it) => !isDone(it, sel)).length;
   const selectedTitle = (sel === today ? t('list.todayPrefix') : '') + dayTitle(selD);
-  const remainLabel = selAll.length === 0 ? '' : remaining === 0 ? t('list.allDone') : t('list.remain', remaining);
+  const remainLabel = selTodos.length === 0 ? '' : remaining === 0 ? t('list.allDone') : t('list.remain', remaining);
 
   let listHtml;
   if (selShown.length) {
     listHtml = selShown.map((it, idx) => {
       const c = catOf(it).color;
       const done = isDone(it, sel);
-      const open = 'data-open="' + esc(it.id) + '" data-ds="' + sel + '"';
+      const evt = isEvent(it);
+      // 여러 날 일정의 가운데를 눌러도 시작 날짜가 그리로 옮겨가면 안 된다 (pill.openDs).
+      const open = 'data-open="' + esc(it.id) + '" data-ds="' + (occStart(it, sel) || sel) + '"';
       return '<div style="display:flex;align-items:center;gap:12px;padding:13px 16px;border-top:' +
         (idx === 0 ? 'none' : '.5px solid var(--separator)') + '">' +
-        '<button data-toggle="' + esc(it.id) + '" aria-label="' + esc(t('list.check')) + '" aria-pressed="' + done + '" ' +
-          'style="width:24px;height:24px;border-radius:50%;flex:none;cursor:pointer;padding:0;display:flex;' +
-          'align-items:center;justify-content:center;border:2px solid ' + (done ? c : 'var(--label-quaternary)') +
-          ';background:' + (done ? c : 'transparent') + ';transition:all .15s ease">' +
-          (done ? icon('checkmark', 13, '#ffffff') : '') + '</button>' +
+        // ★ 일정에는 체크 버튼을 안 그린다 — 완료라는 개념이 없다. 대신 같은 24px
+        //   자리에 네모 점을 둬서 줄이 안 어긋나고, 동그라미가 아니라서 "눌러도
+        //   안 되는 것" 이 모양으로 읽힌다.
+        (evt
+          ? '<span aria-hidden="true" style="width:24px;height:24px;flex:none;display:flex;' +
+            'align-items:center;justify-content:center">' +
+            '<span style="width:12px;height:12px;border-radius:4px;background-color:' + c + '"></span></span>'
+          : '<button data-toggle="' + esc(it.id) + '" aria-label="' + esc(t('list.check')) + '" aria-pressed="' + done + '" ' +
+            'style="width:24px;height:24px;border-radius:50%;flex:none;cursor:pointer;padding:0;display:flex;' +
+            'align-items:center;justify-content:center;border:2px solid ' + (done ? c : 'var(--label-quaternary)') +
+            ';background:' + (done ? c : 'transparent') + ';transition:all .15s ease">' +
+            (done ? icon('checkmark', 13, '#ffffff') : '') + '</button>') +
         '<div ' + open + ' style="flex:1;min-width:0;cursor:pointer">' +
           '<div class="row-title" style="text-decoration:' + (done ? 'line-through' : 'none') +
             ';opacity:' + (done ? 0.45 : 1) + '">' + esc(it.title) + '</div>' +
@@ -1021,6 +1055,11 @@ function render() {
             esc(it.memo) + '</div>' : '') +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;flex:none">' +
+          // 여러 날 배지. 시각 라벨만 있으면 '09:00–18:00' 이 하루 안의 범위로 읽힌다.
+          (spanOf(it) > 1
+            ? '<span style="font-size:11px;font-weight:600;color:' + c + ';padding:3px 8px;border-radius:999px;' +
+              'background-color:color-mix(in srgb, ' + c + ' 16%, transparent)">' +
+              esc(t('form.spanDays', spanOf(it))) + '</span>' : '') +
           (it.repeat && it.repeat !== 'none'
             ? '<span style="font-size:11px;font-weight:600;color:var(--label-secondary);background:var(--fill-quaternary);' +
               'padding:3px 8px;border-radius:999px">' + esc(repLabel(it.repeat, it.days)) + '</span>' : '') +
