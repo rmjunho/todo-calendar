@@ -109,9 +109,10 @@ const timeRange = (a, b) => (b ? timeLabel(a) + ' – ' + timeLabel(b) : timeLab
 const monthTitle = (y, m) => dtf({ year: 'numeric', month: 'long' }).format(new Date(y, m, 1));
 // 선택한 날. ko '7월 25일 토요일' / en 'Saturday, July 25'
 const dayTitle = (d) => dtf({ month: 'long', day: 'numeric', weekday: 'long' }).format(d);
+// 월·일만. ko '7월 25일' / en 'Jul 25' — 목표 마감 배지와 shortDay 가 같이 쓴다.
+const monthDay = (d) => dtf({ month: 'short', day: 'numeric' }).format(d);
 // 짧은 날. ko '7월 25일 (토)' / en 'Jul 25 (Sat)'
-const shortDay = (d) =>
-  dtf({ month: 'short', day: 'numeric' }).format(d) + ' (' + dtf({ weekday: 'short' }).format(d) + ')';
+const shortDay = (d) => monthDay(d) + ' (' + dtf({ weekday: 'short' }).format(d) + ')';
 // 가입일 같은 순수 날짜. 표시 전용이라 fmt() 를 쓰지 않는다.
 const dateLabel = (d) => dtf({ year: 'numeric', month: 'short', day: 'numeric' }).format(d);
 // 년·월 점프 피커용. ko '7월' · '2026년' / en 'Jul' · '2026'.
@@ -140,6 +141,7 @@ const STR = {
     'nav.prev': '이전',
     'nav.next': '다음',
     'nav.today': '오늘',
+    'view.year': '년',
     'view.month': '월',
     'view.week': '주',
     'view.day': '일',
@@ -197,6 +199,29 @@ const STR = {
     'cat.delConfirm': (n) => n === 0
       ? '이 카테고리를 지울까요?'
       : '이 카테고리를 지웁니다. 할 일 ' + n + '개는 지워지지 않고 ‘없음’ 으로 바뀝니다.',
+    // 목표(버킷리스트). 할 일과 다른 컬렉션이라 문자열도 form.* 과 섞지 않는다 —
+    // 목표는 날짜 하나가 아니라 기간이라서 라벨이 '언제'가 아니라 '언제까지'다.
+    'goal.title': '올해 목표',
+    'goal.add': '목표 추가',
+    'goal.new': '새로운 목표',
+    'goal.edit': '목표 편집',
+    'goal.titlePh': '올해 안에 무엇을 이루고 싶나요?',
+    'goal.due': '기한',
+    'goal.dueYear': '올해 안에',
+    'goal.dueMonth': '월까지',
+    'goal.dueDay': '날짜까지',
+    // 인자는 monthShort()/monthDay() 가 만든 로케일 문자열이다 — 여기서 하는 일은
+    // 조사를 붙이는 것뿐이라 ko/en 이 서로 다른 모양이어도 된다.
+    'goal.by': (s) => s + '까지',
+    'goal.empty': '아직 목표가 없습니다',
+    'goal.emptyHint': '오른쪽 아래 + 버튼으로 올해 이루고 싶은 것을 적어 보세요',
+    'goal.remain': (n) => n + '개 남음',
+    'goal.allDone': '모두 완료!',
+    'goal.check': '완료 체크',
+    'goal.months': '월별 목표',
+    // 12칸 요약의 개수. **그 달 목표만** 센다 — 일일 할 일은 여기 안 들어간다.
+    'goal.count': (n) => n + '개',
+
     'rep.none': '반복 안 함', 'rep.daily': '매일', 'rep.weekly': '매주', 'rep.monthly': '매월',
     // 요일 이름은 dow() 가 준다 — 여기서 정하는 건 잇는 방식뿐이다.
     'rep.weeklyDays': (n) => '매주 ' + n.join('·'),
@@ -357,6 +382,7 @@ const STR = {
     'nav.prev': 'Previous',
     'nav.next': 'Next',
     'nav.today': 'Today',
+    'view.year': 'Year',
     'view.month': 'Month',
     'view.week': 'Week',
     'view.day': 'Day',
@@ -408,6 +434,25 @@ const STR = {
     'cat.delConfirm': (n) => n === 0
       ? 'Delete this category?'
       : 'Deleting this category. ' + n + ' to-do(s) will not be deleted — they become “None”.',
+    'goal.title': 'Goals this year',
+    'goal.add': 'Add a goal',
+    'goal.new': 'New goal',
+    'goal.edit': 'Edit goal',
+    'goal.titlePh': 'What do you want to get done this year?',
+    'goal.due': 'Deadline',
+    'goal.dueYear': 'Within the year',
+    'goal.dueMonth': 'By month',
+    'goal.dueDay': 'By date',
+    'goal.by': (s) => 'by ' + s,
+    'goal.empty': 'No goals yet',
+    'goal.emptyHint': 'Tap the + button to write down what you want to achieve',
+    'goal.remain': (n) => n + ' left',
+    'goal.allDone': 'All done!',
+    'goal.check': 'Mark complete',
+    'goal.months': 'Goals by month',
+    // 숫자만. 'n goals' 는 12칸 격자에서 접힌다.
+    'goal.count': (n) => String(n),
+
     'rep.none': 'Does not repeat', 'rep.daily': 'Daily', 'rep.weekly': 'Weekly', 'rep.monthly': 'Monthly',
     'rep.weeklyDays': (n) => 'Every ' + n.join(', '),
     'rep.weeklyAll': 'Weekly (all days)',
