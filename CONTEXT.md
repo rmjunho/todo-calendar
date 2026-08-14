@@ -68,6 +68,11 @@ firebase deploy --only firestore:rules
 - 권한을 *추가*만 하는 규칙(예: `settings` 분기) → **규칙을 먼저** 올려도 안전하고,
   오히려 그래야 새 코드가 바로 저장됩니다.
 
+🔴 **아직 안 올린 규칙 변경이 하나 있습니다** — `validCat` 에 `order`(선택, 0 이상 정수)를
+허용하는 줄입니다. **이걸 안 올리면 카테고리 저장이 전부 거부됩니다**(순서 바꾸기만이
+아니라 이름·색 수정까지). 권한을 넓히기만 하므로 규칙을 먼저 올리는 쪽이고, 올린 뒤 이
+문단을 지우세요.
+
 에뮬레이터로 미리 시험하려면 Java 가 필요한데 이 PC 에는 없습니다.
 
 **관리자 계정은 자동 생성되지 않습니다.** 일반 가입 후 Firebase 콘솔에서 `users/{uid}` 의
@@ -179,6 +184,7 @@ firebase.js                                                        (ESM 모듈)
 |---|---|
 | `esc` `pad` **`fmt`** `parse` `addDays` | 유틸. **`fmt` = `YYYY-MM-DD` — 저장 키 생산자** |
 | **`CAT_COLORS` / `catOf` / `catName`** | **팔레트 10색이 저장 가능한 색의 전부다** — 규칙의 `catColor()` 와 같은 집합을 유지할 것. 자유 입력을 안 받는 이유는 §4 CSS 함정 8. **`catOf(it)` 는 `state.cats` 에서 찾고 못 찾으면 `CAT_NONE`(회색)** — 지워진 카테고리를 가리키는 항목이 조용히 여기로 떨어진다(삭제가 할 일을 안 건드리는 근거). 이름은 `t('cat.none')` |
+| **`sortCats` / `catOrder`** | **카테고리를 세우는 유일한 기준.** `order` 우선, 없으면 이름순으로 **뒤**. 부르는 곳은 `firebase.js` 스냅샷과 `todo.js` 의 낙관적 업데이트 둘 — 여기가 갈리면 폰과 PC 의 순서가 달라진다.<br>★ 없는 `order` 를 `0` 으로 치면 안 된다(옛 카테고리가 전부 맨 앞에 몰린다). `Infinity` 도 안 된다 — **`Infinity - Infinity`가 `NaN`** 이라 비교가 무너져 순서가 조용히 뒤죽박죽이 된다. 그래서 `CAT_ORDER_LAST = 1e9` 다 |
 | **`onColor(hex)`** | **카테고리 원색 위에 올릴 글자색**(검정 or 흰색). 격자에서 **일정은 원색 판, 할 일은 같은 색 16% 틴트** 로 갈리는데, 흰 글자로 고정하면 팔레트의 밝은 쪽(#34C759·#00C7BE·#FF9500)에서 대비 **1.8:1** 로 안 읽힌다. 색을 어둡게 깎아 봤더니 주황이 갈색이 돼 **어느 카테고리인지가 죽어서** 되돌렸다 — 색은 원색 그대로 두고 글자를 고른다. 기준 0.179 는 WCAG 상대 휘도에서 흑/백 대비가 같아지는 지점이고, 이러면 11색 전부 5:1 이상이다(selftest 가 대비비를 직접 계산한다). **화면과 캔버스가 이 함수 하나를 같이 쓴다** |
 | **`repLabel(k, days)`** | **days 를 넘기면 '매주 월·수·금'** — 7개면 '매주 (매일)', 없거나 비면 '매주' |
 | **`startsOn`** | **회차가 시작하는 날인가** (none/daily/weekly/monthly/yearly). `span` 을 안 본다 — 기간이 생기기 전의 `occursOn` 과 글자 하나까지 같다. **weekly 는 `days` 가 있으면 그 요일들로, 없거나 비면 시작일 요일로** — 빼면 옛 항목이 전부 사라진다 |
@@ -236,10 +242,11 @@ firebase.js                                                        (ESM 모듈)
 | **`endOk` / `formTimes`** | **종료 ≤ 시작이면 저장 거부**(자정 넘김 금지) · 폼 → `{time, endTime}`. 하루 종일이면 둘 다 `''` |
 | **`formOk`** | **저장 가능 조건의 단일 소스.** 버튼 `disabled` · 안내 문구 · `saveForm` 가드가 전부 이것만 본다 |
 | **`syncSheet`** | **입력 위임이 `render()` 대신 부르는 것.** 저장 버튼 · 종료 안내 · 날짜 옆 요일 — 아래 지뢰 참고 |
-| **`renderCatSheet` / `catOk` / `syncCatSheet`** | **카테고리 시트. `catDraft` 가 null 이면 목록, 있으면 편집기** (입력 시트와 같은 모양). `catOk` 가 저장 가능 조건의 단일 소스(빈 이름·20자 초과·중복) — 버튼 `disabled`·중복 안내·`saveCatDraft` 가드가 전부 이것만 본다. 이름 칸은 uncontrolled 라 파생 표시는 `syncCatSheet` 가 DOM 을 직접 맞춘다 |
+| **`renderCatSheet` / `catOk` / `syncCatSheet`** | **카테고리 시트. `catDraft` 가 null 이면 목록, 있으면 편집기** (입력 시트와 같은 모양). `catOk` 가 저장 가능 조건의 단일 소스(빈 이름·20자 초과·중복) — 버튼 `disabled`·중복 안내·`saveCatDraft` 가드가 전부 이것만 본다. 이름 칸은 uncontrolled 라 파생 표시는 `syncCatSheet` 가 DOM 을 직접 맞춘다.<br>★ 이름 칸에 **인라인 패딩을 직접 붙인다**(`12px 14px` · `16px`) — `.field` 는 패딩을 안 줘서 맨몸으로 쓰면 브라우저 기본 높이(18px)로 납작하다. 16px 은 폰에서 그보다 작으면 누를 때 화면이 자동 확대되기 때문 |
+| **`catDragPaint` / `catDragDrop` / `catDragEnd`** (+ `CAT_HOLD_MS` 400 · `CAT_SLOP` 10) | **길게 눌러 순서 끌기.** 위임은 `app` 의 `pointerdown`·`pointermove`·`touchmove` 와 **창 단위**의 `pointerup`·`pointercancel` 이다(마우스를 `#app` 밖에서 떼면 app 리스너로 안 온다).<br>★ 끄는 동안 **`render()` 를 한 번도 안 부른다** — `#app` 을 갈아엎으면 손가락이 잡은 줄이 사라진다(로그인 화면 키보드와 같은 원리). `syncSheet` 처럼 줄의 `transform` 만 민다.<br>★ 한 줄 높이는 **이웃한 두 줄의 간격을 잰다.** 첫 줄만 위 테두리(.5px)가 없어서 높이가 다르다.<br>★ 400ms 안에 움직이면 **스크롤로 본다.** 안 그러면 시트를 굴리려는 손짓이 전부 순서 바꾸기가 된다. 잡힌 뒤에는 `touchmove` 를 `preventDefault` 해서 시트가 같이 안 굴러간다 — `app`(div)에 걸어야 non-passive 다. 줄에 `user-select:none` 이 없으면 400ms 동안 안드로이드가 글자를 선택해 끌기가 시작도 못 한다.<br>★ 놓은 뒤 따라오는 `click` **하나를 삼킨다**(`catDragged`) — 안 삼키면 손을 떼는 순간 편집기가 같이 열린다 |
 | **`renderGoalSheet` / `openGoal` / `saveGoalDraft` / `delGoal` / `toggleGoal` / `syncGoalSheet`** | **목표 시트.** 입력 시트와 같은 모양이되 셋이 다르다 — 날짜가 아니라 **기한**(올해 안에 / 그 달까지 / 그 달 며칠까지), **년은 안 고른다**(지금 보는 `state.cy` 에 붙는다. 고르게 하면 저장한 목표가 다른 해로 사라진다), **반복 없음**(목표는 기간 자체라 '매주'가 성립 안 함). `saveGoalDraft` 는 규칙의 `hasOnly` 때문에 **여덟 키를 통으로** 보내고 편집 때 `done` 을 이어받는다 |
 | **`goalDay` / `lastDayOf`** | **말일 클램프.** 2월에 31 을 저장하면 `goalDue()` 의 `new Date(y,1,31)` 이 **3월 3일로 샌다.** 입력칸 `max` 는 브라우저 힌트일 뿐이라 저장 직전에 다시 조인다 |
-| **`saveCatDraft` / `delCat`** | **낙관적 업데이트가 필수다** — 시트가 열린 동안 `sheetBusy()` 가 스냅샷 렌더를 막으므로 `state.cats` 를 직접 안 고치면 방금 만든 카테고리가 **시트를 닫을 때까지 안 보인다**. 정렬 기준을 `firebase.js` 구독과 같게 유지할 것. `delCat` 은 카테고리 문서 하나만 지운다 |
+| **`commitCatOrder` / `saveCatDraft` / `delCat`** | **낙관적 업데이트가 필수다** — 시트가 열린 동안 `sheetBusy()` 가 스냅샷 렌더를 막으므로 `state.cats` 를 직접 안 고치면 방금 만든 카테고리가 **시트를 닫을 때까지 안 보인다**.<br>`commitCatOrder(list)` 가 저장의 단일 통로다: 받은 차례대로 `order` 를 **0..n-1 로 전부 다시 매겨** 보낸다(상한 10이라 한 번에). 이렇게 하면 `order` 없는 옛 문서·삭제로 생긴 번호 구멍·새 항목을 몇 번에 끼울지가 한꺼번에 사라지고 "목록의 자리 = order" 규칙만 남는다.<br>★ `saveCatDraft` 는 편집일 때 **있던 자리를 지킨다.** 이름을 고쳤다고 순서가 튀면 직접 정해 둔 차례가 이름순으로 되돌아간 것처럼 보인다. `fb.saveCat` 이 `setDoc`(통째 교체)이라 `order` 를 같이 안 실으면 실제로 그렇게 된다. `delCat` 은 카테고리 문서 하나만 지운다(번호 구멍은 다음 저장 때 정리된다) |
 | click / input / keydown 위임 | 모든 버튼이 여기 하나로. **입력은 uncontrolled**(캐럿 보존) |
 | 창 단위 리스너 · **`dayTick`** | `darkMQ.change`(가드 없이 `render`) · 1분 타이머 · **`resize`(150ms 합침)**. 뒤의 둘은 일간 뷰만 스스로 다시 그리면 되므로 **`dayTick()` 하나로 묶여** `state.user && state.view==='day' && !sheetBusy()` 를 탄다 — 화면을 돌리면 열 폭이 변해 표시 단계를 다시 계산해야 한다.<br>★ **`state.user` 를 빼면 폰에서 로그인이 안 됩니다** (실제로 밟음). 로그아웃해도 `state.view` 는 안 지워지고(`applyLoggedOut` 은 뷰를 사용자 설정으로 보고 그대로 둔다) 부팅 때 localStorage 에서 `'day'` 가 실려 옵니다. 그 상태로 **로그인 화면**에서 폰 키보드를 열면 `resize` 가 오고, `render()` 가 `#app` 을 통째로 갈아서 **누르고 있던 입력 칸이 문서에서 사라집니다** — 포커스가 죽으니 키보드가 올라왔다 150ms 만에 닫히고 이름도 PIN 도 못 칩니다. 로그인 화면에는 애초에 다시 그릴 일간 뷰가 없습니다 |
 | 부트스트랩 · selftest | `render()` + 10초 타임아웃 가드 · `?selftest` |
@@ -257,7 +264,7 @@ firebase.js                                                        (ESM 모듈)
 | `users/{uid}` | 아래 계정 문서 |
 | `usernames/{name}` | `{ uid, email }` ← **로그인 전** 이름→이메일 조회용 |
 | `users/{uid}/todos/{id}` | 할 일 문서 |
-| `users/{uid}/categories/{id}` | `{ name, color }` — 이름 20자 이내, 색은 팔레트 10색 중 하나 |
+| `users/{uid}/categories/{id}` | `{ name, color, order }` — 이름 20자 이내, 색은 팔레트 10색 중 하나, `order` 는 목록의 자리(0부터). **`order` 는 선택 필드**다 — 도입 전 문서에는 없고 그때는 이름순으로 뒤에 선다(`sortCats`). 저장할 때마다 **전부 0..n-1 로 다시 매겨** 보내므로 한 번 저장하면 그 계정은 정리된다 |
 | `users/{uid}/goals/{id}` | 목표 문서 (아래) — **할 일과 다른 컬렉션** |
 
 ### 목표 (goal) — `users/{uid}/goals/{id}`
@@ -375,7 +382,8 @@ batch 500 한계, 부분 실패 시 상태가 갈리는 것, 그리고 **오프�
   view,                // 'year'|'month'|'week'|'day'. 초기값 = SETTINGS.view (첫 화면 설정)
   cy, cm, selected: 'YYYY-MM-DD',   // ★ 연간 뷰는 cy 만 씁니다 (cm·selected 안 봄)
   items: [],           // 로그인한 계정의 할 일
-  cats: [],            // categories 스냅샷. 이름순 정렬은 firebase.js 구독에서 한 번만
+  cats: [],            // categories 스냅샷. 세우는 기준은 sortCats() 하나 (order → 이름)
+  catDrag: null,       // 관리 목록에서 길게 눌러 끄는 중 { id, from, to, y0, dy, rowH, on, timer }
   goals: [],           // goals 스냅샷. 정렬 안 함 — goalsIn() 이 그릴 때 세운다
   goalDraft: null,     // 목표 시트. null = 닫힘 (exp·jump 와 같은 방식, 여는 플래그 없음)
                        //   { id, title, scope, y, m, hasDay, d, categoryId, memo }
@@ -663,6 +671,15 @@ PIN 재인증 → todos 삭제 → users + usernames 삭제 → Auth 계정 삭�
 
 ### CSS 함정
 
+0. **`.seg` 의 `white-space:nowrap` 을 지우지 마세요 — 모양이 아니라 폭 계산입니다.**
+   `.seg-wrap` 이 `display:flex` 라 칩은 기본으로 `flex-shrink:1` 입니다. 카테고리 줄이
+   넘칠 때 칩이 흘러넘치는 대신 **찌부러져서**, 360px 에서 "스마트처리" 가 105px → **49px**
+   로 눌리고 글자가 두 줄로 접혀 `height:32px` 에 잘렸습니다. 게다가 전부 찌부러져 들어가니
+   가로로 흘릴 것이 **20px 밖에 안 남아** `overflow-x:auto` 가 있는데도 **옆으로 밀리지
+   않았습니다**(폰에서 실제로 겪음. 두 증상이 같은 원인입니다). `nowrap` 이면 min-content
+   폭이 글자 전체 폭이 되고 플렉스 항목의 자동 최소 크기가 그 아래로 못 줄여서, 같은
+   실측에서 스크롤 여유가 **178px** 로 돌아옵니다. 종류 줄(3칩)은 `min-width:0` 으로 스스로
+   빠져 있고 탭바는 라벨이 짧아 **둘 다 영향 0** 입니다.
 1. **버튼 색을 바꿀 때 `background:` (단축)를 쓰면 `--tc-sheen` 이 지워집니다.**
    반드시 **`background-color:`** 를 쓰세요.
 2. **`--tc-sheen`(버튼용)과 `--tc-card-sheen`(카드용)은 다른 토큰입니다.**
@@ -916,10 +933,18 @@ JS 를 안 돌리는 크롤러에게 **빈 페이지**입니다(확인함). 이 
 - Google Play / App Store 로 넓힐 때: Play 는 데이터 안전 섹션, App Store 는 Capacitor
   래핑이 추가로 필요합니다. 앱 내 계정 삭제(5.1.1(v))는 이미 갖췄습니다.
 
-### 4. 카테고리 — **배포 완료 · 옛 `pri` 이관만 남음**
+### 4. 카테고리 — **순서 기능은 규칙 배포 전 · 옛 `pri` 이관도 남음**
 
-규칙·코드 모두 올라갔고 **실기기(안드로이드 크롬)에서 확인했습니다** — 카테고리 저장이
-Firestore 에 실제로 쓰이고, 필터 칩 줄이 폰 한 줄에 들어갑니다(카테고리 2개 기준).
+기본 기능은 규칙·코드 모두 올라갔고 **실기기(안드로이드 크롬)에서 확인했습니다** —
+카테고리 저장이 Firestore 에 실제로 쓰입니다.
+
+**순서 바꾸기(`order` + 길게 눌러 끌기)는 코드만 끝났습니다.** §0 의 빨간 문단대로 규칙을
+먼저 올려야 저장이 통과합니다. 폰 실기기 확인도 **아직입니다** — 브라우저 창이 안 떠서
+터치 제스처를 여기서 잴 수 없었고, 잰 것은 합성 pointer 이벤트로 도는 로직뿐입니다.
+특히 **끌 때 시트가 같이 굴러가지 않는지**는 기기에서 봐야 압니다.
+
+칩 줄은 이제 **찌부러지지 않고 가로로 흐릅니다**(§4 CSS 함정 0). 카테고리 5개·긴 이름에서
+줄이 안 밀리던 것이 이것 때문이었습니다.
 
 **옛 `pri` 값 이관은 아직 판단 전입니다.** 값별 개수를 안 재서 정하지 못했습니다 —
 로그인한 탭 콘솔에서 아래를 돌려 보세요(`watch()` 가 `todos` 전체를 필터 없이 구독하므로
