@@ -99,6 +99,13 @@ input:focus,textarea:focus{outline:2px solid var(--tint);outline-offset:-1px}
 
 .field{width:100%;border:none;background:var(--fill-tertiary);border-radius:12px;
   font-family:inherit;color:var(--label)}
+/* 가로로 흐르는 줄의 스크롤 막대를 감춘다 — 알약 아래에 회색 띠로 남아 구분선처럼
+   보였다(폰에서 지적됨). 감춰도 높이는 그대로다: 원래 자리를 안 먹는 오버레이
+   막대라 실측이 감추기 전후 둘 다 38px 이다.
+   ★ 반대로 ::-webkit-scrollbar 를 **꾸미면** 오버레이가 실물 막대로 바뀌어 4px 을
+   먹는다(38→42, 실측). 얇고 둥글게 만들려다 오히려 더 두꺼워지니 하지 말 것. */
+.no-scrollbar{scrollbar-width:none;-ms-overflow-style:none}
+.no-scrollbar::-webkit-scrollbar{display:none}
 /* Segmented control — the wrapper is a recessed card, each segment a raised
    chip, so all three read as buttons like the rest of the UI. */
 .seg-wrap{display:flex;gap:3px;padding:3px;border-radius:999px;background:var(--fill-tertiary);
