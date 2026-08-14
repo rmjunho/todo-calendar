@@ -22,6 +22,23 @@ const CAT_NAME_MAX = 20;
 // ★ 카테고리 삭제는 할 일 문서를 건드리지 않는다 — 죽은 id 는 조용히 여기로 떨어진다.
 //   days·endTime 이 없는 옛 항목을 다루는 방식과 같다(CONTEXT §3).
 const CAT_NONE = { id: '', color: '#8E8E93' };
+
+// 일정 판(원색) **위에** 올릴 글자색. 할 일 알약이 같은 색의 16% 틴트라, 일정은
+// 원색을 꽉 채워서 가른다 — 옅은 판 vs 진한 판이면 한눈에 갈린다.
+// ★ 흰색으로 고정하면 안 된다: 팔레트에서 밝은 #34C759·#00C7BE·#FF9500 위의 흰 글자는
+//   대비가 1.8~2.3:1 로 **안 읽힌다**. 색을 어둡게 깎는 방법도 써 봤는데 주황이 갈색이
+//   되어 "무슨 카테고리인지" 가 죽었다. 그래서 **색은 원색 그대로 두고 글자를 고른다.**
+// ★ 기준 0.179 는 WCAG 상대 휘도에서 흰 글자 대비와 검은 글자 대비가 같아지는 지점이다
+//   (1.05/(L+0.05) == (L+0.05)/0.05). 이 규칙이면 팔레트 11색 전부 5:1 이상이 나온다 —
+//   ?selftest 가 그 대비비를 직접 계산해 단언한다.
+// ★ 화면과 내보내기 캔버스가 **이 함수 하나**를 같이 쓴다. 각자 정하면 이미지 글자색이
+//   화면과 어긋나고, 그 차이는 둘을 나란히 놓기 전까지 아무도 못 본다.
+function onColor(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  const L = 0.2126 * f((n >> 16) & 255) + 0.7152 * f((n >> 8) & 255) + 0.0722 * f(n & 255);
+  return L > 0.179 ? '#000000' : '#FFFFFF';
+}
 const catOf = (it) =>
   (it && it.categoryId && state.cats.find((c) => c.id === it.categoryId)) || CAT_NONE;
 // 이름은 i18n 을 탄다 — '없음' 을 데이터로 들고 있으면 언어를 바꿔도 안 변한다.
@@ -240,11 +257,19 @@ function barHtml(b, it) {
     // 1번 줄은 자리 맞추기용이라(barSpacer) 층은 2번 줄부터다.
 'px;grid-column:' + (b.from + 1) + '/' + (b.to + 2) + ';grid-row:' + (b.lane + 2) +
     ';margin-left:' + (b.cutL ? 0 : 3) + 'px;margin-right:' + (b.cutR ? 0 : 3) + 'px' +
-    // 패딩·높이는 그대로 둔다 — 판만 빠지고 글자 자리는 여러 날 막대와 같은 줄에 선다.
-    (one ? ';background-color:transparent'
-         : ';border-radius:' + rL + ' ' + rR + ' ' + rR + ' ' + rL + ';background-color:' + p.bg) +
-    ';color:' + p.color + ';text-decoration:' + p.deco +
-    ';opacity:' + p.op + '">' + esc(p.title) + '</div>';
+    // ★ 여러 날 일정은 **원색 판**이다. 할 일 알약(같은 색 16% 틴트)과 같은 옅은 판을
+    //   쓰던 때는 둘을 가를 단서가 '위 줄이냐 칸 안이냐' 뿐이었다. 글자색은 색깔마다
+    //   onColor() 가 고른다 — 흰색 고정이면 초록·주황 위에서 안 읽힌다.
+    //   하루짜리는 판이 없으므로(사용자 요청) 대신 **색 점**을 앞에 붙인다. 그래야
+    //   "채워진 색이 보이면 일정" 이라는 규칙이 둘 다에 걸린다.
+    // 패딩·높이는 그대로다 — 글자 자리가 여러 날 막대와 같은 줄에 선다.
+    (one ? ';background-color:transparent;color:' + p.color
+         : ';border-radius:' + rL + ' ' + rR + ' ' + rR + ' ' + rL +
+           ';background-color:' + p.color + ';color:' + onColor(p.color)) +
+    ';text-decoration:' + p.deco + ';opacity:' + p.op + '">' +
+    (one ? '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;' +
+      'margin-right:5px;vertical-align:middle;background-color:' + p.color + '"></span>' : '') +
+    esc(p.title) + '</div>';
 }
 
 // 일간 뷰가 그릴 모양으로 바꾼 **사본**. 원본은 안 건드린다.

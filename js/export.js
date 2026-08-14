@@ -446,13 +446,19 @@ function exDrawMonth(ctx, C, m) {
         const bx = EX_PAD + b.from * L.cellW + (b.cutL ? 0 : 5);
         const bw = (b.to - b.from + 1) * L.cellW - (b.cutL ? 0 : 5) - (b.cutR ? 0 : 5);
         const by = y + 52 + b.lane * M_BAR_ROW;
-        // 하루짜리는 판 없이 글자만 (barOne). 글자 자리는 그대로라 줄이 안 어긋난다.
-        if (!b.one) {
-          exRect(ctx, bx, by, bw, M_BAR_H, 7);
-          ctx.fillStyle = exAlpha(b.color, C.pillA);
+        // 여러 날은 진한 판 + 흰 글자, 하루짜리는 판 없이 진한 점 + 색 글자 (화면과 같다).
+        if (b.one) {
+          ctx.beginPath();
+          ctx.arc(bx + 11, by + 15, 4, 0, Math.PI * 2);
+          ctx.fillStyle = b.color;
           ctx.fill();
+          exClip(ctx, b.title, bx + 20, by + 15, bw - 27, exFont(600, 19), b.color);
+        } else {
+          exRect(ctx, bx, by, bw, M_BAR_H, 7);
+          ctx.fillStyle = b.color;
+          ctx.fill();
+          exClip(ctx, b.title, bx + 7, by + 15, bw - 14, exFont(600, 19), onColor(b.color));
         }
-        exClip(ctx, b.title, bx + 7, by + 15, bw - 14, exFont(600, 19), b.color);
       });
     }
     ctx.save();
@@ -544,12 +550,18 @@ function exDrawWeek(ctx, C, m) {
       const bx = EX_PAD + b.from * L.colW + (b.cutL ? 0 : 5);
       const bw = (b.to - b.from + 1) * L.colW - (b.cutL ? 0 : 5) - (b.cutR ? 0 : 5);
       const by = L.barTop + 12 + b.lane * W_BAR_ROW;
-      if (!b.one) {                       // 하루짜리는 판 없이 글자만 (barOne)
-        exRect(ctx, bx, by, bw, W_BAR_H, 9);
-        ctx.fillStyle = exAlpha(b.color, C.pillA);
+      if (b.one) {                        // 하루짜리는 판 없이 색 점 + 색 글자 (barOne)
+        ctx.beginPath();
+        ctx.arc(bx + 18, by + 22, 5, 0, Math.PI * 2);
+        ctx.fillStyle = b.color;
         ctx.fill();
+        exClip(ctx, b.title, bx + 29, by + 22, bw - 42, exFont(600, 22), b.color);
+      } else {
+        exRect(ctx, bx, by, bw, W_BAR_H, 9);
+        ctx.fillStyle = b.color;
+        ctx.fill();
+        exClip(ctx, b.title, bx + 13, by + 22, bw - 26, exFont(600, 22), onColor(b.color));
       }
-      exClip(ctx, b.title, bx + 13, by + 22, bw - 26, exFont(600, 22), b.color);
     });
     exLine(ctx, EX_PAD, L.barTop, EX_PAD + EX_GRID, C.sep);
   }
