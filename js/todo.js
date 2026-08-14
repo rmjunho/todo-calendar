@@ -885,22 +885,24 @@ document.addEventListener('keydown', (e) => {
 // theme:'system' 일 때만 의미가 있다. render() 안의 applyTheme() 이 저장값을
 // 먼저 보므로, 밝은/어두운으로 고정해 둔 사람은 OS 를 바꿔도 흔들리지 않는다.
 darkMQ.addEventListener('change', render);
-// The "now" indicator tracks a real clock, so refresh the day view each minute.
-setInterval(() => { if (state.view === 'day' && !sheetBusy()) render(); }, 60000);
-
-// 일간 뷰의 표시 단계(제목+시간 / 제목만 / 색 블록)는 열 폭 px 으로 갈린다. 그 폭은
-// 뷰포트에서 산술로 나오므로 **화면을 돌리면 다시 계산해야** 한다 — 안 걸면 세로에서
-// 4열이던 것이 가로로 돌려도 색 블록으로 남는다. 요소별 리스너가 아니라 위 setInterval·
-// darkMQ 와 같은 층의 창 단위 리스너 하나이고, 가드도 setInterval 과 똑같이 sheetBusy()
-// 를 탄다(시트를 연 채 돌리면 미루고, closeForm() 이 그때 반영한다).
+// 일간 뷰가 스스로 다시 그려야 하는 자리가 둘이다 — 1분마다 움직이는 "지금" 표시선과,
+// 화면을 돌렸을 때의 열 폭 재계산(표시 단계가 열 폭 px 으로 갈린다. 안 걸면 세로에서
+// 4열이던 것이 가로로 돌려도 색 블록으로 남는다). 조건이 같으므로 함수 하나로 묶는다 —
+// 한쪽만 고치는 사고를 막는다. 시트가 열려 있으면 미루고, closeForm() 이 그때 반영한다.
+// ★ state.user 를 반드시 같이 본다. 로그아웃해도 state.view 는 안 지워지고
+//   (applyLoggedOut 은 뷰를 사용자 설정으로 보고 그대로 둔다) 부팅 때 localStorage 에서
+//   'day' 가 실려 온다. 그 상태로 **로그인 화면**에서 폰 키보드를 열면 resize 가 오고,
+//   여기서 render() 가 돌아 누르고 있던 입력 칸이 문서에서 통째로 사라진다 — 포커스가
+//   죽으니 키보드가 올라왔다 바로 닫히고, 이름도 PIN 도 칠 수가 없다. 로그인 화면에는
+//   애초에 다시 그릴 일간 뷰가 없다.
+const dayTick = () => { if (state.user && state.view === 'day' && !sheetBusy()) render(); };
+setInterval(dayTick, 60000);
+// 요소별 리스너가 아니라 위 setInterval·darkMQ 와 같은 층의 창 단위 리스너 하나다.
 // 150ms 로 합치는 이유는 데스크톱 창 드래그다 — 안 합치면 #app 을 초당 수십 번 새로 만든다.
 let resizeT = null;
 window.addEventListener('resize', () => {
   if (resizeT) return;
-  resizeT = setTimeout(() => {
-    resizeT = null;
-    if (state.view === 'day' && !sheetBusy()) render();
-  }, 150);
+  resizeT = setTimeout(() => { resizeT = null; dayTick(); }, 150);
 });
 
 // 세션 복원은 firebase.js 의 onAuthStateChanged 가 한다. 여기서는 로딩 화면만
@@ -2117,6 +2119,23 @@ if (location.search.includes('selftest')) {
   const wA = exWeekLayout(3, true), wB = exWeekLayout(3, true, 2);
   eq(exWeekLayout(3, true, 0).h, wA.h, 'the week export is untouched when there are no bars');
   eq(wB.bodyTop - wA.bodyTop, wB.barH, 'and its columns start below the bar band');
+
+  // --- 로그인 화면은 스스로 다시 그려지면 안 된다 ---
+  // 폰에서 칸을 누르면 키보드가 올라오며 화면이 줄고 resize 가 온다. 그때 render() 가
+  // 돌면 누르고 있던 칸이 문서에서 통째로 사라져 포커스가 죽고 키보드가 바로 닫힌다 —
+  // 이름도 PIN 도 칠 수가 없다. 로그아웃해도 state.view 는 'day' 로 남을 수 있으므로
+  // 뷰만 보고 가드하면 이 화면이 걸린다. 조건이 아니라 **그 함수를 실제로 부른 뒤의
+  // DOM** 을 본다 — setInterval·resize 가 부르는 것과 같은 dayTick 이다.
+  state.user = null;
+  state.booting = false;
+  state.view = 'day';
+  render();
+  const nameEl = document.querySelector('[data-a="name"]');
+  nameEl.focus();
+  dayTick();
+  ok(document.contains(nameEl) && document.activeElement === nameEl,
+    'the login field survives a day-view tick — a phone keyboard fires resize',
+    'inDoc=' + document.contains(nameEl) + ' active=' + document.activeElement.tagName);
 
   Object.assign(state, kSpan);
   Object.assign(state, kGoal);
