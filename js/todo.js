@@ -407,7 +407,11 @@ function renderCatSheet() {
     body =
       '<div style="font-size:13px;font-weight:600;color:var(--label-secondary);margin:14px 0 6px">' +
         esc(t('cat.name')) + '</div>' +
+      // .field 는 패딩을 안 준다 — 다른 입력칸처럼 여기서 붙인다(안 붙이면 브라우저
+      // 기본 높이라 유독 납작하다). 16px 인 이유는 폰이다: 그보다 작으면 누를 때
+      // 화면이 자동으로 확대된다.
       '<input class="field" data-cn maxlength="' + CAT_NAME_MAX + '" ' +
+        'style="padding:12px 14px;font-size:16px" ' +
         'placeholder="' + esc(t('cat.namePh')) + '" value="' + esc(d.name) + '">' +
       '<div id="catDupe" role="alert"' + (catTaken(d) ? '' : ' hidden') +
         ' style="margin-top:8px;font-size:13px;font-weight:600;color:#FF3B30">' +
@@ -1433,6 +1437,9 @@ if (location.search.includes('selftest')) {
   };
   ok(renderForm({ title: '회의' }) && !renderForm({ title: '회의' }).disabled,
     'a valid form renders an enabled save button');
+  // 입력칸 높이의 기준값. 아래 카테고리 시트가 이것과 같은지 본다 — 카테고리 이름
+  // 칸만 .field 를 맨몸으로 써서(패딩이 없다) 브라우저 기본 높이로 납작했다.
+  const refFieldH = document.querySelector('[data-f="title"]').getBoundingClientRect().height;
   ok(renderForm({ title: '   ' }).disabled, 'an empty title renders the save button disabled');
   ok(renderForm({ title: '회의', repeat: 'weekly', days: [] }).disabled,
     'weekly with no weekday selected renders the save button disabled');
@@ -1686,6 +1693,34 @@ if (location.search.includes('selftest')) {
   state.cats = [];
   eq(chips(drawCat(four())).length, 0, 'with no categories the filter row is not drawn at all');
 
+  // ★ 긴 이름은 **찌부러지지 말고 넘쳐야** 한다. .seg-wrap 이 flex 라 칩은 기본으로
+  //   줄어드는데, 그러면 이름이 두 줄로 접혀 height:32px 에 잘리고(폰에서 실제로
+  //   그랬다) 다 찌부러져 들어가니 옆으로 밀 것도 안 남는다.
+  //   창 폭에 안 기대려고 상한 개수 × 상한 길이로 채운다 — 창이 이보다 넓으면
+  //   애초에 안 줄어들어 검사가 헛돌지만(4K), 폰·노트북 폭에서는 확실히 걸린다.
+  state.cats = CAT_COLORS.map((c, i) => ({ id: 'w' + i, color: c,
+    name: '가나다라마바사아자차카타파하거너더러'.slice(0, CAT_NAME_MAX - 1) + i }));
+  const wideRow = [...drawCat([]).querySelectorAll('.seg-wrap')].find((w) => w.querySelector('[data-filter]'));
+  const wide = [...wideRow.querySelectorAll('[data-filter]')];
+  // ★ 넘치는 축은 **세로**다. 접힌 글자는 옆으로 안 새고 height:32px 아래로 새므로
+  //   scrollWidth 를 보면 두 줄로 접혀도 통과한다(실제로 여기서 한 번 헛돌았다).
+  ok(wide.every((c) => c.scrollHeight <= c.clientHeight),
+    'a long category name never overflows its own chip',
+    'worst=' + Math.max.apply(null, wide.map((c) => c.scrollHeight - c.clientHeight)));
+  // 찌부러졌는지 = 제 이름이 요구하는 폭보다 좁게 그려졌는지. 창 크기에 안 기대려고
+  // 같은 칩을 떼어내 자연 폭을 재서 비교한다 — 큰 모니터에서도 판정이 같다.
+  const natW = (c) => {
+    const n = c.cloneNode(true);
+    n.style.position = 'absolute'; n.style.left = '-9999px'; n.style.width = 'max-content';
+    document.body.appendChild(n);
+    const w = n.getBoundingClientRect().width;
+    n.remove();
+    return w;
+  };
+  ok(wide.every((c) => c.getBoundingClientRect().width >= natW(c) - 1),
+    'and no chip is squeezed below the width its label needs — the row overflows instead, so it can be swiped',
+    'worst=' + Math.max.apply(null, wide.map((c) => natW(c) - c.getBoundingClientRect().width)));
+
   // --- 카테고리 시트 ---
   state.cats = [{ id: 'c1', name: '업무', color: '#007AFF' }];
   state.showCats = true;
@@ -1700,6 +1735,8 @@ if (location.search.includes('selftest')) {
   eq(app4.querySelectorAll('[data-catcolor]').length, 10,
     'the editor offers exactly the ten palette colours — there is no free colour input');
   ok(document.getElementById('catSaveBtn').disabled, 'an empty name cannot be saved');
+  eq(app4.querySelector('[data-cn]').getBoundingClientRect().height, refFieldH,
+    'the name field is the same height as the other input fields — .field on its own has no padding');
   // 여기부터는 render() 를 부르지 않는다 — 이름 칸이 uncontrolled 라 입력 위임이
   // syncCatSheet() 로 DOM 만 맞추는 경로를 그대로 탄다.
   state.catDraft.name = '업무';
