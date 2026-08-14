@@ -233,8 +233,24 @@ function exRow(it, ds, includeMemo) {
     color: catOf(it).color,
     time: it.time ? timeRange(it.time, it.endTime || '') : t('item.allDay'),
     allDay: !it.time,
+    // ★ 종류를 같이 실어 보낸다. 이게 없으면 이미지에서 일정과 할 일이 **완전히 같은
+    //   줄**로 나온다 — 화면 아래 목록은 동그라미/네모로 갈라 놓는데 이미지만 그 구분이
+    //   통째로 빠져 있었다(사용자가 실기기 이미지를 보고 지적).
+    evt: isEvent(it),
+    // 여러 날이면 그 회차의 기간. `하루 종일` 이 사흘 내리 반복되면 같은 일정이 아니라
+    // 별개의 할 일 셋으로 읽힌다.
+    span: spanOf(it),
     done: isDone(it, ds)
   };
+  // 여러 날 일정의 오른쪽 라벨은 시각이 아니라 **기간**이다. 폭이 넘치면 아래
+  // exDrawRow 의 Math.min 이 제목을 줄여 받아 준다 — 겹치지 않는다.
+  if (r.evt && r.span > 1) {
+    const s = occStart(it, ds);
+    if (s) {
+      r.time = monthDay(parse(s)) + ' – ' + monthDay(parse(addDays(s, r.span - 1)));
+      r.allDay = false;                     // 정보가 있는 라벨이라 흐리게 두지 않는다
+    }
+  }
   const memo = (it.memo || '').trim();
   if (includeMemo && memo) r.memo = memo;
   return r;
@@ -547,23 +563,50 @@ function exDrawRow(ctx, C, r, x, y, w) {
   ctx.save();
   if (r.done) ctx.globalAlpha = C.doneA;
 
-  exRect(ctx, x, y + 24, 6, rh - 44, 3);
+  // ★ 표시는 **화면 아래 목록과 같은 언어**다: 할 일은 동그라미(체크할 수 있다),
+  //   일정은 네모(완료라는 개념이 없다). 예전에는 둘 다 같은 세로 색 막대였고,
+  //   그래서 이미지만 보면 일정과 할 일을 가를 단서가 하나도 없었다.
+  //   색은 그대로 카테고리 색이라 옛 막대가 주던 정보(어느 카테고리인가)는 안 잃는다.
+  const mx = x + 15, my = y + 44, mr = 13;
   ctx.fillStyle = r.color;
-  ctx.fill();
+  if (r.evt) {
+    exRect(ctx, mx - mr, my - mr, mr * 2, mr * 2, 8);
+    ctx.fill();
+  } else {
+    ctx.beginPath();
+    ctx.arc(mx, my, mr - 1.5, 0, Math.PI * 2);
+    if (r.done) {
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(mx - 6, my);
+      ctx.lineTo(mx - 2, my + 5);
+      ctx.lineTo(mx + 6, my - 5);
+      ctx.strokeStyle = C.onTint;
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = r.color;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+  }
 
   // 시간 칸은 오른쪽 정렬이라 제목과 겹칠 수 있다. 230 은 '오후 2:30' 한 벌에
-  // 맞춘 옛 예약폭이고, '07:00 – 08:00' 범위는 그보다 넓다. Math.min 으로 좁히기만
-  // 하므로 **종료가 없는 옛 행은 230 그대로** — 내보낸 이미지가 안 바뀐다.
+  // 맞춘 옛 예약폭이고, '07:00 – 08:00' 범위와 기간('8월 13일 – 8월 16일')은 그보다
+  // 넓다. Math.min 으로 좁히기만 하므로 넓은 라벨이 와도 제목이 줄어들 뿐 안 겹친다.
+  // ★ 표시 자리만큼(18) 제목이 오른쪽으로 갔으므로 두 상수도 같이 밀었다.
   ctx.font = exFont(600, 25);
   const timeW = ctx.measureText(r.time).width;
-  exClip(ctx, r.title, x + 24, y + 44, Math.min(w - 230, w - 44 - timeW), exFont(600, 30), C.label, r.done);
+  exClip(ctx, r.title, x + 42, y + 44, Math.min(w - 248, w - 62 - timeW), exFont(600, 30), C.label, r.done);
   exText(ctx, r.time, x + w, y + 44, exFont(600, 25), r.allDay ? C.label3 : C.label2, 'right');
   if (r.memo) {
     // 메모만 여러 줄로 흐른다. 한글은 공백이 없어 글자 단위로 끊긴다.
     ctx.font = exFont(500, 24);
-    const memoLines = exWrap(r.memo, w - 30, 2, (v) => ctx.measureText(v).width);
+    const memoLines = exWrap(r.memo, w - 48, 2, (v) => ctx.measureText(v).width);
     for (let k = 0; k < memoLines.length; k++) {
-      exText(ctx, memoLines[k], x + 24, y + 80 + k * D_MEMO_LINE, exFont(500, 24), C.label3);
+      exText(ctx, memoLines[k], x + 42, y + 80 + k * D_MEMO_LINE, exFont(500, 24), C.label3);
     }
   }
   ctx.restore();

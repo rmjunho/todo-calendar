@@ -2067,6 +2067,19 @@ if (location.search.includes('selftest')) {
   const exC = exMonthLayout(2026, 7, true, [1, 0, 0, 0, 0, 0]);
   eq(exC.rowY[1] - exC.rowY[0], M_ROW + M_BAR_ROW,
     'the second week starts below the first week\'s bars — the rows stack, they are not multiplied');
+  // 이미지의 상세 줄이 일정과 할 일을 갈라 놓는가. ★ 실기기 이미지를 보고 나온 지적이다 —
+  // 화면 아래 목록은 동그라미/네모로 가르는데 이미지에는 그 단서가 통째로 없었다.
+  const exTrip = EV({ id: 'x', span: 4, title: '출장', date: '2026-08-13' });
+  const rowEv = exRow(exTrip, '2026-08-14', false);
+  const rowTd = exRow({ id: 'y', kind: 'todo', span: 1, title: '할일', date: '2026-08-14',
+    time: '', endTime: '', categoryId: 'c1', repeat: 'none', days: [], memo: '' }, '2026-08-14', false);
+  ok(rowEv.evt && !rowTd.evt, 'an exported row now says which kind it is');
+  eq(rowEv.time, monthDay(parse('2026-08-13')) + ' – ' + monthDay(parse('2026-08-16')),
+    'a spanning event prints its period, not “all day” repeated once per covered day');
+  eq(rowTd.time, t('item.allDay'), 'and a to-do is untouched');
+  eq(exRow(EV({ id: 'z', span: 1, title: '회의' }), '2026-08-05', false).time, t('item.allDay'),
+    'a one-day event keeps the plain label — its square marker is what tells it apart');
+
   const wA = exWeekLayout(3, true), wB = exWeekLayout(3, true, 2);
   eq(exWeekLayout(3, true, 0).h, wA.h, 'the week export is untouched when there are no bars');
   eq(wB.bodyTop - wA.bodyTop, wB.barH, 'and its columns start below the bar band');
