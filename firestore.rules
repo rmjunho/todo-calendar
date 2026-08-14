@@ -125,10 +125,16 @@ service cloud.firestore {
         return c in ['#FF3B30', '#FF9500', '#34C759', '#00C7BE', '#30B0C7',
                      '#007AFF', '#5856D6', '#AF52DE', '#FF2D55', '#A2845E'];
       }
+      // order 는 화면에 세우는 순서다(0부터). **선택 필드로 둔다** — 이 규칙 이전에
+      // 만든 문서에는 없고, 있으면 그 순서대로 없으면 이름순으로 뒤에 선다
+      // (calendar.js 의 sortCats). 필수로 걸면 옛 문서를 고치는 순간 거부된다.
+      // 타입을 좁히는 이유는 색과 같다 — 숫자가 아닌 값이 들어오면 정렬 비교가
+      // NaN 이 되어 순서가 조용히 뒤죽박죽이 된다.
       function validCat(d) {
-        return d.keys().hasOnly(['name', 'color'])
+        return d.keys().hasOnly(['name', 'color', 'order'])
                && d.name is string && d.name.size() > 0 && d.name.size() <= 20
-               && catColor(d.color);
+               && catColor(d.color)
+               && (!d.keys().hasAny(['order']) || (d.order is int && d.order >= 0));
       }
       match /categories/{catId} {
         allow read, delete: if signedIn() && request.auth.uid == uid && approved();
