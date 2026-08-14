@@ -23,6 +23,20 @@ const CAT_NAME_MAX = 20;
 //   days·endTime 이 없는 옛 항목을 다루는 방식과 같다(CONTEXT §3).
 const CAT_NONE = { id: '', color: '#8E8E93' };
 
+// 카테고리를 화면에 세우는 순서. ★ 이 함수 **하나**가 유일한 기준이다 — 필터 칩 줄,
+// 관리 시트, 입력 시트의 카테고리 칩, 내보내기가 전부 같은 state.cats 배열을 그대로
+// 쓰므로 정렬이 두 군데로 갈리면 화면마다 순서가 달라진다. 부르는 곳은 firebase.js
+// 의 스냅샷과 todo.js 의 낙관적 업데이트 둘이다.
+//
+// order 가 없는 문서는 **뒤로** 보내고 이름순을 유지한다. order 를 도입하기 전에
+// 만든 카테고리가 그렇다 — 없는 값을 0 으로 치면 옛 카테고리가 전부 맨 앞에
+// 몰리면서 순서가 한 번 크게 튄다. 큰 수를 쓰되 Infinity 는 안 된다: Infinity 끼리
+// 빼면 NaN 이라 비교가 무너져 정렬이 조용히 뒤죽박죽이 된다.
+const CAT_ORDER_LAST = 1e9;
+const catOrder = (c) => (typeof c.order === 'number' ? c.order : CAT_ORDER_LAST);
+const sortCats = (list) => list.slice().sort((a, b) =>
+  catOrder(a) - catOrder(b) || (a.name || '').localeCompare(b.name || ''));
+
 // 일정 판(원색) **위에** 올릴 글자색. 할 일 알약이 같은 색의 16% 틴트라, 일정은
 // 원색을 꽉 채워서 가른다 — 옅은 판 vs 진한 판이면 한눈에 갈린다.
 // ★ 흰색으로 고정하면 안 된다: 팔레트에서 밝은 #34C759·#00C7BE·#FF9500 위의 흰 글자는
@@ -99,7 +113,10 @@ const GLYPHS = {
   'plus': '<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>',
   'chevron.left': '<path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
   'chevron.right': '<path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
-  'chevron.up.chevron.down': '<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10l4-4 4 4"/><path d="M8 14l4 4 4-4"/></g>'
+  'chevron.up.chevron.down': '<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10l4-4 4 4"/><path d="M8 14l4 4 4-4"/></g>',
+  // 순서를 바꿀 수 있다는 표시. 손잡이 자체가 잡히는 곳은 아니다 — 줄 아무 데나
+  // 길게 누르면 잡힌다. 이건 "끌 수 있다" 를 눈에 보이게 하는 역할만 한다.
+  'line.3.horizontal': '<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 8h14"/><path d="M5 12h14"/><path d="M5 16h14"/></g>'
 };
 function icon(name, size, color) {
   return '<svg viewBox="0 0 24 24" width="' + size + '" height="' + size + '" role="img" aria-label="' + name +
@@ -508,7 +525,7 @@ const state = {
   cm: now0.getMonth(),
   selected: fmt(now0),
   items: [],
-  cats: [],           // users/{uid}/categories 스냅샷. 이름순 정렬은 firebase.js 가 한다
+  cats: [],           // users/{uid}/categories 스냅샷. 세우는 순서는 sortCats() 하나가 정한다
   goals: [],          // users/{uid}/goals 스냅샷. 정렬은 goalsIn() 이 그릴 때 한다
   // 목표 시트. null 이면 닫힘 — exp·jump 와 같은 방식이라 여는 플래그가 따로 없다.
   // { id, title, scope, y, m, hasDay, d, categoryId, memo }. id 가 '' 면 새 목표.
@@ -521,6 +538,11 @@ const state = {
   kind: null,
   showCats: false,    // 카테고리 관리 시트
   catDraft: null,     // 그 안의 편집기 { id, name, color }. null 이면 목록 모드
+  // 관리 목록에서 길게 눌러 끄는 중. { id, from, to, y0, rowH, on, timer }
+  // ★ 끄는 동안에는 render() 를 안 부른다 — #app 을 갈아엎으면 손가락이 잡고 있던
+  //   줄이 사라진다(로그인 화면에서 키보드가 닫히던 것과 같은 원리). 대신 줄의
+  //   transform 만 직접 민다. 놓을 때 한 번만 그린다.
+  catDrag: null,
   showForm: false,
   editingId: null,
   form: null,

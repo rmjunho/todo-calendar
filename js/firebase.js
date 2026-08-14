@@ -115,6 +115,7 @@ function applyLoggedOut() {
   state.showAdmin = false;
   state.showCats = false;
   state.catDraft = null;
+  state.catDrag = null;     // 끄는 중에 세션이 끊기면 줄이 밀린 채로 남는다
   state.goalDraft = null;   // ★ 안 비우면 sheetBusy() 가 영영 true 로 남는다
   state.booting = false;
   // ★ 열려 있던 시트를 전부 닫는다. 안 닫으면 sheetBusy() 가 영영 true 로 남아
@@ -181,12 +182,12 @@ function watch(user) {
     if (!sheetBusy()) render();
   }, (e) => fail(t('err.loadTodos'), e));
 
-  // 카테고리. 이름순으로 세워 두는 것은 **여기 한 곳**이다 — 필터 칩 줄과 관리
+  // 카테고리. 세우는 기준은 sortCats()(calendar.js) **하나**다 — 필터 칩 줄과 관리
   // 시트와 폼 칩이 같은 배열을 그대로 쓰므로 순서가 세 군데서 갈리지 않는다.
-  // localeCompare 는 화면 순서용이라 써도 된다(정렬 결과가 저장 키가 되지 않는다).
+  // order 우선, 없으면 이름순으로 뒤. localeCompare 는 화면 순서용이라 써도 된다
+  // (정렬 결과가 저장 키가 되지 않는다).
   unsubCats = onSnapshot(catsCol(), (snap) => {
-    state.cats = snap.docs.map((d) => Object.assign({ id: d.id }, d.data()))
-      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    state.cats = sortCats(snap.docs.map((d) => Object.assign({ id: d.id }, d.data())));
     // ★ 보고 있던 카테고리가 다른 기기에서 지워졌으면 필터를 푼다. 안 풀면
     //   빈 화면만 남고 되돌릴 칩도 사라져 사용자가 갇힌다.
     if (state.filter && !state.cats.some((c) => c.id === state.filter)) state.filter = null;
@@ -230,15 +231,18 @@ const newId = () => doc(todosCol()).id;
 const saveTodo = (id, data) => setDoc(todoRef(id), data, { merge: true });
 const removeTodo = (id) => deleteDoc(todoRef(id));
 
-// 카테고리 쓰기. 규칙이 hasOnly(['name','color']) 를 보므로 다른 키를 섞으면
-// 통째로 거부된다 — merge 를 쓰지 않고 두 키짜리 문서를 통으로 교체한다.
+// 카테고리 쓰기. 규칙이 hasOnly(['name','color','order']) 를 보므로 다른 키를 섞으면
+// 통째로 거부된다 — merge 를 쓰지 않고 세 키짜리 문서를 통으로 교체한다.
+// ★ order 를 인자로 받는 이유가 여기 있다. setDoc 은 통째 교체라 이름만 고치면서
+//   order 를 안 실어 보내면 **순서가 조용히 날아간다.** 부르는 쪽(saveCatDraft)이
+//   편집이면 원래 값을, 새 카테고리면 맨 뒤 번호를 넘긴다.
 //
 // ★ removeCat 은 **카테고리 문서 하나만** 지운다. 그 카테고리를 쓰던 할 일은
 //   건드리지 않는다 — 죽은 id 는 catOf() 가 '없음' 으로 떨어뜨린다(calendar.js).
 //   일괄 재작성을 안 하는 이유: batch 500 한계 · 부분 실패 · 오프라인이던 다른
 //   기기가 나중에 올린 항목은 어차피 죽은 id 를 가리켜 폴백이 필요하다.
 const newCatId = () => doc(catsCol()).id;
-const saveCat = (id, name, color) => setDoc(catRef(id), { name, color });
+const saveCat = (id, name, color, order) => setDoc(catRef(id), { name, color, order });
 const removeCat = (id) => deleteDoc(catRef(id));
 
 // 목표 쓰기. 카테고리와 같은 이유로 merge 를 쓰지 않는다 — 규칙의 validGoal() 이
