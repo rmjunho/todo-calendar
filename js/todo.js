@@ -1229,10 +1229,12 @@ if (location.search.includes('selftest')) {
   ok(Math.abs(jul.cellW * 7 - 1020) < 1e-9, 'the seven columns fill the grid exactly');
 
   // 주·일은 데이터가 높이를 정하므로 위아래를 클램프한다.
-  // 하한은 데이터가 적으면 이미지도 짧아야 해서 낮췄다 (총 598px = 요일 줄 + 3칸).
+  // ★ 하한(총 598px)은 **안 움직인다** — 텅 빈 주의 이미지 크기가 갑자기 달라지면
+  //   예전에 내보낸 그림과 나란히 놨을 때 어긋난다. 대신 그 하한이 담는 칸 수가
+  //   W_ITEM 에 따라 변한다: 시간 라벨을 빼면서 88 → 52 가 되어 3칸 → 5칸이 됐다.
   ok(exWeekLayout(0).h === 598 && exWeekLayout(0).fit >= 1, 'a sparse week produces a short image');
-  ok(exWeekLayout(3).h === 598, 'the week floor covers three slots exactly');
-  ok(exWeekLayout(4).h > 598, 'past the floor the week grows with the data');
+  ok(exWeekLayout(5).h === 598, 'the week floor swallows five slots before it has to grow');
+  ok(exWeekLayout(6).h > 598, 'past the floor the week grows with the data');
   ok(exWeekLayout(99).h === 1700, 'a packed week is clamped instead of growing forever');
   ok(exWeekLayout(99).fit < 99, 'a packed week hides the overflow behind a +N line');
   ok(exDayLayout([]).h === 700 && exDayLayout([]).shown === 0, 'an empty day still renders a card');

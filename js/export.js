@@ -73,9 +73,14 @@ const W_BAR_H = 44, W_BAR_ROW = 52;                   // 주: 막대 띠 (칸이
 //   넘치는 만큼은 마지막에 `+N개` 로 자른다.
 const EX_MAX_H = 8000;
 
-// 주 격자. 하한은 요일 줄 + 3칸 = 96+264+24 (총 이미지 598px). 더 낮추면
-// 요일 헤더만 남아 주 격자로 안 읽힌다. 상한은 총 1700 에 해당.
-const W_DOW = 96, W_ITEM = 88, W_GRID_MIN = 384, W_GRID_MAX = 1486;
+// 주 격자. 하한 384 는 총 이미지 598px 에 해당한다 — 더 낮추면 요일 헤더만 남아
+// 주 격자로 안 읽힌다. 상한은 총 1700 에 해당.
+// ★ W_ITEM 이 88 → 52 로 줄었다: 화면과 같이 **시간 라벨을 뺐다**(사용자 요청).
+//   제목 한 줄이면 판이 44 면 되고, 그건 막대 띠(W_BAR_H)와 같은 값이라 두 층이
+//   같은 크기로 맞는다. 하한 384 는 **안 내렸다** — 텅 빈 주의 이미지 크기가 갑자기
+//   작아지면 예전에 내보낸 그림과 나란히 놨을 때 어긋난다. 대신 하한이 담는 칸이
+//   3개에서 5개로 늘었다(?selftest 가 그 5와 6을 단언한다).
+const W_DOW = 96, W_ITEM = 52, W_GRID_MIN = 384, W_GRID_MAX = 1486;
 
 // 메모가 있는 행은 항상 2줄 자리를 잡는다. 실제 줄 수는 measureText 로만 알 수
 // 있는데(캔버스 필요), 레이아웃 함수는 캔버스 없이 시험 가능해야 하므로 고정한다.
@@ -507,8 +512,8 @@ function exDrawWeek(ctx, C, m) {
       ctx.fill();
       ctx.save();
       if (r.done) ctx.globalAlpha *= C.doneA;
-      exClip(ctx, r.title, x + 13, y + 26, L.colW - 26, exFont(600, 22), r.color, r.done);
-      exClip(ctx, r.time, x + 13, y + 56, L.colW - 26, exFont(500, 19), exAlpha(r.color, 0.75));
+      // 시간은 안 적는다 — 화면의 주간 칸과 같다. 제목 한 줄이라 판(44) 한가운데 22.
+      exClip(ctx, r.title, x + 13, y + 22, L.colW - 26, exFont(600, 22), r.color, r.done);
       ctx.restore();
     }
     const hid = Math.max(0, d.rows.length - L.fit) + (d.more || 0);
