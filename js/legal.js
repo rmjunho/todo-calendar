@@ -100,9 +100,6 @@ const LEGAL = {
       <td>서비스 제공(기록·조회·기기 간 동기화)</td><td>필수</td></tr>
   <tr><td>약관 동의 내역<br>(동의 항목, 버전, 시각, 나이 구분)</td>
       <td>동의 사실의 증빙, 만 14세 미만 이용자 확인</td><td>필수</td></tr>
-  <tr><td><strong>법정대리인(보호자) 성명·연락처</strong><br>
-          — <strong>만 14세 미만 이용자에 한해</strong> 수집합니다</td>
-      <td>법정대리인 동의 여부 확인 및 동의 사실의 증빙</td><td>필수<br>(만 14세 미만)</td></tr>
 </table>
 <p>이름·이메일·PIN은 <strong>가입 시 이용자가 직접 입력</strong>한 정보이며, 그 외에
 자동으로 수집되는 정보(광고 식별자, 위치 정보, 연락처, 사진 등)는 <strong>없습니다.</strong>
@@ -132,13 +129,11 @@ const LEGAL = {
 <p>수탁자는 위탁받은 업무 목적 외로 개인정보를 이용할 수 없습니다.</p>
 
 <h2>5. 만 14세 미만 아동의 개인정보</h2>
-<p>만 14세 미만 아동은 <strong>법정대리인(보호자)의 동의를 받은 후</strong>에만
-서비스를 이용할 수 있습니다. 가입 시 나이 구분을 확인하고, 만 14세 미만을 선택한
-경우 <strong>법정대리인의 성명과 연락처를 입력받습니다.</strong> 이 정보는
-<strong>법정대리인 동의 여부를 확인하고 그 사실을 증빙하는 목적으로만</strong> 쓰이며,
-다른 목적으로 이용하거나 제3자에게 제공하지 않습니다. 보유 기간은 위 2항과 같아
-<strong>회원 탈퇴 시 함께 파기</strong>됩니다. 법정대리인은 아동의 개인정보 열람·정정·
-삭제 및 처리 정지를 요구할 수 있습니다.</p>
+<p><strong>만 14세 미만 아동은 회원가입을 할 수 없습니다.</strong> 가입 시 만 14세
+이상임을 확인하며, 그 확인 없이는 계정이 만들어지지 않습니다. 따라서 서비스는
+<strong>만 14세 미만 아동의 개인정보를 수집하지 않습니다.</strong></p>
+<p>만 14세 미만 아동의 계정이 확인되면 해당 계정과 데이터를 삭제합니다. 법정대리인은
+아래 연락처로 삭제를 요청할 수 있습니다.</p>
 
 <h2>6. 정보주체의 권리와 행사 방법</h2>
 <ul>
@@ -288,10 +283,6 @@ them for any other purpose.</p>
       <td>Providing the Service (recording, viewing, syncing across devices)</td><td>Required</td></tr>
   <tr><td>Consent records<br>(items agreed, version, time, age bracket)</td>
       <td>Evidence of consent; identifying users under 14</td><td>Required</td></tr>
-  <tr><td><strong>Legal guardian's name and phone number</strong><br>
-          — collected <strong>only from users under 14</strong></td>
-      <td>Confirming and evidencing the legal guardian's consent</td>
-      <td>Required<br>(under 14)</td></tr>
 </table>
 <p>Your name, email and PIN are <strong>entered by you at sign-up</strong>. Nothing else is collected
 automatically — <strong>no</strong> advertising identifiers, location, contacts or photos. The Service
@@ -321,13 +312,11 @@ or rented, and it is not used for advertising.</p>
 <p>The processor may not use personal data for any purpose beyond the entrusted work.</p>
 
 <h2>5. Personal data of children under 14</h2>
-<p>Children under 14 may use the Service only <strong>after obtaining the consent of a legal
-guardian</strong>. The age bracket is confirmed at sign-up, and users who select "under 14" are asked
-for <strong>their legal guardian's name and phone number</strong>. That information is used
-<strong>solely to confirm and evidence the guardian's consent</strong>; it is never used for any other
-purpose or disclosed to third parties, and it is <strong>destroyed together with the account</strong>
-on withdrawal, as described in section 2. A legal guardian may request access to, correction of,
-deletion of, or suspension of processing of the child's personal data.</p>
+<p><strong>Children under 14 cannot create an account.</strong> Sign-up requires confirming that you
+are 14 or older, and no account is created without it. The Service therefore <strong>does not collect
+personal data from children under 14</strong>.</p>
+<p>If an account belonging to a child under 14 is identified, that account and its data are deleted.
+A legal guardian may request deletion using the contact details below.</p>
 
 <h2>6. Your rights and how to exercise them</h2>
 <ul>
