@@ -68,11 +68,6 @@ firebase deploy --only firestore:rules
 - 권한을 *추가*만 하는 규칙(예: `settings` 분기) → **규칙을 먼저** 올려도 안전하고,
   오히려 그래야 새 코드가 바로 저장됩니다.
 
-🔴 **아직 안 올린 규칙 변경이 하나 있습니다** — `validCat` 에 `order`(선택, 0 이상 정수)를
-허용하는 줄입니다. **이걸 안 올리면 카테고리 저장이 전부 거부됩니다**(순서 바꾸기만이
-아니라 이름·색 수정까지). 권한을 넓히기만 하므로 규칙을 먼저 올리는 쪽이고, 올린 뒤 이
-문단을 지우세요.
-
 에뮬레이터로 미리 시험하려면 Java 가 필요한데 이 PC 에는 없습니다.
 
 **관리자 계정은 자동 생성되지 않습니다.** 일반 가입 후 Firebase 콘솔에서 `users/{uid}` 의
@@ -86,6 +81,8 @@ firebase deploy --only firestore:rules
 ```
 dev\todo-calendar\
 ├── index.html                     껍데기. <link> 3개 + <script> 6개. 로드 순서 고정.
+│                                  + 공유 카드용 og 메타(그림은 og.png, 절대 URL 필수)
+├── og.png                         1200×630 공유 카드 그림. tools\og.html 로 다시 뽑는다
 ├── css\style.css                  입체감 토큰 + DS 컴포넌트 CSS 포팅
 ├── js\i18n.js                     ★ 테마·언어 설정 단일 소스 + 문자열 테이블(ko/en)
 ├── js\legal.js                    약관 본문(ko/en)·버전 상수
@@ -100,6 +97,9 @@ dev\todo-calendar\
 ├── firestore.rules                보안 규칙
 ├── _ds\ios-26-design-system-…\   디자인 토큰 (원본. 고치지 말 것)
 │   └── tokens\             colors / typography / spacing / effects
+├── tools\og.html                  og.png 생성기. 앱이 안 읽는다(로드 순서와 무관).
+│                                  캔버스라 서체가 안 실려도 조용히 폴백으로 그린다 —
+│                                  파일 안에서 폭을 재서 Pretendard 적용을 확인한다
 ├── CHANGELOG.md · CONTEXT.md
 └── 백업·시안 (앱은 안 씀)
     할일캘린더.html · Todo Calendar.dc.html · support.js · legacy\

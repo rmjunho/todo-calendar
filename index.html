@@ -4,6 +4,26 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>할 일 캘린더</title>
+
+<!-- 링크를 공유했을 때 뜨는 카드(카톡·트위터 등). 그림은 tools/og.html 로 만든다.
+     ★ og:image 는 **절대 URL 이어야 한다** — 카톡을 비롯한 크롤러가 상대 경로를
+       못 읽는다. 도메인은 CNAME 과 같은 값이다.
+     ★ 여기 글은 i18n 을 안 탄다. 크롤러는 앱이 뜨기 전의 HTML 만 읽으므로
+       언어 설정으로 못 바꾼다 — 주 언어인 한국어로 고정한다. -->
+<meta name="description" content="달력과 할 일을 한 화면에서. 월·주·일 세 가지 보기, 카테고리마다 다른 색, 로그인하면 기기끼리 동기화되는 개인 할 일 캘린더.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="할 일 캘린더">
+<meta property="og:url" content="https://todo-calendar.kro.kr/">
+<meta property="og:title" content="할 일 캘린더">
+<meta property="og:description" content="달력과 할 일을 한 화면에서. 월·주·일 세 가지 보기, 카테고리마다 다른 색, 로그인하면 기기끼리 동기화됩니다.">
+<meta property="og:image" content="https://todo-calendar.kro.kr/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="할 일 캘린더 — 월간 달력과 그날의 할 일 목록">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:locale:alternate" content="en_US">
+<meta name="twitter:card" content="summary_large_image">
+
 <link rel="stylesheet" href="_ds/ios-26-design-system-75cbb073-9cda-487c-ac9b-579bedbd0f5a/styles.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="stylesheet" href="css/style.css">
