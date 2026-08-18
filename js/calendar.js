@@ -826,9 +826,12 @@ function render() {
   const isAdmin = !guestMode && state.user.role === 'admin';
   const pending = pendingUsers().length;
   const accountBar = '<div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-bottom:14px">' +
-    '<span style="font-size:13px;font-weight:600;color:var(--label-secondary);background:var(--fill-quaternary);' +
-      'padding:6px 12px;border-radius:999px">' + esc(guestMode ? t('guest.name') : state.user.name) +
-      (isAdmin ? ' · ' + esc(t('hdr.admin')) : '') + '</span>' +
+    // 손님에게는 이름표를 안 단다 — 붙일 이름이 없고, 옆의 '로그인' 버튼이
+    // 로그인하지 않은 상태라는 걸 이미 말한다.
+    (guestMode ? ''
+      : '<span style="font-size:13px;font-weight:600;color:var(--label-secondary);background:var(--fill-quaternary);' +
+        'padding:6px 12px;border-radius:999px">' + esc(state.user.name) +
+        (isAdmin ? ' · ' + esc(t('hdr.admin')) : '') + '</span>') +
     (isAdmin ? '<button class="btn btn-gray btn-sm" data-act="admin">' + esc(t('hdr.signups')) +
       (pending ? '<span style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;' +
         'padding:0 5px;margin-left:2px;border-radius:999px;background:#FF3B30;color:#fff;font-size:11px;font-weight:700">' +
