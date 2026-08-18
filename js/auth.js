@@ -89,8 +89,8 @@ async function signup() {
   a.busy = true; render();
   try {
     await fb.signUp(name, email, a.pin, a.agree);
-    state.auth = Object.assign(blankAuth(), { name, notice: t('auth.signupDone') });
-    render();
+    // 승인제가 아니라서 가입하면 그대로 들어간다 — 화면 전환은 enterAccount() 가
+    // 한다(로그인과 같은 경로). 여기서 render 하지 않는다.
   } catch (e) {
     authFail(e.message);
   }
@@ -306,8 +306,6 @@ function renderAuth() {
             'style="width:100%' + (blocked ? ';opacity:.45' : '') + '"' +
             (a.busy ? ' disabled' : '') + (blocked ? ' aria-disabled="true"' : '') + '>' +
             esc(a.busy ? t('auth.busy') : t(isLogin ? 'auth.login' : 'auth.submit')) + '</button></div>' +
-        (isLogin ? '' : '<div style="margin-top:12px;font-size:12px;line-height:1.5;color:var(--label-tertiary);text-align:center">' +
-          esc(t('auth.afterSignup')) + '</div>') +
 
         // 언어 전환은 로그인 화면에도 있어야 한다. 설정 시트는 로그인해야 열리는데,
         // 한국어를 못 읽는 사람은 그때까지 갈 수가 없다.
@@ -435,47 +433,98 @@ function ageBadge(u) {
     b[1] + ';background:color-mix(in srgb, ' + b[1] + ' 14%, transparent)">' + esc(t(b[0])) + '</span>';
 }
 
+// 표시 전용이라 dateLabel(Intl)을 쓴다. fmt() 는 저장 키 전용으로 남겨 둔다.
+const admJoined = (u) => (u.createdAt && u.createdAt.toDate ? t('adm.joined', dateLabel(u.createdAt.toDate())) : '');
+
+// 약관 동의 기록. 지금까지 저장만 하고 화면에 안 보여 주던 값이다.
+// ★ 옛 계정에는 agreements 자체가 없다(약관 도입 전 가입) — 없음으로 표시한다.
+function admAgree(u) {
+  const g = u.agreements;
+  if (!g) return esc(t('adm.agreeNone'));
+  const at = g.terms && g.terms.at && g.terms.at.toDate ? dateLabel(g.terms.at.toDate()) : '';
+  return [esc(t('adm.agreeVer', (g.terms && g.terms.version) || '?')), esc(at),
+    esc(t(g.marketing ? 'adm.agreeMktOn' : 'adm.agreeMktOff'))].filter(Boolean).join(' · ');
+}
+
+// 목록만 따로 만든다 — 검색칸을 칠 때 render() 를 부르면 캐럿이 날아가므로
+// syncAdmSheet() 가 이 결과만 갈아 끼운다(syncCatSheet 과 같은 방식).
+function admRows() {
+  const q = (state.admQ || '').trim().toLowerCase();
+  const hit = (u) => !q || (u.name || '').toLowerCase().indexOf(q) >= 0 ||
+    (u.email || '').toLowerCase().indexOf(q) >= 0;
+  const at = (u) => (u.createdAt && u.createdAt.toDate ? u.createdAt.toDate().getTime() : 0);
+  const list = state.users.filter(hit).sort((x, y) => (state.admSort === 'name'
+    ? (x.name || '').localeCompare(y.name || '')
+    : at(y) - at(x)));           // 기본은 최근 가입 먼저
+
+  if (!list.length) {
+    return '<div style="padding:28px 4px;text-align:center;font-size:15px;font-weight:600;' +
+      'color:var(--label-secondary)">' + esc(t(q ? 'adm.noMatch' : 'adm.noUsers')) + '</div>';
+  }
+  return list.map((u, i) => {
+    const blocked = u.status !== 'approved';
+    return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 4px;border-top:' +
+      (i === 0 ? 'none' : '.5px solid var(--separator)') + '">' +
+      '<div style="flex:1;min-width:180px">' +
+        '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
+          '<span style="font-size:16px;font-weight:600">' + esc(u.name) + '</span>' +
+          (u.role === 'admin' ? '<span style="font-size:11px;font-weight:600;color:var(--tint)">' +
+            esc(t('hdr.admin')) + '</span>' : '') +
+          ageBadge(u) +
+          (blocked ? '<span style="font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;color:#FF3B30;' +
+            'background:color-mix(in srgb, #FF3B30 14%, transparent)">' + esc(statusLabel(u.status)) +
+            '</span>' : '') + '</div>' +
+        '<div class="trunc" style="font-size:13px;color:var(--label-secondary);margin-top:1px">' +
+          esc(u.email || '') + (admJoined(u) ? ' · ' + esc(admJoined(u)) : '') + '</div>' +
+        '<div class="trunc" style="font-size:12px;color:var(--label-tertiary);margin-top:2px">' +
+          admAgree(u) + '</div></div>' +
+      '<button class="btn btn-gray btn-sm" data-resetpin="' + esc(u.uid) + '">' +
+        esc(t('adm.resetPin')) + '</button>' +
+      // 본인 계정은 잠그지도 지우지도 못한다 — 스스로 갇히는 길을 아예 안 그린다.
+      (u.uid === state.user.uid ? '' :
+        (blocked
+          ? '<button class="btn btn-gray btn-sm" data-approve="' + esc(u.uid) + '" style="color:var(--tint)">' +
+            esc(t('adm.unblock')) + '</button>'
+          : '<button class="btn btn-gray btn-sm" data-reject="' + esc(u.uid) + '" style="color:#FF9500">' +
+            esc(t('adm.block')) + '</button>') +
+        '<button class="btn btn-gray btn-sm" data-delacct="' + esc(u.uid) + '" ' +
+          'style="color:#FF3B30">' + esc(t('adm.delete')) + '</button>') +
+      '</div>';
+  }).join('');
+}
+
+// 목록만 갈아 끼운다. 검색칸(uncontrolled)은 건드리지 않아 캐럿이 살아 있는다.
+function syncAdmSheet() {
+  const el = document.getElementById('admList');
+  if (el) el.innerHTML = admRows();
+}
+
 function renderAdminSheet() {
-  // 표시 전용이라 dateLabel(Intl)을 쓴다. fmt() 는 저장 키 전용으로 남겨 둔다.
-  const joined = (u) => (u.createdAt && u.createdAt.toDate ? t('adm.joined', dateLabel(u.createdAt.toDate())) : '');
   const heading = (t) => '<div style="font-size:13px;font-weight:700;color:var(--label-secondary);' +
     'margin:20px 4px 2px;letter-spacing:.2px">' + t + '</div>';
-  const empty = (t) => '<div style="padding:28px 4px;text-align:center;font-size:15px;font-weight:600;' +
-    'color:var(--label-secondary)">' + t + '</div>';
-  const row = (i, inner) => '<div style="display:flex;align-items:center;gap:12px;padding:14px 4px;border-top:' +
-    (i === 0 ? 'none' : '.5px solid var(--separator)') + '">' + inner + '</div>';
+  const allRows = admRows();
 
-  const pend = pendingUsers();
-  const pendRows = pend.length ? pend.map((u, i) => row(i,
-    '<div style="flex:1;min-width:0">' +
-      '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
-        '<span style="font-size:16px;font-weight:600">' + esc(u.name) + '</span>' + ageBadge(u) + '</div>' +
-      '<div class="trunc" style="font-size:13px;color:var(--label-secondary);margin-top:1px">' +
-        esc(u.email || '') + (joined(u) ? ' · ' + esc(joined(u)) : '') + '</div></div>' +
-    '<button class="btn btn-gray btn-sm" data-reject="' + esc(u.uid) + '" style="color:#FF3B30">' +
-      esc(t('adm.reject')) + '</button>' +
-    '<span data-raise="tint" style="display:inline-flex">' +
-      '<button class="btn btn-prominent btn-sm" data-approve="' + esc(u.uid) + '">' +
-      esc(t('adm.approve')) + '</button></span>'
-  )).join('') : empty(esc(t('adm.noPending')));
+  // 한눈에 보는 숫자. users 스냅샷만으로 계산한다 — 읽기가 더 늘지 않는다.
+  const week = Date.now() - 7 * 86400000;
+  const isNew = (u) => !!(u.createdAt && u.createdAt.toDate && u.createdAt.toDate().getTime() >= week);
+  const stat = (label, n, color) =>
+    '<div style="flex:1;min-width:0;background-color:var(--bg-secondary);border-radius:12px;padding:12px 14px">' +
+      '<div style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:' + color + '">' + n + '</div>' +
+      '<div class="trunc" style="font-size:12px;font-weight:600;color:var(--label-secondary);margin-top:2px">' +
+        esc(label) + '</div></div>';
+  const stats = '<div style="display:flex;gap:8px;margin:14px 0 4px">' +
+    stat(t('adm.statAll'), state.users.length, 'var(--label)') +
+    stat(t('adm.statNew'), state.users.filter(isNew).length, 'var(--tint)') +
+    stat(t('adm.statBlocked'), state.users.filter((u) => u.status !== 'approved').length, '#FF3B30') +
+    '</div>';
 
-  const all = state.users.slice().sort((x, y) => (x.name || '').localeCompare(y.name || ''));
-  const allRows = all.length ? all.map((u, i) => row(i,
-    '<div style="flex:1;min-width:0">' +
-      '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
-        '<span style="font-size:16px;font-weight:600">' + esc(u.name) + '</span>' +
-        (u.role === 'admin' ? '<span style="font-size:11px;font-weight:600;color:var(--tint)">' +
-          esc(t('hdr.admin')) + '</span>' : '') +
-        ageBadge(u) + '</div>' +
-      '<div class="trunc" style="font-size:13px;color:var(--label-secondary);margin-top:1px">' +
-        esc(u.email || '') + ' · ' + esc(statusLabel(u.status)) + '</div></div>' +
-    '<button class="btn btn-gray btn-sm" data-resetpin="' + esc(u.uid) + '">' +
-      esc(t('adm.resetPin')) + '</button>' +
-    // 본인 계정에는 삭제 버튼을 아예 그리지 않는다.
-    (u.uid === state.user.uid ? '' :
-      '<button class="btn btn-gray btn-sm" data-delacct="' + esc(u.uid) + '" ' +
-        'style="color:#FF3B30">' + esc(t('adm.delete')) + '</button>')
-  )).join('') : empty(esc(t('adm.noUsers')));
+  // 검색·정렬. 검색칸은 uncontrolled 라 입력할 때 render() 를 부르면 캐럿이 날아간다 —
+  // 목록만 갈아 끼우는 syncAdmSheet() 를 쓴다(카테고리 시트와 같은 방식).
+  const tools = '<div style="display:flex;gap:8px;margin:14px 0 2px">' +
+    '<input class="field" data-admq style="flex:1;padding:10px 12px;font-size:16px" ' +
+      'placeholder="' + esc(t('adm.search')) + '" value="' + esc(state.admQ) + '">' +
+    '<button class="btn btn-gray btn-md" data-act="admSort" style="flex:none;white-space:nowrap">' +
+      esc(t(state.admSort === 'name' ? 'adm.sortName' : 'adm.sortJoined')) + '</button></div>';
 
   return '<div data-act="closeAdmin" style="position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.35);animation:tcFade .2s ease-out"></div>' +
     '<div style="position:fixed;left:0;right:0;bottom:0;z-index:101;display:flex;justify-content:center;pointer-events:none">' +
@@ -489,8 +538,8 @@ function renderAdminSheet() {
           'border-radius:50%;background:var(--fill-tertiary);color:var(--label-secondary);display:flex;' +
           'align-items:center;justify-content:center;padding:0">' + icon('xmark', 14) + '</button></div>' +
 
-      heading(esc(t('adm.pending'))) + pendRows +
-      heading(esc(t('adm.all'))) + allRows +
+      stats + tools +
+      '<div id="admList">' + allRows + '</div>' +
 
       heading(esc(t('adm.migrate'))) +
       '<div style="font-size:12px;line-height:1.5;color:var(--label-tertiary);margin:6px 4px 10px">' +

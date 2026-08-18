@@ -562,6 +562,8 @@ const state = {
   showLogin: false,
   booting: true,
   showAdmin: false,
+  admQ: '',           // 관리자 패널 검색어 (uncontrolled 입력칸의 값)
+  admSort: 'joined',  // 'joined' = 최근 가입 먼저 | 'name'
   legal: null,        // null | 'terms' | 'privacy' — 회원가입 화면의 약관 전문 모달
   showSettings: false,
   del: null,          // 탈퇴 확인 { pin, error, busy }. null 이면 확인 단계 전
@@ -576,8 +578,10 @@ const state = {
 //   원격 스냅샷이 render() 를 돌리면 타이핑하던 캐럿이 날아간다. showSettings·
 //   showAdmin 이 여기 없는 이유는 그쪽에 입력칸이 없기 때문이다.
 // ★ goalDraft 도 여기 든다 — 목표 시트에 제목·메모 입력칸(uncontrolled)이 있다.
+// ★ showAdmin 도 여기 든다 — 관리자 패널에 검색칸(uncontrolled)이 생겼다. 대신
+//   users 스냅샷이 오면 syncAdmSheet() 가 목록만 갈아 끼워서 화면은 계속 최신이다.
 const sheetBusy = () =>
-  state.showForm || !!state.exp || !!state.jump || state.showCats || !!state.goalDraft;
+  state.showForm || !!state.exp || !!state.jump || state.showCats || !!state.goalDraft || state.showAdmin;
 
 // ---------------------------------------------------------------- 손님 저장소
 // 로그인하지 않아도 앱을 그대로 쓴다. 손님의 할 일은 **서버에 안 간다** — 이

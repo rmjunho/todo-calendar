@@ -79,7 +79,9 @@ async function signUp(name, email, pin, agree) {
     const cred = await createUserWithEmailAndPassword(auth, email, pin);
     const batch = writeBatch(db);
     batch.set(doc(db, 'users', cred.user.uid), {
-      name, email, role: 'user', status: 'pending', createdAt: serverTimestamp(),
+      // 승인제가 아니다 — 만들면 바로 쓴다. 규칙도 create 때 이 값을 'approved' 로
+      // 고정하므로 여기와 규칙이 **한 쌍**이다. 한쪽만 바꾸면 가입이 전부 거부된다.
+      name, email, role: 'user', status: 'approved', createdAt: serverTimestamp(),
       // 동의 내역은 계정 문서와 같은 batch 로 들어간다. 보안 규칙이 필수 항목을
       // 다시 검사하므로, 동의 없이 만들어진 계정 문서는 존재할 수 없다.
       // 버전은 LEGAL(js/legal.js) 한 곳에서 온다 — 본문과 기록이 어긋나지 않는다.
@@ -92,7 +94,11 @@ async function signUp(name, email, pin, agree) {
     });
     batch.set(doc(db, 'usernames', name), { uid: cred.user.uid, email });
     await batch.commit();
-    await signOut(auth);
+    // 가입하면 그대로 들어간다. createUserWithEmailAndPassword 가 이미 로그인
+    // 상태를 만들어 두는데, busy 때문에 onAuthStateChanged 가 건너뛰었으므로
+    // 여기서 같은 경로를 직접 부른다 — 안 부르면 가입해 놓고 손님 화면에 남는다.
+    busy = false;
+    await enterAccount(cred.user);
   } catch (e) {
     // 계정만 만들어지고 문서 생성이 실패하면 반쪽 상태로 남는다. 로그아웃해 두면
     // 다음 로그인 때 "계정 정보를 찾을 수 없습니다"로 걸려서 조용히 넘어가지 않는다.
@@ -113,6 +119,8 @@ function applyLoggedOut() {
   state.filter = null;
   state.showForm = false;
   state.showAdmin = false;
+  state.admQ = '';
+  state.admSort = 'joined';
   state.showCats = false;
   state.catDraft = null;
   state.catDrag = null;     // 끄는 중에 세션이 끊기면 줄이 밀린 채로 남는다
@@ -136,7 +144,12 @@ function applyLoggedOut() {
 onAuthStateChanged(auth, async (u) => {
   if (busy) return;
   if (!u) return applyLoggedOut();
+  await enterAccount(u);
+});
 
+// 로그인·세션 복원·가입 직후가 모두 여기로 온다. 가입이 이 함수를 직접 부르는
+// 이유는 위 핸들러가 busy 동안 건너뛰기 때문이다.
+async function enterAccount(u) {
   let data = null;
   try {
     const snap = await getDoc(doc(db, 'users', u.uid));
@@ -177,7 +190,7 @@ onAuthStateChanged(auth, async (u) => {
   // 손님으로 쓰던 것이 이 기기에 남아 있으면 계정으로 옮길지 묻는다. render() 뒤에
   // 두는 이유는 confirm 이 화면을 멈추기 때문이다 — 먼저 내 달력을 보여 준다.
   askUploadGuest();
-});
+}
 
 // ---------------------------------------------------------------- 실시간 동기화
 function watch(user) {
@@ -213,7 +226,10 @@ function watch(user) {
   if (user.role !== 'admin') return;
   unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
     state.users = snap.docs.map((d) => Object.assign({ uid: d.id }, d.data()));
+    // 관리자 패널이 열려 있으면 render() 대신 목록만 갈아 끼운다 — 검색칸을 치는
+    // 도중이어도 캐럿이 살고, 정지/해제 결과는 바로 보인다.
     if (!sheetBusy()) render();
+    else if (state.showAdmin) syncAdmSheet();
   }, (e) => fail(t('err.loadUsers'), e));
 }
 

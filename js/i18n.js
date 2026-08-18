@@ -146,7 +146,7 @@ const STR = {
 
     // 헤더 · 달력
     'hdr.admin': '관리자',
-    'hdr.signups': '회원가입 신청',
+    'hdr.signups': '관리자',
     'hdr.settings': '설정',
     'hdr.logout': '로그아웃',
     // 손님 모드 — 로그인하지 않고 쓰는 상태
@@ -286,8 +286,8 @@ const STR = {
 
     // 로그인 · 회원가입
     'auth.login': '로그인',
-    'auth.signup': '회원가입 신청',
-    'auth.submit': '가입 신청하기',
+    'auth.signup': '회원가입',
+    'auth.submit': '가입하기',
     'auth.busy': '잠시만요…',
     'auth.name': '이름',
     'auth.namePh': '이름을 입력하세요',
@@ -354,7 +354,20 @@ const STR = {
     'set.delFail': '삭제에 실패했습니다.',
 
     // 관리자 시트
-    'adm.title': '회원 관리',
+    'adm.title': '관리자 패널',
+    'adm.statAll': '전체 계정',
+    'adm.statNew': '최근 7일 가입',
+    'adm.statBlocked': '정지된 계정',
+    'adm.search': '이름 · 이메일 검색',
+    'adm.sortJoined': '가입순',
+    'adm.sortName': '이름순',
+    'adm.noMatch': '검색 결과가 없습니다',
+    'adm.block': '정지',
+    'adm.unblock': '해제',
+    'adm.agreeNone': '약관 동의 기록 없음',
+    'adm.agreeVer': (v) => '약관 ' + v,
+    'adm.agreeMktOn': '마케팅 동의',
+    'adm.agreeMktOff': '마케팅 미동의',
     'adm.pending': '회원가입 신청',
     'adm.all': '전체 회원',
     'adm.noPending': '대기 중인 신청이 없습니다',
@@ -413,7 +426,7 @@ const STR = {
     'a.close': 'Close',
 
     'hdr.admin': 'Admin',
-    'hdr.signups': 'Sign-up requests',
+    'hdr.signups': 'Admin',
     'hdr.settings': 'Settings',
     'hdr.logout': 'Sign out',
     'guest.name': 'Guest',
@@ -537,8 +550,8 @@ const STR = {
     'form.save': 'Save',
 
     'auth.login': 'Sign in',
-    'auth.signup': 'Request an account',
-    'auth.submit': 'Send request',
+    'auth.signup': 'Sign up',
+    'auth.submit': 'Create account',
     'auth.busy': 'One moment…',
     'auth.name': 'Name',
     'auth.namePh': 'Enter your name',
@@ -601,7 +614,20 @@ const STR = {
     'set.delDone': (n) => 'Your account and ' + n + ' to-do(s) have been deleted. Thank you for using the app.',
     'set.delFail': 'Deletion failed.',
 
-    'adm.title': 'Members',
+    'adm.title': 'Admin panel',
+    'adm.statAll': 'Accounts',
+    'adm.statNew': 'Joined in 7 days',
+    'adm.statBlocked': 'Blocked',
+    'adm.search': 'Search name or email',
+    'adm.sortJoined': 'Newest',
+    'adm.sortName': 'By name',
+    'adm.noMatch': 'Nothing matches that search',
+    'adm.block': 'Block',
+    'adm.unblock': 'Unblock',
+    'adm.agreeNone': 'No consent record',
+    'adm.agreeVer': (v) => 'Terms ' + v,
+    'adm.agreeMktOn': 'Marketing: yes',
+    'adm.agreeMktOff': 'Marketing: no',
     'adm.pending': 'Sign-up requests',
     'adm.all': 'All members',
     'adm.noPending': 'No pending requests',

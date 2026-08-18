@@ -68,8 +68,12 @@ service cloud.firestore {
       allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
       allow list: if isAdmin();
 
-      // 가입 직후엔 아직 pending 이라 approved 검사를 통과할 수 없다.
-      // 스스로 admin 이나 approved 를 달고 태어나지 못하게 값을 고정한다.
+      // 가입은 승인제가 아니다 — 만들면 바로 쓴다. 그래서 status 를 'approved' 로
+      // **고정**한다. 값을 자유롭게 두지 않는 이유는 그대로다: 고정해야 스스로
+      // 다른 상태를 달고 태어나지 못한다.
+      // ★ role 고정은 그대로 둔다 — 스스로 관리자가 되는 것을 막는 유일한 줄이다.
+      // ★ 관리자는 아래 update 로 status 를 'rejected' 로 바꿔 계정을 잠글 수 있다.
+      //   승인제를 없앤 뒤에도 잠그는 통로는 남아 있어야 한다.
       //
       // 필수 동의는 여기서 강제한다 — 화면 검사는 콘솔에서 우회할 수 있어도
       // 이건 못 한다. 조건이 깨지면 문서가 아예 생기지 않고, signUp() 의 catch 가
@@ -79,7 +83,7 @@ service cloud.firestore {
       // 없지만 get / update / todos 규칙은 그대로라서 로그인에 지장이 없다.
       allow create: if signedIn()
                     && request.auth.uid == uid
-                    && request.resource.data.status == 'pending'
+                    && request.resource.data.status == 'approved'
                     && request.resource.data.role == 'user'
                     && request.resource.data.agreements.terms.agreed == true
                     && request.resource.data.agreements.privacy.agreed == true

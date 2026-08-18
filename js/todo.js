@@ -861,8 +861,10 @@ app.addEventListener('click', (e) => {
         return render();
       case 'toggleRemember': state.auth.remember = !state.auth.remember; return render();
       case 'closeLegal': state.legal = null; return render();
-      case 'admin': state.showAdmin = true; return render();
+      case 'admin': state.showAdmin = true; state.admQ = ''; return render();
+      // ★ 닫을 때 sheetBusy() 가 풀리므로, 미뤄 둔 원격 스냅샷이 이 render() 로 들어온다.
       case 'closeAdmin': state.showAdmin = false; return render();
+      case 'admSort': state.admSort = state.admSort === 'name' ? 'joined' : 'name'; return render();
       case 'settings': state.showSettings = true; state.del = null; return render();
       case 'closeSettings': state.showSettings = false; state.del = null; return render();
       // 카테고리 관리. 설정 시트에서 들어오고, 닫으면 밀린 스냅샷이 반영된다.
@@ -935,6 +937,9 @@ app.addEventListener('input', (e) => {
   // 카테고리 이름. state.form 과 섞지 않는다 — 시트도 수명도 다르다.
   const cn = e.target.closest('[data-cn]');
   if (cn) { if (state.catDraft) { state.catDraft.name = cn.value; syncCatSheet(); } return; }
+  // 관리자 패널 검색. render() 가 아니라 목록만 갈아 끼운다 — 캐럿 보존.
+  const aq = e.target.closest('[data-admq]');
+  if (aq) { state.admQ = aq.value; syncAdmSheet(); return; }
   // 목표 시트의 제목·메모·일. state.form 과 섞지 않는다 — 시트도 수명도 다르다.
   // 일 칸만 숫자다: 지우는 도중 '' 가 오는데, 그때 NaN 을 넣으면 goalDay() 가
   // Number(NaN)||1 로 1을 돌려주므로 화면과 저장이 둘 다 안 깨진다.
@@ -2430,6 +2435,55 @@ if (location.search.includes('selftest')) {
   if (keepGuest === null) localStorage.removeItem(GUEST_KEY);
   else localStorage.setItem(GUEST_KEY, keepGuest);
   Object.assign(state, keepData);
+
+  // --- 관리자 패널 ---
+  // 가입이 승인제가 아니게 되면서 '승인 대기' 자리가 '정지/해제' 로 바뀌었다.
+  // 숫자·검색은 users 스냅샷만으로 만들고, 검색칸은 uncontrolled 라 목록만 갈아 끼운다.
+  const keepAdm = { user: state.user, users: state.users, showAdmin: state.showAdmin,
+    admQ: state.admQ, admSort: state.admSort };
+  const ts = (ms) => ({ toDate: () => new Date(ms) });
+  const DAY = 86400000;
+  state.user = { uid: 'me', name: '나', email: 'me@x.co', role: 'admin', status: 'approved' };
+  state.users = [
+    { uid: 'me', name: '나', email: 'me@x.co', role: 'admin', status: 'approved', createdAt: ts(Date.now() - 200 * DAY) },
+    { uid: 'u1', name: '가나', email: 'a@x.co', role: 'user', status: 'approved', createdAt: ts(Date.now() - 2 * DAY),
+      agreements: { terms: { agreed: true, version: 'v1', at: ts(Date.now() - 2 * DAY) },
+        privacy: { agreed: true, version: 'v1' }, age: 'over14', marketing: true } },
+    { uid: 'u2', name: '다라', email: 'b@x.co', role: 'user', status: 'rejected', createdAt: ts(Date.now() - 40 * DAY) }
+  ];
+  state.admQ = '';
+  state.admSort = 'joined';
+  state.showAdmin = true;
+  render();
+  ok(sheetBusy(), 'an open admin panel defers remote renders — it has a search field to protect');
+  const admSheet = document.querySelector('[role="dialog"]');
+  eq(document.querySelectorAll('#admList > div').length, 3, 'every account is listed');
+  eq([...document.querySelectorAll('[data-reject],[data-approve]')].map((b) => b.textContent).join(','),
+    t('adm.block') + ',' + t('adm.unblock'),
+    'a live account offers block and a blocked one offers unblock — no approve/reject left');
+  ok(!document.querySelector('[data-reject="me"],[data-delacct="me"]'),
+    'the admin cannot block or delete their own account — that is how you lock yourself out');
+  ok(admSheet.textContent.indexOf(t('adm.agreeVer', 'v1')) >= 0 &&
+     admSheet.textContent.indexOf(t('adm.agreeMktOn')) >= 0,
+    'the consent record that was only ever stored is now shown');
+  ok(admSheet.textContent.indexOf(t('adm.agreeNone')) >= 0,
+    'and an account from before the terms existed says so instead of pretending');
+
+  const admInput = document.querySelector('[data-admq]');
+  admInput.focus();
+  state.admQ = '가나';
+  syncAdmSheet();
+  eq(document.querySelectorAll('#admList > div').length, 1, 'searching narrows the list');
+  ok(document.contains(admInput) && document.activeElement === admInput,
+    'and the search field itself survives — only the list below it is replaced',
+    'inDoc=' + document.contains(admInput) + ' active=' + document.activeElement.tagName);
+  state.admQ = 'zzz';
+  syncAdmSheet();
+  eq(document.querySelectorAll('#admList > div').length, 1,
+    'a search that matches nothing draws one empty-state row, not a blank panel');
+
+  state.showAdmin = false;
+  Object.assign(state, keepAdm);
 
   Object.assign(state, kSpan);
   Object.assign(state, kGoal);
