@@ -87,7 +87,7 @@ dev\todo-calendar\
 ├── js\i18n.js                     ★ 테마·언어 설정 단일 소스 + 문자열 테이블(ko/en)
 ├── js\legal.js                    약관 본문(ko/en)·버전 상수
 ├── js\auth.js                     로그인 화면·PIN 검증·회원 관리·설정 시트
-├── js\calendar.js                 유틸·반복 규칙·state·달력 렌더
+├── js\calendar.js                 유틸·반복 규칙·state·달력 렌더 + 손님 저장소
 ├── js\export.js                   ★ Canvas 2D 이미지 내보내기·미리보기 시트 (외부 lib 0)
 ├── js\todo.js                     할 일 CRUD·입력 시트·이벤트·부트스트랩·selftest
 ├── js\firebase.js                 ★ ESM 모듈. Auth·Firestore 전담. window.fb 로 노출
@@ -266,6 +266,20 @@ firebase.js                                                        (ESM 모듈)
 | `users/{uid}/todos/{id}` | 할 일 문서 |
 | `users/{uid}/categories/{id}` | `{ name, color, order }` — 이름 20자 이내, 색은 팔레트 10색 중 하나, `order` 는 목록의 자리(0부터). **`order` 는 선택 필드**다 — 도입 전 문서에는 없고 그때는 이름순으로 뒤에 선다(`sortCats`). 저장할 때마다 **전부 0..n-1 로 다시 매겨** 보내므로 한 번 저장하면 그 계정은 정리된다 |
 | `users/{uid}/goals/{id}` | 목표 문서 (아래) — **할 일과 다른 컬렉션** |
+| `localStorage['tc.guest.v1']` | **손님 저장소.** `{ items, cats, goals }` 를 키 하나에 통째로. 문서 모양은 위 Firestore 와 **같게 유지할 것** — 로그인할 때 그대로 실어 올린다(`guestDocs`/`uploadGuest`). 낱개 키로 쪼개지 않은 이유는 용량이 찼을 때 "할 일만 저장되고 카테고리는 안 된" 반쪽 상태를 만들지 않기 위해서다 |
+
+**손님 모드.** 세션이 없으면 로그인 화면이 아니라 **손님으로 앱에 들어갑니다**
+(`applyLoggedOut` → `enterGuest`). 손님도 `state.user` 가 차 있고(`{guest:true, uid:''}`)
+`state.showLogin` 이 켜져야만 로그인 화면이 뜹니다.
+
+- ★ **`state.user` 를 "로그인했다" 로 읽지 마세요.** 계정이 있어야 하는 자리는
+  `isGuest()` 로 한 번 더 잘라야 합니다. 지금 잘라 둔 곳: 헤더의 로그아웃/관리자
+  버튼(`calendar.js`), 설정 시트의 계정 줄·탈퇴(`auth.js`).
+- 저장 갈래는 **`window.fb` 한 겹에만** 있습니다. 쓰기 함수 11개가 첫 줄에서
+  `isGuest()` 로 갈리고, 화면 코드는 저장소가 둘이라는 사실을 모릅니다.
+- 손님 갈래는 스냅샷이 없으므로 **state 를 직접 고치고 `render()`** 합니다
+  (`guestDone`, 시트가 열려 있으면 미루는 규칙은 원격 스냅샷과 같음).
+- `firestore.rules` 는 **안 건드렸습니다.** 손님은 서버에 아무것도 안 씁니다.
 
 ### 목표 (goal) — `users/{uid}/goals/{id}`
 ```js

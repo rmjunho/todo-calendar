@@ -174,6 +174,9 @@ onAuthStateChanged(auth, async (u) => {
   state.view = SETTINGS.view;
   watch(state.user);
   render();
+  // 손님으로 쓰던 것이 이 기기에 남아 있으면 계정으로 옮길지 묻는다. render() 뒤에
+  // 두는 이유는 confirm 이 화면을 멈추기 때문이다 — 먼저 내 달력을 보여 준다.
+  askUploadGuest();
 });
 
 // ---------------------------------------------------------------- 실시간 동기화
@@ -336,6 +339,32 @@ function localItems(name) {
   const me = Array.isArray(old) ? old.find((u) => u.name === name) : null;
   const items = (me && read('todo-cal-v1:' + me.id)) || read('todo-cal-v1');
   return Array.isArray(items) ? items : [];
+}
+
+// 손님으로 쌓아 둔 것을 계정으로 한 번에 올린다. 로그인 직후에만 부른다.
+// 성공해야 지운다 — 중간에 실패하면 손님 저장소가 그대로 남아 다시 시도할 수 있다.
+async function uploadGuest() {
+  const d = guestDocs();
+  const n = d.cats.length + d.goals.length + d.items.length;
+  if (!n) return 0;
+  // ponytail: uploadLocal 과 같은 이유로 500개 한계를 안 쪼갰다. 개인 목록이 거기
+  // 닿으면 500개씩 나눠 커밋할 것.
+  const batch = writeBatch(db);
+  d.cats.forEach((c) => batch.set(catRef(c.id), c.body));
+  d.goals.forEach((g) => batch.set(goalRef(g.id), g.body));
+  d.items.forEach((it) => batch.set(todoRef(it.id), it.body));
+  await batch.commit();
+  guestClear();
+  return n;
+}
+
+// 로그인 직후에 묻는다. 거절하면 **지우지 않는다** — 로그아웃하면 그대로 다시 보인다.
+function askUploadGuest() {
+  const n = guestCount();
+  if (!n || !confirm(t('guest.askUpload', n))) return;
+  uploadGuest()
+    .then((k) => { if (k) alert(t('guest.uploadDone', k)); })
+    .catch((e) => fail(t('err.upload'), e));
 }
 
 async function uploadLocal(name) {

@@ -2412,6 +2412,21 @@ if (location.search.includes('selftest')) {
     'a guest can open the login screen and still has a way back');
   state.showLogin = false;
 
+  // 계정으로 올릴 때의 문서 모양. 규칙이 카테고리는 세 키, 목표는 여덟 키만 받으므로
+  // id 가 몸통에 섞이면 **묶음 전체가 거부된다.** 올리는 것 자체는 서버가 있어야 해서
+  // 여기서 못 하고, 거부를 부르는 그 한 가지를 대신 본다.
+  guest.saveCat('gc1', '가', '#FF3B30', 0);
+  guest.saveGoal('gg1', { title: '가', scope: 'year', y: 2026, m: null, d: null,
+    categoryId: '', memo: '', done: false });
+  const docs = guestDocs();
+  eq(Object.keys(docs.cats[0].body).sort().join(','), 'color,name,order',
+    'an uploaded category carries exactly the three keys the rules allow — id is not one of them');
+  eq(Object.keys(docs.goals[0].body).sort().join(','),
+    'categoryId,d,done,m,memo,scope,title,y', 'and an uploaded goal carries exactly its eight');
+  eq(docs.cats[0].id + ' ' + docs.items[0].id, 'gc1 g1',
+    'the original ids are reused so a to-do still points at its own category');
+  eq(guestCount(), 3, 'the count offered on sign-in covers to-dos, categories and goals');
+
   if (keepGuest === null) localStorage.removeItem(GUEST_KEY);
   else localStorage.setItem(GUEST_KEY, keepGuest);
   Object.assign(state, keepData);

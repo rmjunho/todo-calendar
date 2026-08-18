@@ -590,14 +590,36 @@ const sheetBusy = () =>
 const GUEST_KEY = 'tc.guest.v1';
 const isGuest = () => !!(state.user && state.user.guest);
 
-function guestLoad() {
+function guestRead() {
   let raw = null;
   try { raw = JSON.parse(localStorage.getItem(GUEST_KEY)); } catch (e) { raw = null; }
   const d = raw && typeof raw === 'object' ? raw : {};
   const arr = (v) => (Array.isArray(v) ? v : []);
-  state.items = arr(d.items);
-  state.cats = sortCats(arr(d.cats));
-  state.goals = arr(d.goals);
+  return { items: arr(d.items), cats: arr(d.cats), goals: arr(d.goals) };
+}
+
+function guestLoad() {
+  const d = guestRead();
+  state.items = d.items;
+  state.cats = sortCats(d.cats);
+  state.goals = d.goals;
+}
+
+const guestCount = () => { const d = guestRead(); return d.items.length + d.cats.length + d.goals.length; };
+const guestClear = () => { try { localStorage.removeItem(GUEST_KEY); } catch (e) { /* 지울 수 없으면 그냥 둔다 */ } };
+
+// 계정으로 올릴 문서를 만든다. **id 는 그대로 쓴다** — 할 일이 가리키는 categoryId 가
+// 올라간 카테고리와 같은 id 여야 색이 유지된다. 새로 뽑으면 전부 '없음' 으로 떨어진다.
+// ★ 보안 규칙이 카테고리는 keys().hasOnly(['name','color','order']), 목표는 여덟 키를
+//   본다. id 를 몸통에 섞어 보내면 **묶음 전체가 거부된다** — 그래서 여기서 뺀다.
+function guestDocs() {
+  const d = guestRead();
+  const body = (o) => { const b = Object.assign({}, o); delete b.id; return b; };
+  return {
+    cats: d.cats.map((c) => ({ id: c.id, body: { name: c.name, color: c.color, order: c.order } })),
+    goals: d.goals.map((g) => ({ id: g.id, body: body(g) })),
+    items: d.items.map((it) => ({ id: it.id, body: body(it) }))
+  };
 }
 
 // 손님으로 들어간다. 세션이 없을 때 로그인 화면 대신 여기로 온다.
