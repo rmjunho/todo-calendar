@@ -550,8 +550,16 @@ const state = {
   // Firestore 읽기는 전부 비동기다 — 여기서 계정을 동기로 채울 수 없다.
   // firebase.js(모듈)가 인증 상태를 알려줄 때까지 booting 화면을 보여준다.
   users: [],          // 관리자로 로그인했을 때만 채워지는 users 컬렉션 스냅샷
+  // 로그인한 계정 **또는 손님**. 손님은 { guest:true, uid:'' } 다 — null 이 아니다.
+  // ★ 이 값을 "로그인했다" 는 뜻으로 읽으면 안 된다. 계정이 있어야만 되는 자리는
+  //   반드시 isGuest() 로 한 번 더 갈라야 한다(설정 시트의 계정·탈퇴 줄이 그렇다).
   user: null,
   auth: blankAuth(),
+  // 로그인 화면을 **일부러** 띄운 상태. 손님이 설정에서 "로그인" 을 눌렀거나,
+  // 로그인이 실패해 사유를 보여 줘야 할 때 true 다. false 면 손님 화면이 그대로 뜬다.
+  // ★ 한 번 켜지면 로그인 성공이나 사용자가 닫을 때까지 유지한다 — 중간에 끼는
+  //   applyLoggedOut() 이 사유 문구를 덮어 버리지 않게 하려는 것이다.
+  showLogin: false,
   booting: true,
   showAdmin: false,
   legal: null,        // null | 'terms' | 'privacy' — 회원가입 화면의 약관 전문 모달
@@ -570,6 +578,110 @@ const state = {
 // ★ goalDraft 도 여기 든다 — 목표 시트에 제목·메모 입력칸(uncontrolled)이 있다.
 const sheetBusy = () =>
   state.showForm || !!state.exp || !!state.jump || state.showCats || !!state.goalDraft;
+
+// ---------------------------------------------------------------- 손님 저장소
+// 로그인하지 않아도 앱을 그대로 쓴다. 손님의 할 일은 **서버에 안 간다** — 이
+// 브라우저에만 남는다. window.fb 의 쓰기 함수들이 isGuest() 로 여기로 갈린다.
+//
+// ★ 키 하나에 세 컬렉션을 통째로 담는다. 낱개 키로 나누면 용량이 찼을 때
+//   "할 일만 저장되고 카테고리는 안 된" 반쪽 상태가 생긴다.
+// ★ 문서 모양은 Firestore 와 **같게 유지할 것**. 나중에 계정으로 올릴 때
+//   그대로 실어 보내야 하고, 화면 코드가 두 저장소를 구분하지 않기 때문이다.
+const GUEST_KEY = 'tc.guest.v1';
+const isGuest = () => !!(state.user && state.user.guest);
+
+function guestLoad() {
+  let raw = null;
+  try { raw = JSON.parse(localStorage.getItem(GUEST_KEY)); } catch (e) { raw = null; }
+  const d = raw && typeof raw === 'object' ? raw : {};
+  const arr = (v) => (Array.isArray(v) ? v : []);
+  state.items = arr(d.items);
+  state.cats = sortCats(arr(d.cats));
+  state.goals = arr(d.goals);
+}
+
+// 손님으로 들어간다. 세션이 없을 때 로그인 화면 대신 여기로 온다.
+// ★ name 을 비워 둔다 — '손님' 은 번역 문자열이라 여기 박아 두면 언어를 바꿔도
+//   안 따라온다. 화면에 쓸 때 t('guest.name') 을 부른다.
+function enterGuest() {
+  state.user = { uid: '', guest: true, name: '', email: '', role: 'user', status: 'approved' };
+  state.users = [];
+  guestLoad();
+}
+
+function guestWrite() {
+  try {
+    localStorage.setItem(GUEST_KEY, JSON.stringify(
+      { items: state.items, cats: state.cats, goals: state.goals }));
+    return true;
+  } catch (e) {
+    // 조용히 넘기지 않는다 — 사파리 시크릿 모드·용량 초과에서 저장이 안 되는데
+    // 화면만 멀쩡하면 사용자는 다 지워진 다음에야 알게 된다.
+    if (window.fb) fb.fail(t('err.save'), e);
+    return false;
+  }
+}
+
+// 여러 번 이어서 부를 수 있다(카테고리 순서는 한 번에 열 개를 쓴다) — 렌더는
+// 한 번으로 모은다. 시트가 열려 있으면 미루는 것은 원격 스냅샷과 같은 규칙이다.
+let guestPaint = null;
+function guestDone() {
+  guestWrite();
+  if (!guestPaint) {
+    guestPaint = setTimeout(() => { guestPaint = null; if (!sheetBusy()) render(); }, 0);
+  }
+  return Promise.resolve();
+}
+
+// Firestore 쪽 쓰기 함수와 **같은 뜻**으로 맞춘 손님 갈래.
+// saveTodo 가 merge 인 것, setToggle 이 반복이면 날짜 배열을 건드리는 것까지 같다.
+const guest = {
+  newId: () => 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+  saveTodo(id, data) {
+    const at = state.items.findIndex((x) => x.id === id);
+    const merged = Object.assign({}, at < 0 ? null : state.items[at], data, { id });
+    state.items = at < 0 ? state.items.concat(merged)
+      : state.items.slice(0, at).concat(merged, state.items.slice(at + 1));
+    return guestDone();
+  },
+  removeTodo(id) {
+    state.items = state.items.filter((x) => x.id !== id);
+    return guestDone();
+  },
+  setToggle(id, ds, repeating, on) {
+    state.items = state.items.map((x) => {
+      if (x.id !== id) return x;
+      if (!repeating) return Object.assign({}, x, { done: on });
+      const cur = Array.isArray(x.doneDates) ? x.doneDates : [];
+      return Object.assign({}, x, {
+        doneDates: on ? (cur.indexOf(ds) < 0 ? cur.concat(ds) : cur) : cur.filter((s) => s !== ds)
+      });
+    });
+    return guestDone();
+  },
+  saveCat(id, name, color, order) {
+    const rest = state.cats.filter((c) => c.id !== id);
+    state.cats = sortCats(rest.concat({ id, name, color, order }));
+    return guestDone();
+  },
+  removeCat(id) {
+    state.cats = state.cats.filter((c) => c.id !== id);
+    return guestDone();
+  },
+  saveGoal(id, data) {
+    const rest = state.goals.filter((g) => g.id !== id);
+    state.goals = rest.concat(Object.assign({}, data, { id }));
+    return guestDone();
+  },
+  removeGoal(id) {
+    state.goals = state.goals.filter((g) => g.id !== id);
+    return guestDone();
+  },
+  setGoalDone(id, on) {
+    state.goals = state.goals.map((g) => (g.id === id ? Object.assign({}, g, { done: on }) : g));
+    return guestDone();
+  }
+};
 
 // 마지막으로 **그려진** 뷰. 진입 애니메이션을 뷰가 실제로 바뀐 렌더에만 걸기 위한 것이다.
 // ★ render() 는 탭 말고도 돈다 — 체크 한 번, 1분마다(일간 시계), 원격 스냅샷,
@@ -658,7 +770,10 @@ function render() {
   }
   // 약관 모달은 로그인 화면 위에만 뜬다 — 여기서 return 하므로 아래 본문 렌더까지
   // 내려가지 않는다. 그래서 renderAuth() 뒤에 바로 이어 붙인다.
-  if (!state.user) {
+  // ★ 손님도 state.user 가 차 있으므로 !state.user 만으로는 로그인 화면이 안 뜬다.
+  //   showLogin 이 켜져 있을 때만 띄운다 — 손님이 설정에서 눌렀거나, 로그인이
+  //   실패해 사유를 보여 줘야 하는 경우다.
+  if (!state.user || state.showLogin) {
     document.getElementById('app').innerHTML = renderAuth() + (state.legal ? renderLegalSheet() : '');
     return;
   }
@@ -683,18 +798,24 @@ function render() {
       '<span>' + esc(t('view.' + k)) + '</span></button>';
   }).join('');
 
-  const isAdmin = state.user.role === 'admin';
+  // ★ 손님은 role 이 'user' 로 채워져 있을 뿐 계정이 아니다 — isGuest() 로 먼저
+  //   자른다. 안 자르면 손님에게 로그아웃 버튼이 보인다.
+  const guestMode = isGuest();
+  const isAdmin = !guestMode && state.user.role === 'admin';
   const pending = pendingUsers().length;
   const accountBar = '<div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-bottom:14px">' +
     '<span style="font-size:13px;font-weight:600;color:var(--label-secondary);background:var(--fill-quaternary);' +
-      'padding:6px 12px;border-radius:999px">' + esc(state.user.name) +
+      'padding:6px 12px;border-radius:999px">' + esc(guestMode ? t('guest.name') : state.user.name) +
       (isAdmin ? ' · ' + esc(t('hdr.admin')) : '') + '</span>' +
     (isAdmin ? '<button class="btn btn-gray btn-sm" data-act="admin">' + esc(t('hdr.signups')) +
       (pending ? '<span style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;' +
         'padding:0 5px;margin-left:2px;border-radius:999px;background:#FF3B30;color:#fff;font-size:11px;font-weight:700">' +
         pending + '</span>' : '') + '</button>' : '') +
     '<button class="btn btn-gray btn-sm" data-act="settings">' + esc(t('hdr.settings')) + '</button>' +
-    '<button class="btn btn-gray btn-sm" data-act="logout">' + esc(t('hdr.logout')) + '</button></div>';
+    (guestMode
+      ? '<button class="btn btn-gray btn-sm" data-act="openLogin" style="color:var(--tint);font-weight:700">' +
+        esc(t('guest.login')) + '</button>'
+      : '<button class="btn btn-gray btn-sm" data-act="logout">' + esc(t('hdr.logout')) + '</button>') + '</div>';
 
   let html = '<div style="max-width:1024px;margin:0 auto;padding:28px 16px 130px">' + accountBar +
     '<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px">' +

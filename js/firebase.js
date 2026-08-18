@@ -126,6 +126,10 @@ function applyLoggedOut() {
   state.showSettings = false;
   state.del = null;
   // state.auth 는 건드리지 않는다 — 로그인 실패 사유·가입 완료 안내가 여기 남아 있다.
+  // ★ 로그인하지 않은 사람은 로그인 화면이 아니라 **손님으로 앱에 들어간다.**
+  //   로그인 화면은 state.showLogin 이 켜져 있을 때만 뜬다 — 그래서 여기서
+  //   그 값을 건드리지 않는다. 승인 대기 같은 사유 문구가 화면에 남아야 한다.
+  enterGuest();
   render();
 }
 
@@ -153,6 +157,7 @@ onAuthStateChanged(auth, async (u) => {
 
   state.user = { uid: u.uid, name: data.name, email: data.email, role: data.role, status: data.status };
   state.auth = blankAuth();
+  state.showLogin = false;   // 로그인에 성공했으니 로그인 화면을 내린다
   state.booting = false;
   // 원격 설정이 로컬을 덮는다. 다만 원격에 없는 키는 로컬 값이 살아남고,
   // 그때는 곧바로 승격해 저장한다 — 로그인 화면에서 고른 언어가 사라지지 않고,
@@ -227,9 +232,13 @@ const saveSettings = () =>
 
 // ---------------------------------------------------------------- 할 일 쓰기
 // 문서 id 는 Firestore 가 만든다 — 예전 uid() 는 기기 간 충돌 가능성이 있었다.
-const newId = () => doc(todosCol()).id;
-const saveTodo = (id, data) => setDoc(todoRef(id), data, { merge: true });
-const removeTodo = (id) => deleteDoc(todoRef(id));
+// ★ 아래 쓰기 함수는 전부 **첫 줄에서 손님 갈래로 빠진다**(calendar.js 의 guest).
+//   손님은 서버에 안 쓴다 — 규칙을 넓히지 않고 로그인 없는 사용을 붙이는 방법이
+//   이것이다. 갈래를 여기 한 겹에만 두는 이유는 호출부가 함수마다 딱 하나여서,
+//   화면 코드가 저장소가 둘이라는 사실을 아예 모르게 하기 위해서다.
+const newId = () => (isGuest() ? guest.newId() : doc(todosCol()).id);
+const saveTodo = (id, data) => (isGuest() ? guest.saveTodo(id, data) : setDoc(todoRef(id), data, { merge: true }));
+const removeTodo = (id) => (isGuest() ? guest.removeTodo(id) : deleteDoc(todoRef(id)));
 
 // 카테고리 쓰기. 규칙이 hasOnly(['name','color','order']) 를 보므로 다른 키를 섞으면
 // 통째로 거부된다 — merge 를 쓰지 않고 세 키짜리 문서를 통으로 교체한다.
@@ -241,9 +250,10 @@ const removeTodo = (id) => deleteDoc(todoRef(id));
 //   건드리지 않는다 — 죽은 id 는 catOf() 가 '없음' 으로 떨어뜨린다(calendar.js).
 //   일괄 재작성을 안 하는 이유: batch 500 한계 · 부분 실패 · 오프라인이던 다른
 //   기기가 나중에 올린 항목은 어차피 죽은 id 를 가리켜 폴백이 필요하다.
-const newCatId = () => doc(catsCol()).id;
-const saveCat = (id, name, color, order) => setDoc(catRef(id), { name, color, order });
-const removeCat = (id) => deleteDoc(catRef(id));
+const newCatId = () => (isGuest() ? guest.newId() : doc(catsCol()).id);
+const saveCat = (id, name, color, order) =>
+  (isGuest() ? guest.saveCat(id, name, color, order) : setDoc(catRef(id), { name, color, order }));
+const removeCat = (id) => (isGuest() ? guest.removeCat(id) : deleteDoc(catRef(id)));
 
 // 목표 쓰기. 카테고리와 같은 이유로 merge 를 쓰지 않는다 — 규칙의 validGoal() 이
 // hasOnly(['title','scope','y','m','d','categoryId','memo','done']) 를 보므로
@@ -252,15 +262,16 @@ const removeCat = (id) => deleteDoc(catRef(id));
 // ★ setGoalDone 만 updateDoc 이다. 규칙은 update 때 **합쳐진 문서 전체**를
 //   validGoal() 로 다시 보므로, 저장된 문서에 여덟 키만 있으면 그대로 통과한다.
 //   완료 체크는 배열이 아니라 불리언 하나라 doneDates 처럼 lost update 가 없다.
-const newGoalId = () => doc(goalsCol()).id;
-const saveGoal = (id, data) => setDoc(goalRef(id), data);
-const removeGoal = (id) => deleteDoc(goalRef(id));
-const setGoalDone = (id, on) => updateDoc(goalRef(id), { done: on });
+const newGoalId = () => (isGuest() ? guest.newId() : doc(goalsCol()).id);
+const saveGoal = (id, data) => (isGuest() ? guest.saveGoal(id, data) : setDoc(goalRef(id), data));
+const removeGoal = (id) => (isGuest() ? guest.removeGoal(id) : deleteDoc(goalRef(id)));
+const setGoalDone = (id, on) => (isGuest() ? guest.setGoalDone(id, on) : updateDoc(goalRef(id), { done: on }));
 
 // 완료 체크는 배열을 통째로 바꾸지 않는다. 두 기기에서 같은 날 체크하면 한쪽
 // 갱신이 사라지기(lost update) 때문에 arrayUnion / arrayRemove 를 쓴다.
 const setToggle = (id, ds, repeating, on) =>
-  updateDoc(todoRef(id), repeating ? { doneDates: on ? arrayUnion(ds) : arrayRemove(ds) } : { done: on });
+  (isGuest() ? guest.setToggle(id, ds, repeating, on)
+    : updateDoc(todoRef(id), repeating ? { doneDates: on ? arrayUnion(ds) : arrayRemove(ds) } : { done: on }));
 
 // ---------------------------------------------------------------- 관리자
 const setStatus = (uid, status) => updateDoc(doc(db, 'users', uid), { status });

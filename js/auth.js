@@ -321,7 +321,14 @@ function renderAuth() {
             (curLang() === o[0] ? 'font-weight:700;color:var(--tint)' : 'font-weight:500;color:var(--label-tertiary)') +
             '">' + esc(o[1]) + '</button>').join('') +
         '</div>' +
-      '</div></div></div>';
+      '</div>' +
+      // 로그인하지 않아도 앱은 그대로 쓸 수 있다. 이 줄이 손님 화면으로 돌아가는
+      // 유일한 길이다 — 지우면 로그인 화면에 들어온 사람이 갇힌다.
+      '<div style="text-align:center;margin-top:16px">' +
+        '<button type="button" data-act="closeLogin" style="border:none;background:none;cursor:pointer;' +
+          'font-family:inherit;font-size:13px;font-weight:600;color:var(--tint);padding:8px 12px">' +
+          esc(t('auth.guestGo')) + '</button></div>' +
+    '</div></div>';
 }
 
 // ---------------------------------------------------------------- 설정 시트
@@ -332,6 +339,10 @@ function renderSettingsSheet() {
     'border-top:.5px solid var(--separator)">' +
     '<span style="font-size:14px;color:var(--label-secondary)">' + k + '</span>' +
     '<span class="trunc" style="font-size:14px;font-weight:600">' + esc(v) + '</span></div>';
+
+  // ★ 손님은 계정이 없다 — 계정 정보도 탈퇴도 없고, 대신 로그인 입구가 선다.
+  //   u.role 이 'user' 라서 canDeleteSelf(u) 가 true 로 나오므로 여기서 먼저 자른다.
+  const guestMode = isGuest();
 
   // 탈퇴 확인: PIN 을 다시 받는다. 실수로 누른 사람은 여기서 멈춘다.
   const danger = !canDeleteSelf(u)
@@ -371,8 +382,13 @@ function renderSettingsSheet() {
 
       '<div style="font-size:13px;font-weight:700;color:var(--label-secondary);margin:18px 4px 2px">' +
         esc(t('set.account')) + '</div>' +
-      row(t('auth.name'), u.name) + row(t('auth.email'), u.email || '') +
-      row(t('set.role'), t(u.role === 'admin' ? 'set.roleAdmin' : 'set.roleUser')) +
+      (guestMode
+        ? '<div style="font-size:13px;line-height:1.6;color:var(--label-secondary);padding:6px 4px 12px">' +
+            esc(t('guest.hint')) + '</div>' +
+          '<button class="btn btn-prominent btn-md" data-act="openLogin" style="width:100%">' +
+            esc(t('guest.login')) + '</button>'
+        : row(t('auth.name'), u.name) + row(t('auth.email'), u.email || '') +
+          row(t('set.role'), t(u.role === 'admin' ? 'set.roleAdmin' : 'set.roleUser'))) +
 
       // 테마·언어. users/{uid}.settings 로 저장되어 기기 간에 따라온다.
       '<div style="font-size:13px;font-weight:700;color:var(--label-secondary);margin:22px 4px 2px">' +
@@ -391,9 +407,9 @@ function renderSettingsSheet() {
       '<button class="btn btn-gray btn-md" data-act="cats" style="width:100%">' +
         esc(t('cat.manage')) + '</button>' +
 
-      '<div style="font-size:13px;font-weight:700;color:#FF3B30;margin:22px 4px 8px">' +
-        esc(t('set.danger')) + '</div>' +
-      danger +
+      (guestMode ? ''
+        : '<div style="font-size:13px;font-weight:700;color:#FF3B30;margin:22px 4px 8px">' +
+          esc(t('set.danger')) + '</div>' + danger) +
 
       '<div style="font-size:12px;line-height:1.6;color:var(--label-tertiary);margin-top:22px;padding:0 4px">' +
         '<a href="terms.html" target="_blank" rel="noopener">' + esc(t('legal.terms')) + '</a> · ' +

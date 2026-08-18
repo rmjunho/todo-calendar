@@ -850,6 +850,15 @@ app.addEventListener('click', (e) => {
       case 'login': return login();
       case 'signup': return signup();
       case 'logout': return logout();
+      // 손님 ↔ 로그인 화면. 시트가 아니라 화면 전체를 바꾸는 스위치라
+      // sheetBusy() 에는 넣지 않는다 — 가릴 시트도, 지켜야 할 캐럿도 없다.
+      case 'openLogin':
+        state.showLogin = true; state.showSettings = false; state.del = null;
+        state.auth = blankAuth();     // 지난 실패 문구를 들고 들어가지 않는다
+        return render();
+      case 'closeLogin':
+        state.showLogin = false; state.auth = blankAuth();
+        return render();
       case 'toggleRemember': state.auth.remember = !state.auth.remember; return render();
       case 'closeLegal': state.legal = null; return render();
       case 'admin': state.showAdmin = true; return render();
@@ -2356,6 +2365,56 @@ if (location.search.includes('selftest')) {
   ok(document.contains(nameEl) && document.activeElement === nameEl,
     'the login field survives a day-view tick — a phone keyboard fires resize',
     'inDoc=' + document.contains(nameEl) + ' active=' + document.activeElement.tagName);
+
+  // --- 손님 모드 ---
+  // 로그인하지 않은 사람이 앱을 그대로 쓴다. 여기서 보는 것은 두 가지다:
+  // 세션이 없을 때 **그려지는 화면**이 로그인 화면이 아니라 본문이라는 것과,
+  // 저장이 서버가 아니라 localStorage 로 간다는 것.
+  // ★ 진짜 손님 데이터를 덮지 않게 키를 통째로 빼 뒀다가 되돌린다. 설정에서
+  //   setSettings(keep) 로 하는 것과 같은 이유다 — 검사가 사용자 데이터를 지우면 안 된다.
+  const keepGuest = localStorage.getItem(GUEST_KEY);
+  const keepData = { user: state.user, items: state.items, cats: state.cats, goals: state.goals };
+  localStorage.removeItem(GUEST_KEY);
+  enterGuest();
+  state.showLogin = false;
+  state.booting = false;
+  render();
+  ok(!!document.querySelector('[data-view]') && !document.querySelector('[data-a="pin"]'),
+    'a visitor with no session lands on the app itself, not on the login screen',
+    'tabbar=' + !!document.querySelector('[data-view]') + ' pinField=' + !!document.querySelector('[data-a="pin"]'));
+  ok(!document.querySelector('[data-act="logout"]') && !!document.querySelector('[data-act="openLogin"]'),
+    'and is offered sign-in where an account holder gets sign-out');
+
+  state.showSettings = true;
+  render();
+  ok(!document.querySelector('[data-act="askDelete"]') && !!document.querySelector('[data-act="openLogin"]'),
+    'the guest settings sheet drops the delete-account button — there is no account to delete');
+  ok(!!document.querySelector('[data-act="cats"]'),
+    'but categories stay reachable — that row is the only way to make one');
+  state.showSettings = false;
+
+  guest.saveTodo('g1', { title: '가', date: '2026-03-18', repeat: 'weekly', done: false, doneDates: [] });
+  guest.saveTodo('g1', { title: '나' });
+  eq(state.items.length, 1, 'writing the same id twice edits one row instead of adding a second');
+  eq(state.items[0].date, '2026-03-18',
+    'a title-only write merges — the date survives, exactly as setDoc({merge:true}) would');
+  guest.setToggle('g1', '2026-03-18', true, true);
+  eq((state.items[0].doneDates || []).join(','), '2026-03-18',
+    'checking a repeating to-do records that one date');
+  guest.setToggle('g1', '2026-03-18', true, false);
+  eq((state.items[0].doneDates || []).length, 0, 'and unchecking takes exactly that date back out');
+  eq(JSON.parse(localStorage.getItem(GUEST_KEY) || '{}').items.length, 1,
+    'the guest store on disk is what actually holds it — nothing went to the server');
+
+  state.showLogin = true;
+  render();
+  ok(!!document.querySelector('[data-a="pin"]') && !!document.querySelector('[data-act="closeLogin"]'),
+    'a guest can open the login screen and still has a way back');
+  state.showLogin = false;
+
+  if (keepGuest === null) localStorage.removeItem(GUEST_KEY);
+  else localStorage.setItem(GUEST_KEY, keepGuest);
+  Object.assign(state, keepData);
 
   Object.assign(state, kSpan);
   Object.assign(state, kGoal);
