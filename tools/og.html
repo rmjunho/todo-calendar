@@ -53,27 +53,23 @@
     x.beginPath(); x.arc(a, b, r, 0, 6.284); x.fillStyle = color; x.fill();
   };
 
-  function draw() {
+  function draw(icon) {
     x.textBaseline = 'alphabetic';
     x.fillStyle = C.bg; x.fillRect(0, 0, W, H);
 
     /* ── 왼쪽: 아이콘 · 제목 · 설명 · 도메인 ───────────────────── */
     var L = 88;
 
-    // 앱 아이콘 자리 — 파란 라운드 사각형에 흰 달력 글리프
-    x.save();
-    x.shadowColor = 'rgba(0,122,255,0.30)'; x.shadowBlur = 26; x.shadowOffsetY = 10;
-    x.fillStyle = C.tint; rr(L, 96, 84, 84, 23); x.fill();
-    x.restore();
-    x.strokeStyle = '#FFFFFF'; x.lineWidth = 4; x.lineJoin = 'round'; x.lineCap = 'round';
-    rr(L + 22, 96 + 28, 40, 34, 8); x.stroke();
-    x.beginPath();
-    x.moveTo(L + 22, 96 + 40); x.lineTo(L + 62, 96 + 40);          // 머리 줄
-    x.moveTo(L + 33, 96 + 21); x.lineTo(L + 33, 96 + 30);          // 걸이 둘
-    x.moveTo(L + 51, 96 + 21); x.lineTo(L + 51, 96 + 30);
-    x.stroke();
-    dot(L + 34, 96 + 51, 3.5, '#FFFFFF');
-    dot(L + 50, 96 + 51, 3.5, 'rgba(255,255,255,0.55)');
+    // 사이트 파비콘과 **같은 그림**을 쓴다(icon-512.png). 손으로 그리면 진짜
+    // 아이콘과 어긋나서, 공유 카드와 탭 아이콘이 서로 다른 앱처럼 보인다.
+    // 원본 아이콘 자체가 흰 바탕이라 회색 배경에서 묻힌다 — 뒤에 옅은 그림자를 깔아
+    // 가장자리를 세운다(원본 파일은 안 건드린다).
+    if (icon) {
+      x.save();
+      x.shadowColor = 'rgba(0,0,0,0.16)'; x.shadowBlur = 28; x.shadowOffsetY = 10;
+      x.drawImage(icon, L, 80, 112, 112);
+      x.restore();
+    }
 
     // 제목
     x.fillStyle = C.label; x.font = f(800, 84); x.letterSpacing = '-3px';
@@ -193,13 +189,22 @@
   Promise.all(need.map(function (n) { return document.fonts.load(n, '할 일 캘린더 3월 오후'); }))
     .then(function () { return document.fonts.ready; })
     .then(function () {
+      return new Promise(function (r) {      // 사이트 아이콘. 못 받으면 null 로 넘긴다
+        var i = new Image();
+        i.onload = function () { r(i); };
+        i.onerror = function () { r(null); };
+        i.src = '../icon-512.png';
+      });
+    })
+    .then(function (icon) {
       var ok = fontApplied();
-      draw();
+      draw(icon);
       var url = cv.toDataURL('image/png');
-      return fetch('/save', { method: 'POST', body: url })
+      return fetch('/save?name=og.png', { method: 'POST', body: url })
         .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
         .then(function (n) {
-          window.__og = { saved: true, bytes: +n, fontApplied: ok, w: cv.width, h: cv.height };
+          window.__og = { saved: true, bytes: +n, fontApplied: ok, iconDrawn: !!icon,
+                          w: cv.width, h: cv.height };
           document.getElementById('log').textContent =
             'og.png 저장됨 · ' + n + ' bytes · Pretendard ' + (ok ? '적용됨' : '실패(폴백)');
         })
