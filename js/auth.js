@@ -13,8 +13,13 @@ const blankAuth = () => ({
   remember: false, error: '', notice: '', busy: false,
   // 약관 동의. age 는 '' | 'over14' | 'under14_guardian' — 배타 선택을 문자열
   // 하나로 들고 있어서 "하나 고르면 다른 하나 해제" 로직이 따로 필요 없다.
-  agree: { terms: false, privacy: false, age: '', marketing: false }
+  // gName/gPhone 은 만 14세 미만을 골랐을 때만 쓴다. age 를 바꿔도 지우지 않는다 —
+  // 잘못 눌렀다 되돌아온 사람이 다시 치게 만들 이유가 없다. 저장은 age 로 가른다.
+  agree: { terms: false, privacy: false, age: '', marketing: false, gName: '', gPhone: '' }
 });
+
+// 만 14세 미만이면 법정대리인 정보를 받는다.
+const needsGuardian = (g) => g.age === 'under14_guardian';
 
 // 필수 동의 검사. 미충족이면 안내 문구를, 다 됐으면 '' 를 돌려준다.
 // 화면용이다 — 진짜 강제는 firestore.rules 의 users create 조건이 한다.
@@ -22,6 +27,11 @@ function agreeMissing(g) {
   if (!g.terms) return t('ag.needTerms');
   if (!g.privacy) return t('ag.needPrivacy');
   if (g.age !== 'over14' && g.age !== 'under14_guardian') return t('ag.needAge');
+  // 보호자 칸은 만 14세 미만일 때만 본다. 규칙도 같은 조건으로 막는다.
+  if (needsGuardian(g)) {
+    if (!normName(g.gName)) return t('ag.needGName');
+    if (!normName(g.gPhone)) return t('ag.needGPhone');
+  }
   return '';
 }
 
@@ -213,6 +223,30 @@ function renderAgree() {
     line(check('data-agree="age" data-val="over14"', g.age === 'over14', txt(esc(t('ag.over14'))))) +
     line(check('data-agree="age" data-val="under14_guardian"', g.age === 'under14_guardian',
       txt(esc(t('ag.under14'))))) +
+
+    // 보호자 정보. 만 14세 미만을 고른 **그때만** 펼친다 — 대부분의 사람에게는
+    // 물어볼 이유가 없는 제3자의 개인정보다.
+    // ★ 입력칸은 uncontrolled 다. data-a 위임과 섞지 않으려고 data-gd 를 쓴다
+    //   (state.auth.agree 안에 살고, 수명이 약관 동의와 같다).
+    (needsGuardian(g)
+      ? '<div style="margin-top:10px;padding:14px;border-radius:12px;background-color:var(--bg-secondary)">' +
+          '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">' +
+            '<span style="font-size:13px;font-weight:700;color:var(--label)">' + esc(t('ag.gTitle')) + '</span>' +
+            tag(esc(t('ag.required')), true) + '</div>' +
+          '<div style="font-size:12px;line-height:1.5;color:var(--label-tertiary);margin-bottom:10px">' +
+            esc(t('ag.gWhy')) + '</div>' +
+          '<label style="display:block;font-size:12px;font-weight:600;color:var(--label-secondary);margin-bottom:4px">' +
+            esc(t('ag.gName')) + '</label>' +
+          '<input class="field" data-gd="gName" type="text" autocomplete="off" ' +
+            'placeholder="' + esc(t('ag.gNamePh')) + '" value="' + esc(g.gName) + '" ' +
+            'style="padding:12px 14px;font-size:16px">' +
+          '<label style="display:block;font-size:12px;font-weight:600;color:var(--label-secondary);margin:10px 0 4px">' +
+            esc(t('ag.gPhone')) + '</label>' +
+          '<input class="field" data-gd="gPhone" type="tel" inputmode="tel" autocomplete="off" ' +
+            'placeholder="010-0000-0000" value="' + esc(g.gPhone) + '" ' +
+            'style="padding:12px 14px;font-size:16px">' +
+        '</div>'
+      : '') +
 
     '<div style="' + hr + ';margin-top:8px;padding-top:4px">' +
       line(check('data-agree="marketing"', g.marketing,
@@ -477,7 +511,15 @@ function admRows() {
         '<div class="trunc" style="font-size:13px;color:var(--label-secondary);margin-top:1px">' +
           esc(u.email || '') + (admJoined(u) ? ' · ' + esc(admJoined(u)) : '') + '</div>' +
         '<div class="trunc" style="font-size:12px;color:var(--label-tertiary);margin-top:2px">' +
-          admAgree(u) + '</div></div>' +
+          admAgree(u) + '</div>' +
+        // 만 14세 미만 계정에만 보호자 줄을 붙인다. 다른 계정에는 애초에 값이 없다.
+        (u.agreements && u.agreements.age === 'under14_guardian'
+          ? '<div class="trunc" style="font-size:12px;font-weight:600;color:#FF9500;margin-top:2px">' +
+            esc(u.agreements.guardian && u.agreements.guardian.name
+              ? t('adm.guardian', u.agreements.guardian.name, u.agreements.guardian.phone || '')
+              : t('adm.guardianNone')) + '</div>'
+          : '') +
+        '</div>' +
       '<button class="btn btn-gray btn-sm" data-resetpin="' + esc(u.uid) + '">' +
         esc(t('adm.resetPin')) + '</button>' +
       // 본인 계정은 잠그지도 지우지도 못한다 — 스스로 갇히는 길을 아예 안 그린다.

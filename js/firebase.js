@@ -89,7 +89,14 @@ async function signUp(name, email, pin, agree) {
         terms:   { agreed: !!agree.terms,   version: LEGAL.version, at: serverTimestamp() },
         privacy: { agreed: !!agree.privacy, version: LEGAL.version, at: serverTimestamp() },
         age: agree.age,
-        marketing: !!agree.marketing
+        marketing: !!agree.marketing,
+        // 법정대리인 정보는 만 14세 미만일 때만 담는다. 아닌 사람에게서는 아예
+        // 받지도 저장하지도 않는다 — 제3자의 개인정보를 이유 없이 들고 있지 않는다.
+        // ★ 규칙도 같은 조건으로 본다: age 가 under14_guardian 이면 이 두 값이
+        //   비어 있으면 문서가 생기지 않는다.
+        guardian: agree.age === 'under14_guardian'
+          ? { name: (agree.gName || '').trim(), phone: (agree.gPhone || '').trim() }
+          : null
       }
     });
     batch.set(doc(db, 'usernames', name), { uid: cred.user.uid, email });

@@ -931,6 +931,10 @@ app.addEventListener('click', (e) => {
 app.addEventListener('input', (e) => {
   const auth = e.target.closest('[data-a]');
   if (auth) { state.auth[auth.dataset.a] = auth.value; return; }
+  // 보호자 정보. state.auth.agree 안에 산다 — 약관 동의와 수명이 같다.
+  // ★ render() 를 부르지 않는다. 다른 입력칸과 같은 이유로 캐럿이 날아간다.
+  const gd = e.target.closest('[data-gd]');
+  if (gd) { state.auth.agree[gd.dataset.gd] = gd.value; return; }
   // 탈퇴 확인 PIN. state.auth 와 섞지 않는다 — 로그인 폼과 수명이 다르다.
   const del = e.target.closest('[data-d]');
   if (del) { if (state.del) state.del[del.dataset.d] = del.value; return; }
@@ -1259,8 +1263,9 @@ if (location.search.includes('selftest')) {
   // 막지만, 그때는 Auth 계정만 만들어졌다 지워지는 낭비가 생긴다.
   const ag = (o) => Object.assign(blankAuth().agree, o);
   ok(agreeMissing(ag({ terms: true, privacy: true, age: 'over14' })) === '', 'all required consents pass');
-  ok(agreeMissing(ag({ terms: true, privacy: true, age: 'under14_guardian' })) === '',
-    'under-14 with guardian consent passes');
+  ok(agreeMissing(ag({ terms: true, privacy: true, age: 'under14_guardian',
+    gName: '보호자', gPhone: '010-0000-0000' })) === '',
+    'under-14 passes once the guardian’s name and phone are filled in');
   ok(agreeMissing(ag({ privacy: true, age: 'over14' })), 'missing terms consent is rejected');
   ok(agreeMissing(ag({ terms: true, age: 'over14' })), 'missing privacy consent is rejected');
   ok(agreeMissing(ag({ terms: true, privacy: true })), 'missing age confirmation is rejected');
@@ -2482,8 +2487,58 @@ if (location.search.includes('selftest')) {
   eq(document.querySelectorAll('#admList > div').length, 1,
     'a search that matches nothing draws one empty-state row, not a blank panel');
 
+  // 만 14세 미만 계정에는 보호자 줄이 붙는다. 관리자가 이걸 못 보면 동의를
+  // 확인할 방법이 없다 — 저장만 하고 안 보여 주던 자리를 되풀이하지 않는다.
+  state.users = [{ uid: 'u3', name: '마바', email: 'c@x.co', role: 'user', status: 'approved',
+    createdAt: ts(Date.now() - DAY),
+    agreements: { terms: { agreed: true, version: 'v1' }, privacy: { agreed: true, version: 'v1' },
+      age: 'under14_guardian', marketing: false,
+      guardian: { name: '보호자이름', phone: '010-1234-5678' } } }];
+  state.admQ = '';
+  render();
+  ok(document.querySelector('[role="dialog"]').textContent.indexOf('010-1234-5678') >= 0,
+    'an under-14 account shows its guardian in the admin panel');
+
   state.showAdmin = false;
   Object.assign(state, keepAdm);
+
+  // --- 미성년자 동의 ---
+  // 보호자 칸은 만 14세 미만을 고른 그때만 나오고, 비어 있으면 가입이 막힌다.
+  const keepAuth = { auth: state.auth, showLogin: state.showLogin, user: state.user };
+  state.user = null;
+  state.auth = blankAuth();
+  state.auth.mode = 'signup';
+  state.auth.agree.terms = true;
+  state.auth.agree.privacy = true;
+  state.auth.agree.age = 'over14';
+  state.showLogin = true;
+  render();
+  ok(!document.querySelector('[data-gd="gName"]'),
+    'someone over 14 is never asked for a guardian — it is a third party’s data');
+  eq(agreeMissing(state.auth.agree), '', 'and nothing blocks them from signing up');
+
+  state.auth.agree.age = 'under14_guardian';
+  render();
+  const gNameEl = document.querySelector('[data-gd="gName"]');
+  ok(!!gNameEl && !!document.querySelector('[data-gd="gPhone"]'),
+    'picking under 14 opens the guardian fields');
+  eq(agreeMissing(state.auth.agree), t('ag.needGName'),
+    'an empty guardian name blocks sign-up instead of silently saving a blank');
+  state.auth.agree.gName = '보호자';
+  eq(agreeMissing(state.auth.agree), t('ag.needGPhone'), 'and the phone is required too');
+  state.auth.agree.gPhone = '010-0000-0000';
+  eq(agreeMissing(state.auth.agree), '', 'with both filled in, sign-up is allowed');
+
+  // 되돌아가도 친 값이 살아 있어야 한다 — 다시 치게 만들 이유가 없다.
+  state.auth.agree.age = 'over14';
+  render();
+  state.auth.agree.age = 'under14_guardian';
+  render();
+  eq(document.querySelector('[data-gd="gPhone"]').value, '010-0000-0000',
+    'switching age back and forth keeps what was already typed');
+
+  state.showLogin = false;
+  Object.assign(state, keepAuth);
 
   Object.assign(state, kSpan);
   Object.assign(state, kGoal);
