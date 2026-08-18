@@ -214,8 +214,15 @@ function renderAgree() {
       '<span style="font-size:13px;font-weight:600;color:var(--label-secondary)">' + esc(t('ag.ageTitle')) + '</span>' +
       tag(esc(t('ag.required')), true) + '</div>' +
     line(check('data-agree="age" data-val="over14"', g.age === 'over14', txt(esc(t('ag.over14'))))) +
-    '<div style="font-size:12px;line-height:1.5;color:var(--label-tertiary);margin:0 0 4px 32px">' +
+    // ★ 안내로 끝내지 않고 갈 길을 같이 준다. 만 14세 미만은 막힌 게 아니라
+    //   **계정 없이 쓰는 쪽**으로 가는 것이고, 그 버튼이 여기 없으면 화면 맨 아래까지
+    //   내려가서 찾아야 한다.
+    '<div style="font-size:12px;line-height:1.5;color:var(--label-tertiary);margin:0 0 2px 32px">' +
       esc(t('ag.under14No')) + '</div>' +
+    '<div style="margin:0 0 4px 30px">' +
+      '<button type="button" data-act="closeLogin" style="border:none;background:none;cursor:pointer;' +
+        'font-family:inherit;font-size:12px;font-weight:700;color:var(--tint);' +
+        'text-decoration:underline;padding:4px 2px">' + esc(t('auth.guestGo')) + '</button></div>' +
 
     '<div style="' + hr + ';margin-top:8px;padding-top:4px">' +
       line(check('data-agree="marketing"', g.marketing,

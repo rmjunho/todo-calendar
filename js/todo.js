@@ -2511,6 +2511,9 @@ if (location.search.includes('selftest')) {
     'age confirmation is one checkbox — there is no under-14 option to pick');
   ok(document.body.textContent.indexOf(t('ag.under14No')) >= 0,
     'and the screen says outright that under-14 accounts are not available');
+  // 막고 끝내면 그 사람은 갈 데가 없다. 계정 없이 쓰는 길이 **그 자리에** 있어야 한다.
+  eq(document.querySelectorAll('[data-act="closeLogin"]').length, 2,
+    'the way out — using it without an account — sits right next to the age line, not only at the bottom');
   eq(agreeMissing(state.auth.agree), t('ag.needAge'),
     'leaving it unchecked blocks sign-up');
   state.auth.agree.age = 'over14';

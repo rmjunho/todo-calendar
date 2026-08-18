@@ -132,6 +132,9 @@ const LEGAL = {
 <p><strong>만 14세 미만 아동은 회원가입을 할 수 없습니다.</strong> 가입 시 만 14세
 이상임을 확인하며, 그 확인 없이는 계정이 만들어지지 않습니다. 따라서 서비스는
 <strong>만 14세 미만 아동의 개인정보를 수집하지 않습니다.</strong></p>
+<p>다만 <strong>계정 없이(로그인하지 않고) 이용하는 것은 나이와 무관하게 가능합니다.</strong>
+이 경우 이름·이메일·PIN 을 포함해 <strong>어떤 개인정보도 수집하지 않으며</strong>, 입력한
+할 일은 서버로 전송되지 않고 이용자의 브라우저(localStorage)에만 저장됩니다.</p>
 <p>만 14세 미만 아동의 계정이 확인되면 해당 계정과 데이터를 삭제합니다. 법정대리인은
 아래 연락처로 삭제를 요청할 수 있습니다.</p>
 
@@ -315,6 +318,9 @@ or rented, and it is not used for advertising.</p>
 <p><strong>Children under 14 cannot create an account.</strong> Sign-up requires confirming that you
 are 14 or older, and no account is created without it. The Service therefore <strong>does not collect
 personal data from children under 14</strong>.</p>
+<p>Using the Service <strong>without an account is available at any age</strong>. In that case
+<strong>no personal data is collected at all</strong> — no name, email or PIN — and the to-dos you
+enter are never sent to the server; they stay in your browser's local storage.</p>
 <p>If an account belonging to a child under 14 is identified, that account and its data are deleted.
 A legal guardian may request deletion using the contact details below.</p>
 
