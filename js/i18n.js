@@ -339,7 +339,7 @@ const STR = {
     'set.lang': '언어',
     // 지금 보고 있는 화면이 아니라 **다음에 열 때** 처음 뜨는 화면이다.
     'set.view': '첫 화면',
-    'set.danger': '위험 구역',
+    'set.danger': '계정 삭제',
     'set.adminNoDelete': '관리자 계정은 여기에서 삭제할 수 없습니다. 다른 관리자에게 요청하거나, ' +
       'Firebase 콘솔에서 직접 처리하세요.',
     'set.delConfirm': '계정과 할 일이 <strong>영구 삭제</strong>되며 되돌릴 수 없습니다.<br>' +
@@ -347,7 +347,7 @@ const STR = {
     'set.delCancel': '취소',
     'set.delGo': '영구 삭제',
     'set.delBusy': '삭제 중…',
-    'set.delOpen': '계정 삭제',
+    'set.delOpen': '계정 삭제하기',
     'set.delHint': '계정과 모든 할 일이 영구 삭제됩니다. 되돌릴 수 없습니다.',
     'set.delDone': (n) => '계정과 할 일 ' + n + '개를 모두 삭제했습니다. 그동안 감사했습니다.',
     'set.delFail': '삭제에 실패했습니다.',
@@ -599,7 +599,7 @@ const STR = {
     'set.themeSystem': 'System',
     'set.lang': 'Language',
     'set.view': 'First screen',
-    'set.danger': 'Danger zone',
+    'set.danger': 'Delete account',
     'set.adminNoDelete': 'An administrator account cannot be deleted here. Ask another administrator, ' +
       'or remove it from the Firebase console.',
     'set.delConfirm': 'Your account and to-dos will be <strong>permanently deleted</strong> and cannot be recovered.<br>' +
@@ -607,7 +607,7 @@ const STR = {
     'set.delCancel': 'Cancel',
     'set.delGo': 'Delete permanently',
     'set.delBusy': 'Deleting…',
-    'set.delOpen': 'Delete account',
+    'set.delOpen': 'Delete my account',
     'set.delHint': 'Your account and every to-do will be permanently deleted. This cannot be undone.',
     'set.delDone': (n) => 'Your account and ' + n + ' to-do(s) have been deleted. Thank you for using the app.',
     'set.delFail': 'Deletion failed.',
