@@ -7,7 +7,7 @@
 **최종 갱신:** 2026-08-13 · **본진:** `C:\Users\LENOVO\dev\todo-calendar` (git `main`)
 **배포됨:** <https://todo-calendar.kro.kr> (GitHub Pages + `CNAME`) · 보안 규칙도 배포 완료
 
-기능은 다 붙었습니다 — 계정·승인·약관 동의·기기 간 동기화·본인 탈퇴·테마 3종·언어 2종·
+기능은 다 붙었습니다 — 손님 모드·계정·약관 동의·기기 간 동기화·본인 탈퇴·테마 3종·언어 2종·
 캘린더 이미지 내보내기(캘린더·상세·메모 토글)·날짜 이동 팝오버·요일 선택 반복·
 카테고리(색 팔레트 10종)와 카테고리 필터·**연간 뷰와 목표(버킷리스트)**·
 **하단 캡슐 탭 바(년/월/주/일)**·**첫 화면 설정**·**기간 일정(막대·3모드 필터)**.
@@ -157,7 +157,8 @@ firebase.js                                                        (ESM 모듈)
 | `validPin` / `validEmail` / `normName` | **PIN은 숫자 6자리 고정** · 이메일 형식 · 이름 trim |
 | `blankAuth` | 로그인 폼 초기값. `state.auth` 모양의 단일 출처 |
 | `login` / `signup` / `logout` | `fb.*` 호출 후 결과만 화면에 반영 |
-| `decide` / `resetPin` / `migrateLocal` | 승인·거절 · PIN 재설정 메일 · localStorage 업로드 |
+| `decide` / `resetPin` / `migrateLocal` | **정지·해제**(`status` 를 rejected/approved 로) · PIN 재설정 메일 · 옛 localStorage 업로드. ★ 가입 승인제는 없앴습니다 — `decide` 는 이제 잠그고 푸는 용도입니다 |
+| `admRows` / `syncAdmSheet` | 관리자 패널의 **목록만** 만드는 함수와, 그것만 갈아 끼우는 함수. 검색칸이 uncontrolled 라 입력 중에 `render()` 를 부르면 캐럿이 날아간다 — `syncCatSheet` 과 같은 이유·같은 방식이다. `users` 스냅샷도 패널이 열려 있으면 이쪽으로 온다 |
 | **`agreeMissing`** | **필수 동의 검사.** 미충족 항목의 안내 문구를 돌려준다 |
 | `renderAgree` / `renderLegalSheet` | 동의 체크 UI · 약관 전문 모달 (본문은 `legalDoc()`) |
 | `ageBadge` | 관리자 패널 나이 배지. `agreements` 가 없으면 "약관 미동의" |
@@ -363,12 +364,18 @@ batch 500 한계, 부분 실패 시 상태가 갈리는 것, 그리고 **오프�
   name: '이준호',                     // 로그인 아이디 겸용. 중복 불가
   email: 'someone@example.com',       // Auth 계정 이메일. 화면엔 안 나옴
   role: 'admin'|'user',
-  status: 'pending'|'approved'|'rejected',
+  // 가입은 **승인제가 아니다** — 만들면 바로 'approved' 다(규칙이 create 때 그 값으로
+  // 고정한다). 'rejected' 는 관리자가 계정을 잠근 상태, 'pending' 은 승인제 시절의
+  // 잔재라 옛 계정에만 남아 있다. 셋 다 관리자 패널의 정지/해제로 오간다.
+  status: 'approved'|'rejected'|'pending'(옛 계정),
   createdAt: <Timestamp>,
   agreements: {                       // 약관 1.0 이후 가입자만 있음
     terms:   { agreed: true, version: '1.0', at: <Timestamp> },
     privacy: { agreed: true, version: '1.0', at: <Timestamp> },
-    age: 'over14'|'under14_guardian',
+    // 만 14세 미만은 **가입할 수 없다**(규칙이 'over14' 로 고정). 화면은 체크 하나이고,
+    // 그 옆에서 손님으로 쓰러 갈 수 있다. 'under14_guardian' 과 legal.js 로 받던
+    // 보호자 성명·연락처는 **철회했다** — 옛 계정에만 남아 있고 새로 쓰지 않는다.
+    age: 'over14' (옛 계정에 'under14_guardian' 이 남아 있을 수 있음),
     marketing: true|false             // 선택 항목
   },
   settings: {                         // 없을 수 있음 (도입 전 계정)
@@ -440,9 +447,11 @@ PIN  ─────────────────────────
 
 - **로그인 실패 사유를 구분해서 알려주지 않습니다.** 이름이 없는 건지 PIN이 틀린 건지
   나누면 이름 존재 여부가 새어 나갑니다.
-- 승인 검사는 `onAuthStateChanged` 안에서 합니다. Auth 로그인 자체는 승인 전에도 되므로
-  `status !== 'approved'` 면 그 자리에서 `signOut` 합니다. **이 화면 검사만 믿으면 안
-  됩니다** — 데이터 접근은 규칙이 따로 막습니다.
+- 상태 검사는 `enterAccount()`(= `onAuthStateChanged` 가 부르는 함수) 안에서 합니다.
+  Auth 로그인 자체는 잠긴 계정도 되므로 `status !== 'approved'` 면 그 자리에서
+  `signOut` 합니다. **이 화면 검사만 믿으면 안 됩니다** — 데이터 접근은 규칙이 따로 막습니다.
+  ★ 가입도 이 함수를 **직접** 부릅니다. `busy` 동안은 `onAuthStateChanged` 가 건너뛰기
+  때문인데, 안 부르면 가입해 놓고 손님 화면에 남습니다.
 - 자동 로그인 스위치 = `setPersistence(browserLocal | browserSession)`.
 - `validPin` 을 느슨하게 풀면 가입 폼은 통과하고 Auth가 `weak-password` 로 거절합니다.
 
@@ -470,8 +479,10 @@ PIN  ─────────────────────────
 `uid` 가 달라 시작도 못 합니다. `validSettings()` 가 키 목록과 값 집합을 둘 다 고정합니다
 — 빼면 `users` 가 임의의 맵을 받는 통로가 됩니다.
 
-`create` 는 `status:'pending'` + `role:'user'` 로 값을 고정해 스스로 관리자를 달고
-태어나지 못하게 막습니다.
+`create` 는 세 값을 **고정**합니다 — `status:'approved'`(가입은 승인제가 아니다),
+`role:'user'`(스스로 관리자를 달고 태어나지 못한다), `agreements.age:'over14'`
+(만 14세 미만은 계정을 만들 수 없다). 셋 다 화면에도 같은 검사가 있지만 **화면은
+콘솔에서 우회됩니다** — 강제하는 곳은 여기 하나뿐입니다.
 
 ### 계정 삭제 — 순서가 곧 안전장치입니다
 
