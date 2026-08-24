@@ -111,6 +111,11 @@ function dow(style) {
 // ★ 일요일부터다 — calendar.js 의 startOffset 이 그 전제로 짜여 있다.
 const DOW_HANJA = ['日', '月', '火', '水', '木', '金', '土'];
 const DOW_EN = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+// 제호 줄의 영문 달 이름. DOW_EN 과 같은 이유로 **로케일을 안 탄다** — 레퍼런스
+// 달력이 `2007 DECEMBER` 처럼 한글 화면에도 영문을 같이 찍는다.
+// monthShort() 를 대신하는 것이 아니다. 그쪽은 연간 12칸이 쓰는 로케일 이름이다.
+const MONTH_EN = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
+  'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
 
 // 'HH:MM' → 로케일 시각. ko '오후 2:30' / en '2:30 PM'
 // 인자 이름을 t 로 두지 말 것 — 아래 문자열 함수 t() 를 가린다.

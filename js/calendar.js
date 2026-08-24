@@ -861,40 +861,45 @@ function render() {
         esc(t('guest.login')) + '</button>'
       : '<button class="btn btn-gray btn-sm" data-act="logout">' + esc(t('hdr.logout')) + '</button>') + '</div>';
 
-  let html = '<div style="max-width:1024px;margin:0 auto;padding:28px 16px 130px">' + accountBar +
-    '<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px">' +
-      // 제목을 누르면 년·월 팝오버가 열린다. < > 로 한 칸씩 걸어가지 않아도 된다.
-      // ★ position:relative 래퍼 — 팝오버가 top:100% 로 제목 바로 아래에 붙는다.
-      //   화면이 좁아 헤더가 줄바꿈돼도 팝오버는 제목을 따라간다.
-      '<div style="position:relative">' +
-      '<button data-act="jump" aria-label="' + esc(t('jump.title')) + '" aria-expanded="' + !!state.jump +
-        '" style="border:none;padding:0;margin:0;background:none;color:inherit;font:inherit;' +
-        'text-align:left;cursor:pointer;display:block">' +
-        '<div style="font-size:13px;font-weight:600;color:var(--tint)">' + esc(todayLabel) + '</div>' +
-        '<div style="display:flex;align-items:center;gap:6px">' +
-          // 간판 글자. 크림 글자에 먹 외곽선 — 모양은 .sign-title 이 든다(style.css).
-          '<h1 class="sign-title" style="margin:2px 0 0;font-size:32px">' + esc(monthLabel) + '</h1>' +
-          icon('chevron.up.chevron.down', 17, 'var(--label-tertiary)') +
-        '</div>' +
+  // -- 제호 줄 --------------------------------------------------------------
+  // 레퍼런스(2008 방앗간 달력) 맨 윗줄이 [2008 | 12 | 戊子年 CALENDAR] 이다.
+  // 그 구조를 그대로 가져오되 오른쪽 자리는 사용자 요청으로 **버튼**이 쓴다.
+  // ★ 예전에는 이 셋이 판 **바깥** 헤더에 있었다. 판 안으로 들어오면서
+  //   data-act="jump" 와 renderJumpPopover() 도 같이 따라왔다 — 위임(todo.js)은
+  //   closest() 라 자리를 옮겨도 그대로 먹는다.
+  // ★ 가운데 숫자는 뷰마다 다른 값을 든다: 연간은 연도, 나머지는 달.
+  //   주간·일간은 **보고 있는 날(selD)** 기준이다 — state.cm 은 월간 전용 축이다.
+  const mastM = state.view === 'month' ? state.cm : selD.getMonth();
+  const mastBig = state.view === 'year' ? String(state.cy) : String(mastM + 1);
+  const mastSub = state.view === 'year' ? 'CALENDAR' : MONTH_EN[mastM];
+  const mast = '<div class="cal-mast">' +
+    '<div class="cal-mast-year">' +
+      (state.view === 'year' ? '' : '<span class="cal-mast-y">' + state.cy + '</span>') +
+      '<span class="cal-mast-today">' + esc(todayLabel) + '</span></div>' +
+    // position:relative 래퍼 — 팝오버가 top:100% 로 숫자 바로 아래에 붙는다.
+    '<div style="position:relative">' +
+      // ★ aria-label 에 로케일 제목(`2026년 8월`)을 넣는다. 화면에는 숫자와 영문만
+      //   남아서, 이걸 안 넣으면 스크린 리더가 "8" 이라고만 읽는다.
+      '<button data-act="jump" class="cal-mast-mid" aria-label="' +
+        esc(monthLabel + ' · ' + t('jump.title')) +
+        '" aria-expanded="' + !!state.jump + '">' +
+        '<span class="cal-mast-num">' + esc(mastBig) + '</span>' +
+        '<span class="cal-mast-sub">' + esc(mastSub) + '</span>' +
       '</button>' + (state.jump ? renderJumpPopover() : '') + '</div>' +
-      // ★ 년/월/주/일 선택은 여기 없다 — 화면 아래 떠 있는 캡슐 바로 옮겼다.
-      //   엄지가 닿는 자리이기도 하고, 좁은 화면에서 헤더가 두 줄로 접히던 것도
-      //   같이 사라진다. 아래 'floating tab bar' 블록이 같은 segments 를 쓴다.
-      '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
-        '<div data-raise="glass" style="display:flex;gap:8px;align-items:center">' +
-          '<button class="btn btn-glass btn-sm btn-icon" data-nav="prev" aria-label="' + esc(t('nav.prev')) + '">' + icon('chevron.left', 15) + '</button>' +
-          '<button class="btn btn-glass btn-sm" data-nav="today">' + esc(t('nav.today')) + '</button>' +
-          '<button class="btn btn-glass btn-sm btn-icon" data-nav="next" aria-label="' + esc(t('nav.next')) + '">' + icon('chevron.right', 15) + '</button>' +
-          // 현재 뷰(월/주/일)를 그대로 이미지로 내보낸다. 버튼 하나가 세 뷰를 다 맡는다.
-          // ★ 연간 뷰에서는 안 그린다 — export.js 의 drawExport 는 month/week/day 세
-          //   갈래뿐이라 'year' 가 들어오면 주간 격자를 그린다(조용히 틀린 이미지).
-          //   연간 내보내기를 붙일 때 이 조건을 지울 것.
-          (state.view === 'year' ? '' :
-            '<button class="btn btn-glass btn-sm" data-act="export" aria-label="' + esc(t('exp.title')) + '">' +
-            esc(t('exp.btn')) + '</button>') +
-        '</div>' +
-      '</div>' +
-    '</div>';
+    '<div class="cal-mast-btns" data-raise="glass">' +
+      '<button class="btn btn-glass btn-sm btn-icon" data-nav="prev" aria-label="' + esc(t('nav.prev')) + '">' + icon('chevron.left', 15) + '</button>' +
+      '<button class="btn btn-glass btn-sm" data-nav="today">' + esc(t('nav.today')) + '</button>' +
+      '<button class="btn btn-glass btn-sm btn-icon" data-nav="next" aria-label="' + esc(t('nav.next')) + '">' + icon('chevron.right', 15) + '</button>' +
+      // ★ 연간 뷰에서는 안 그린다 — export.js 의 drawExport 는 month/week/day 세
+      //   갈래뿐이라 'year' 가 들어오면 주간 격자를 그린다(조용히 틀린 이미지).
+      (state.view === 'year' ? '' :
+        '<button class="btn btn-glass btn-sm" data-act="export" aria-label="' + esc(t('exp.title')) + '">' +
+        esc(t('exp.btn')) + '</button>') +
+    '</div></div>';
+  // 판 맨 위는 늘 [철끈 띠][제호 줄] 이다. 네 뷰가 같은 한 줄을 쓴다.
+  const sheetTop = calHang + mast;
+
+  let html = '<div style="max-width:1024px;margin:0 auto;padding:28px 16px 130px">' + accountBar;
 
   // -- kind filter (할 일 / 일정) --------------------------------------------
   // 월간·주간에서만 그린다. 일간은 시간축에 둘을 같이 놓는 자리고, 연간은 목표만 그려서
@@ -1008,7 +1013,7 @@ function render() {
       '<div style="margin:22px 4px 10px"><span class="sign-head" style="font-size:20px">' +
         esc(t('goal.months')) + '</span></div>' +
       // 격자 자체가 판이다 — 패딩 없이 12칸이 테두리에 딱 붙는다(레퍼런스의 12개월 블록).
-      '<div class="card cal-sheet">' + calHang + '<div class="cal-months">' + months + '</div></div>';
+      '<div class="card cal-sheet">' + sheetTop + '<div class="cal-months">' + months + '</div></div>';
   }
 
   // -- month view -----------------------------------------------------------
@@ -1086,7 +1091,7 @@ function render() {
         bars + '</div>';
     }
     // 7열 minmax(0,1fr) 의 근거는 .cal-grid / .cal-head 쪽 주석에 있다.
-    body += '<div class="card cal-sheet">' + calHang + '<div class="cal-head">' + heads + '</div>' + grid + '</div>';
+    body += '<div class="card cal-sheet">' + sheetTop + '<div class="cal-head">' + heads + '</div>' + grid + '</div>';
   }
 
   // -- week view ------------------------------------------------------------
@@ -1167,7 +1172,7 @@ function render() {
       'px);border-bottom:1px solid var(--cal-rule-in)">' +
       wshown.map((r) => barHtml(r, byId[r.id])).join('') + '</div>' : '';
     // ★ 막대 띠는 .cal-grid 를 **안 쓴다** — 세로 괘선이 막대 위를 지나면 안 된다.
-    body += '<div class="card cal-sheet">' + calHang + '<div class="cal-head">' + heads + '</div>' + wbars +
+    body += '<div class="card cal-sheet">' + sheetTop + '<div class="cal-head">' + heads + '</div>' + wbars +
       '<div class="cal-grid">' + cols + '</div></div>';
   }
 
@@ -1273,7 +1278,7 @@ function render() {
     // ⚠️ 이 카드의 padding 16 은 DAY_PX.cardPad 와 같은 값이어야 한다(위 주석).
     // ★ 패딩이 판이 아니라 **안쪽 래퍼**로 내려갔다 — 철끈 띠는 판 끝까지 꽉 차야
     //   철끈으로 읽힌다. DAY_PX.cardPad 와 같아야 한다는 등식은 그대로다.
-    body += '<div class="card cal-sheet">' + calHang +
+    body += '<div class="card cal-sheet">' + sheetTop +
       '<div style="padding:16px 16px 20px">' + allDayBlock + axis + '</div></div>';
   }
 

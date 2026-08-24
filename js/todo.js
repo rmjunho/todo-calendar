@@ -2607,7 +2607,36 @@ if (location.search.includes('selftest')) {
     const hang = s && s.querySelector('.cal-hang');
     ok(hang && s.firstElementChild === hang,
       'the ' + v + ' sheet is hung from a binding strip at its very top', v);
+    // 제호 줄은 철끈 띠 **바로 다음**이다(레퍼런스 달력의 맨 윗줄).
+    const mastEl = s && s.querySelector('.cal-mast');
+    ok(mastEl && hang && hang.nextElementSibling === mastEl,
+      'the ' + v + ' masthead sits directly under the binding strip', v);
+    // 큰 숫자가 판 **정중앙**에 선다. 좌우 칸의 내용 길이가 달라도(연도 vs 버튼 넷)
+    // 안 밀려야 한다 — 이게 grid-template-columns 를 1fr auto 1fr 로 둔 이유다.
+    const numEl = mastEl && mastEl.querySelector('.cal-mast-num');
+    const mid = (el) => { const b = el.getBoundingClientRect(); return (b.left + b.right) / 2; };
+    ok(numEl && Math.abs(mid(numEl) - mid(s)) < 2,
+      'the ' + v + ' masthead number stands dead centre on the sheet',
+      numEl ? 'off by ' + Math.abs(mid(numEl) - mid(s)).toFixed(2) : 'no number');
   });
+  // 가운데 숫자가 뷰마다 다른 값을 든다 — 연간은 연도, 나머지는 달.
+  const bigOf = (v) => { state.view = v; render();
+    return APP().querySelector('.cal-mast-num').textContent; };
+  ok(bigOf('year') === String(state.cy) && bigOf('month') === String(state.cm + 1),
+    'the masthead prints the year in the year view and the month number everywhere else',
+    'year=' + bigOf('year') + ' month=' + bigOf('month'));
+  // ★ 이번 작업에서 가장 깨지기 쉬운 곳: 제목이 판 **바깥 헤더에서 판 안 제호로**
+  //   옮겨 갔다. 위임(closest)이라 자리를 옮겨도 먹어야 하는데, 그게 실제로
+  //   먹는지는 눌러 봐야 안다. 조건 함수가 아니라 **그려진 팝오버**를 본다.
+  state.view = 'month';
+  state.jump = null;
+  render();
+  APP().querySelector('.cal-mast-mid').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  ok(!!state.jump && !!APP().querySelector('.cal-mast-mid').closest('div').querySelector('[data-jy]'),
+    'tapping the big number still opens the year/month popover from its new home inside the sheet',
+    'state.jump=' + JSON.stringify(state.jump));
+  state.jump = null;
+  render();
   // 종이와 벽이 **다른 색**이라야 걸려 있는 것으로 읽힌다. 둘이 같아지면 그림자만
   // 남아 종이의 가장자리가 사라진다 — 색을 리터럴로 적지 않고 다른지만 본다.
   const paperC = getComputedStyle(APP().querySelector('.cal-sheet')).backgroundColor;
