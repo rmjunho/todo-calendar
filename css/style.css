@@ -251,6 +251,11 @@ input:focus,textarea:focus{outline:2px solid var(--tint);outline-offset:-1px}
    ★ 여기만 border-radius 가 50% 다. 앱 전체를 각지게 했지만 펀치 구멍은 원이다. */
 .cal-hang{position:relative;height:22px;flex:none;
   background-color:var(--fill-quaternary);border-bottom:1px solid var(--cal-rule-in)}
+/* 한지 벽. ★ background 단축이 아니라 background-color + background-image 다 —
+   단축으로 쓰면 둘 중 하나를 고칠 때 나머지가 조용히 지워진다(CLAUDE.md).
+   ★ 걸이 구멍(.cal-hang::after)도 이 벽 색으로 뚫는다. 벽 색을 바꾸면 구멍도 따라간다. */
+body{background-color:var(--bg-secondary);background-image:var(--hanji);
+  background-repeat:repeat}
 .cal-hang::after{content:"";position:absolute;left:50%;top:6px;width:11px;height:11px;
   margin-left:-5.5px;border-radius:50%;background-color:var(--bg-secondary);
   box-shadow:inset 0 1px 2px rgba(0,0,0,.35)}
@@ -319,8 +324,16 @@ input:focus,textarea:focus{outline:2px solid var(--tint);outline-offset:-1px}
   --sign-red:#D2282E;
   --sign-blue:#1D4E9C;
   --sign-yellow:#F2C230;
-  /* 바탕 — 벽에 걸린 판때기(page)와 그 위에 칠한 판(card). */
-  --bg-secondary:#E4DAC0;
+  /* 한지 결. **SVG 로 직접 그린다** — 사용자가 보여 준 한지 사진은 전부 워터마크가
+     박힌 유료 스톡이라 쓸 수 없고, 어차피 사진 한 장보다 이쪽이 훨씬 가볍다(약 1.6KB).
+     구성은 둘이다: feTurbulence 로 만든 **종이 알갱이** + 손으로 찍은 **닥섬유 조각**.
+     ★ 타일 이음매가 안 보이는 이유는 알갱이 알파가 0.13 이라서다. 진하게 올리면
+       300px 격자가 눈에 띄기 시작한다. */
+  --hanji:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' seed='11'/%3E%3CfeColorMatrix values='0 0 0 0 0.60 0 0 0 0 0.53 0 0 0 0 0.38 0 0 0 0.13 0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23g)'/%3E%3Cg stroke='%23B7A67C' stroke-width='0.9' stroke-linecap='round' opacity='.42'%3E%3Cline x1='22' y1='36' x2='46' y2='30'/%3E%3Cline x1='72' y1='112' x2='98' y2='120'/%3E%3Cline x1='141' y1='58' x2='160' y2='49'/%3E%3Cline x1='209' y1='92' x2='233' y2='99'/%3E%3Cline x1='56' y1='201' x2='79' y2='207'/%3E%3Cline x1='121' y1='251' x2='147' y2='243'/%3E%3Cline x1='191' y1='179' x2='207' y2='196'/%3E%3Cline x1='248' y1='41' x2='265' y2='59'/%3E%3C/g%3E%3Cg stroke='%23A9A497' stroke-width='0.8' stroke-linecap='round' opacity='.34'%3E%3Cline x1='31' y1='259' x2='51' y2='267'/%3E%3Cline x1='166' y1='214' x2='191' y2='209'/%3E%3Cline x1='239' y1='241' x2='263' y2='233'/%3E%3Cline x1='96' y1='151' x2='113' y2='141'/%3E%3Cline x1='272' y1='139' x2='287' y2='157'/%3E%3Cline x1='12' y1='121' x2='29' y2='113'/%3E%3C/g%3E%3C/svg%3E");
+  /* 바탕 — 한지 벽(page)과 그 위에 칠한 판(card).
+     ★ 벽을 조금 밝혔다(#E4DAC0 → #EAE1CB). 한지는 사용자가 준 사진처럼 옅은 미색이고,
+       그래도 흰 종이(--cal-paper)와는 갈린다 — selftest 가 그 둘이 다른지 잰다. */
+  --bg-secondary:#EAE1CB;
   --bg:#F3EBD8;
   --bg-tertiary:#F3EBD8;
   --bg-grouped:#E4DAC0;
