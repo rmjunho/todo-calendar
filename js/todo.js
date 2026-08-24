@@ -2204,26 +2204,8 @@ if (location.search.includes('selftest')) {
 
   // 일정을 할 일과 갈라 보이게 하는 것: 여러 날은 **색 밑줄**, 하루짜리는 **색 점**.
   // 할 일 알약은 같은 색의 16% 틴트 + 색 글자 그대로다.
-  // ★ onColor 의 조건식(L > 0.179)을 기댓값으로 옮겨 적지 않는다 — 여기서 세는 것은
-  //   WCAG 대비비고, 그건 onColor 가 어떤 규칙을 쓰든 독립적으로 성립해야 할 성질이다.
-  const lum = (hex) => {
-    const n = parseInt(hex.slice(1), 16);
-    const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
-    return 0.2126 * f((n >> 16) & 255) + 0.7152 * f((n >> 8) & 255) + 0.0722 * f(n & 255);
-  };
-  const ratio = (bg, fg) => {
-    const a = lum(bg) + 0.05, b = lum(fg) + 0.05;
-    return a > b ? a / b : b / a;
-  };
-  const worst = CAT_COLORS.concat([CAT_NONE.color])
-    .map((c) => ({ c: c, r: ratio(c, onColor(c)) })).sort((a, b) => a.r - b.r)[0];
-  ok(worst.r >= 4.5, 'the label onColor() picks is readable on every category colour',
-    worst.c + ' → ' + onColor(worst.c) + ' = ' + worst.r.toFixed(2) + ':1');
-  // 흰색으로 고정했다면 어땠는지 — 이 검사가 onColor 의 존재 이유다.
-  ok(CAT_COLORS.some((c) => ratio(c, '#FFFFFF') < 3),
-    'a fixed white label would have been unreadable on the light half of the palette',
-    CAT_COLORS.map((c) => ratio(c, '#FFFFFF').toFixed(1)).join(' '));
-
+  // ★ 여기 있던 onColor() 대비 검사 두 개를 뺐다 — 그 함수를 지웠기 때문이다(위 참고).
+  //   원색 판 자체가 없어져서 "판 위 글자가 읽히나" 라는 질문이 성립하지 않는다.
   state.items = [EV({ id: 'many', span: 3, title: '휴가', date: '2026-08-03' }),
     EV({ id: 'oneday', span: 1, title: '회의', date: '2026-08-19' })];
   render();
