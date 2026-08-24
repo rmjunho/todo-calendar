@@ -2563,6 +2563,102 @@ if (location.search.includes('selftest')) {
   state.showLogin = false;
   Object.assign(state, keepAuth);
 
+  // --- 옛 인쇄 달력 격자 ---
+  // 사용자가 벽걸이 달력 사진을 레퍼런스로 줘서 네 뷰의 본문을 괘선 격자로 바꿨다.
+  // 아래는 **그려진 DOM** 만 본다 — 클래스가 붙었는지가 아니라 선이 실제로 났는지다.
+  // ★ user·showLogin 까지 붙잡는다. 바로 앞 블록이 로그인 화면을 그리려고 user 를
+  //   비워 두는데, 그대로 render() 하면 달력이 아니라 로그인 화면이 나온다
+  //   (실제로 여기서 .cal-sheet 가 null 이라 터졌다).
+  const kCal = { items: state.items, goals: state.goals, cats: state.cats, view: state.view,
+    cy: state.cy, cm: state.cm, selected: state.selected, filter: state.filter, kind: state.kind,
+    user: state.user, showLogin: state.showLogin, booting: state.booting };
+  const nowCal = new Date();
+  state.user = { uid: 'u', name: 'selftest', email: 'a@b.co', role: 'user', status: 'approved' };
+  state.showLogin = false;
+  state.booting = false;
+  state.cats = [];
+  state.filter = null;
+  state.kind = '';
+  state.goals = [{ id: 'cg', title: '목표', scope: 'month', m: 2, y: nowCal.getFullYear() }];
+  state.items = [
+    { id: 'cspan', kind: 'event', span: 4, title: '출장', repeat: 'none', time: '', endTime: '', pri: 'none',
+      date: fmt(new Date(nowCal.getFullYear(), nowCal.getMonth(), 9)) },
+    { id: 'ctime', kind: 'todo', span: 1, title: '회의', repeat: 'none', time: '09:00', endTime: '10:00',
+      pri: 'none', date: fmt(nowCal) }
+  ];
+  state.selected = fmt(nowCal);
+  state.cy = nowCal.getFullYear();
+  state.cm = nowCal.getMonth();
+
+  VIEWS.forEach((v) => {
+    state.view = v;
+    render();
+    const s = APP().querySelector('.cal-sheet');
+    ok(s && parseFloat(getComputedStyle(s).borderTopLeftRadius) === 0,
+      'the ' + v + ' sheet is square — a printed wall calendar has no rounded corners', v);
+  });
+
+  state.view = 'month';
+  render();
+  const mCells = [...APP().querySelectorAll('.cell')];
+  const mSheet = APP().querySelector('.cal-sheet');
+  const mHead = APP().querySelector('.cal-head');
+  // ★ 굵기를 숫자로 적지 않는다. 1.5px 로 뒀을 때 dpr 1.25 에서 안쪽 괘선과 **같은
+  //   굵기로 잘려** 나온 적이 있다(둘 다 0.8px 로 실측 — 크롬이 device px 로 내린다).
+  //   리터럴로 봤으면 못 잡았다. 틀이 틀로 읽히려면 안쪽보다 굵기만 하면 된다.
+  const frameW = parseFloat(getComputedStyle(mSheet).borderTopWidth);
+  const innerW = parseFloat(getComputedStyle(mCells[1]).borderLeftWidth);
+  ok(frameW > innerW,
+    'the outer frame prints heavier than the inner rules — otherwise the sheet has no edge',
+    'frame=' + frameW + ' inner=' + innerW);
+  ok(parseFloat(getComputedStyle(mCells[0]).borderLeftWidth) === 0 && innerW > 0,
+    'the seven columns are ruled apart, and the first column leans on the frame instead of doubling it',
+    'first=' + getComputedStyle(mCells[0]).borderLeftWidth + ' second=' + innerW);
+  ok(getComputedStyle(mHead).borderBottomStyle === 'double'
+    && parseFloat(getComputedStyle(mHead).borderBottomWidth) > innerW,
+    'the weekday row is cut off by a double rule, heavier than the rules between the cells',
+    getComputedStyle(mHead).borderBottomStyle + ' ' + getComputedStyle(mHead).borderBottomWidth);
+  // 일·평일·토가 서로 다른 잉크로 나온다. 셋을 **서로** 비교한다 — 기댓값을 적어
+  // 두면 색 토큰을 바꿀 때마다 이 줄을 같이 고쳐야 하고, 그러면 검사가 아니게 된다.
+  const ink = (i) => getComputedStyle(mCells[i].querySelector('.cal-day')).color;
+  ok(ink(7) !== ink(10) && ink(13) !== ink(10) && ink(7) !== ink(13),
+    'Sunday, a weekday and Saturday print in three different inks',
+    ink(7) + ' / ' + ink(10) + ' / ' + ink(13));
+  const tStamp = APP().querySelector('[data-day="' + fmt(nowCal) + '"] .cal-day');
+  ok(tStamp && parseFloat(getComputedStyle(tStamp).borderTopLeftRadius) === 0
+    && !clear(getComputedStyle(tStamp).backgroundColor),
+    'today is stamped as a filled square, not a round chip',
+    tStamp && getComputedStyle(tStamp).borderTopLeftRadius + ' ' + getComputedStyle(tStamp).backgroundColor);
+  // ★ 이번 작업에서 가장 깨지기 쉬운 곳. 칸이 비워 두는 자리(barSpacer)와 막대 층의
+  //   첫 줄 높이가 **따로 계산**되는데, 괘선을 .5 → 1px 로 올릴 때 한쪽만 올리면
+  //   막대가 주마다 어긋난다. 둘을 각각 재서 맞는지 본다.
+  const bSpace = APP().querySelector('[data-barspace]');
+  const bLayer = APP().querySelector('[data-bars]');
+  const reserved = bSpace && bSpace.getBoundingClientRect().top
+    - bSpace.parentElement.getBoundingClientRect().top;
+  const spacerH = bLayer && bLayer.firstElementChild.getBoundingClientRect().height;
+  ok(bSpace && bLayer && Math.abs(reserved - spacerH) < 0.5,
+    'the bar layer still starts exactly where the cell reserved room for it',
+    'cell=' + reserved + ' layer=' + spacerH);
+
+  state.view = 'year';
+  render();
+  const mons = [...APP().querySelectorAll('.cal-months > button')];
+  ok(mons.length === 12
+    && Math.abs(mons[0].getBoundingClientRect().right - mons[1].getBoundingClientRect().left) < 0.5,
+    'the twelve month blocks share their rules instead of floating apart as separate chips',
+    mons.length + ' blocks, gap=' + (mons.length > 1
+      ? mons[1].getBoundingClientRect().left - mons[0].getBoundingClientRect().right : '?'));
+
+  state.view = 'day';
+  render();
+  const axis = APP().querySelector('.cal-axis');
+  ok(axis && parseFloat(getComputedStyle(axis, '::before').borderLeftWidth) > 0,
+    'the hour labels are ruled off from the day itself',
+    axis && getComputedStyle(axis, '::before').borderLeftWidth);
+
+  Object.assign(state, kCal);
+
   Object.assign(state, kSpan);
   Object.assign(state, kGoal);
   Object.assign(state, kCat);
