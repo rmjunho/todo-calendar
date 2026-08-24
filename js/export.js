@@ -31,20 +31,28 @@ const EX_COLORS = {
   //   (화면의 --cal-rule 이 var(--label) 이다).
   // ★ calRed / calBlue 는 **격자 전용 오프셋 잉크**다. tint/sun 은 그대로 두었다 —
   //   상세 목록의 체크·배지가 여전히 그 색이고, 화면에서도 --tint 는 안 건드렸다.
+  // 밝은 테마: 벽에 걸린 판때기(page) 위의 칠한 판(card). label2/3·sep·ruleIn·head 는
+  // 화면의 반투명 토큰을 **card 위에 미리 합성**한 값이다(캔버스에는 color-mix 가 없다).
+  //   ink=(28,24,19) over card=(243,235,216) — .62→#6E685E · .40→#9D9789 · .38→#A19B8D
+  //   .42→#999285(ruleIn) · .06→#E6DECC(head)
+  //   card 를 고치면 이 다섯을 **다시 계산할 것.**
   light: {
-    page: '#F2F2F7', card: '#FCFAF6',
-    label: '#000000', label2: '#6E6E73', label3: '#8E8E93',
-    sep: '#D8D8DC', ruleIn: '#929190', head: '#F2EFE9',
-    calRed: '#DE2E24', calBlue: '#1450A3',
-    tint: '#007AFF', onTint: '#FFFFFF', sun: '#FF3B30',
+    page: '#E4DAC0', card: '#F3EBD8',
+    label: '#1C1813', label2: '#6E685E', label3: '#9D9789',
+    sep: '#A19B8D', ruleIn: '#999285', head: '#E6DECC',
+    calRed: '#D2282E', calBlue: '#1D4E9C',
+    tint: '#1D4E9C', onTint: '#F3EBD8', sun: '#D2282E',
     pillA: 0.16, doneA: 0.42
   },
+  // 어두운 테마: 때 탄 나무판에 크림 글자. 같은 방식으로 합성했다.
+  //   cream=(239,231,211) over card=(34,29,21) — .62→#A19A8B · .40→#746E61 · .34→#686256
+  //   .42→#787265(ruleIn) · .06→#2E2920(head)
   dark: {
-    page: '#000000', card: '#1C1C1E',
-    label: '#FFFFFF', label2: '#A0A0A6', label3: '#6E6E73',
-    sep: '#38383A', ruleIn: '#7B7B7D', head: '#2A2A2C',
-    calRed: '#FF6B5E', calBlue: '#6FA6FF',
-    tint: '#0A84FF', onTint: '#FFFFFF', sun: '#FF453A',
+    page: '#14110C', card: '#221D15',
+    label: '#EFE7D3', label2: '#A19A8B', label3: '#746E61',
+    sep: '#686256', ruleIn: '#787265', head: '#2E2920',
+    calRed: '#F0605A', calBlue: '#7FA9E4',
+    tint: '#7FA9E4', onTint: '#14110C', sun: '#F0605A',
     pillA: 0.28, doneA: 0.40
   }
 };
@@ -867,23 +875,23 @@ function renderExportSheet() {
     'font-weight:600;color:var(--label-secondary)">' + esc(msg) + '</div>';
   const preview = e.busy ? placeholder(t('exp.building'))
     : e.url ? '<img src="' + e.url + '" alt="' + esc(t('exp.alt')) + '" style="display:block;width:100%;' +
-      'max-height:46vh;object-fit:contain;object-position:top;border-radius:12px">'
+      'max-height:46vh;object-fit:contain;object-position:top;border-radius:3px">'
     : placeholder(t('exp.fail'));
 
   return '<div data-act="closeExport" style="position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.35);animation:tcFade .2s ease-out"></div>' +
     '<div style="position:fixed;left:0;right:0;bottom:0;z-index:101;display:flex;justify-content:center;pointer-events:none">' +
     '<div role="dialog" aria-modal="true" aria-label="' + esc(t('exp.title')) + '" style="pointer-events:auto;' +
       'width:min(560px,100vw);max-height:88vh;overflow:auto;background-color:var(--bg);' +
-      'border-radius:20px 20px 0 0;box-shadow:var(--shadow-3);padding:12px 20px 30px;' +
+      'border-radius:3px 3px 0 0;box-shadow:var(--shadow-3);padding:12px 20px 30px;' +
       'animation:tcSheet .3s cubic-bezier(.34,1.3,.64,1)">' +
       '<div style="width:38px;height:5px;border-radius:3px;background-color:var(--fill-secondary);margin:0 auto 12px"></div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +
         '<h3 style="margin:0;font-size:19px;font-weight:700">' + esc(t('exp.title')) + '</h3>' +
         '<button data-act="closeExport" aria-label="' + esc(t('a.close')) + '" style="border:none;cursor:pointer;' +
-          'width:30px;height:30px;border-radius:50%;background-color:var(--fill-tertiary);color:var(--label-secondary);' +
+          'width:30px;height:30px;border-radius:3px;background-color:var(--fill-tertiary);color:var(--label-secondary);' +
           'display:flex;align-items:center;justify-content:center;padding:0">' + icon('xmark', 14) + '</button></div>' +
 
-      '<div style="background-color:var(--fill-quaternary);border-radius:14px;padding:8px;overflow:hidden">' +
+      '<div style="background-color:var(--fill-quaternary);border-radius:3px;padding:8px;overflow:hidden">' +
         preview + '</div>' +
 
       // 일간 뷰는 이미 아젠다 형식이라 [상세 목록 포함] 을 안 보여 준다.
@@ -894,7 +902,7 @@ function renderExportSheet() {
       expToggle('memo', 'exp.memo', 'exp.hint', e) +
 
       (e.err ? '<div role="alert" style="margin-top:14px;font-size:13px;font-weight:600;color:#FF3B30;' +
-        'background-color:color-mix(in srgb, #FF3B30 12%, transparent);padding:10px 12px;border-radius:10px">' +
+        'background-color:color-mix(in srgb, #FF3B30 12%, transparent);padding:10px 12px;border-radius:3px">' +
         esc(e.err) + '</div>' : '') +
 
       '<div style="display:flex;gap:10px;margin-top:18px">' +

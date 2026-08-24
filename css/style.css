@@ -361,7 +361,11 @@ input:focus,textarea:focus{outline:2px solid var(--tint);outline-offset:-1px}
 /* --- 하드코딩된 모서리·재질을 간판으로 되돌린다 -----------------------------
    아래 값들은 토큰이 아니라 이 파일 위쪽에 px 로 박혀 있어서 :root 만 고쳐서는
    안 따라온다. **정의보다 뒤에 와야** 이긴다 — 이 블록을 위로 옮기지 말 것. */
-.card{border-radius:3px}
+/* ★ :not(.cal-sheet) 이 꼭 필요하다. 이 블록이 .cal-sheet 정의보다 **뒤**라서
+   그냥 `.card` 로 쓰면 명시도가 같아 나중 규칙이 이기고, 달력 판까지 3px 로
+   둥글어진다(실제로 그렇게 만들었다가 selftest 4개가 잡았다).
+   달력은 칠한 판이 아니라 **종이**다 — 완전히 각져야 한다. */
+.card:not(.cal-sheet){border-radius:3px}
 .field{border-radius:2px}
 .seg-wrap{border-radius:3px;box-shadow:0 0 0 1.5px var(--sign-ink)}
 .seg{border-radius:2px}

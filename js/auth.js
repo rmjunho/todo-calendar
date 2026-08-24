@@ -171,13 +171,13 @@ function renderAgree() {
   // 체크 표시는 색으로만 켜고 끈다 — 꺼져 있어도 자리를 차지해야 줄이 안 흔들린다.
   // aria-hidden: icon() 이 <svg aria-label="checkmark"> 를 만드는데, 그대로 두면
   // 체크박스 이름이 "checkmark 이용약관 동의" 로 읽힌다.
-  const box = (on) => '<span aria-hidden="true" style="flex:none;width:22px;height:22px;border-radius:7px;display:flex;' +
+  const box = (on) => '<span aria-hidden="true" style="flex:none;width:22px;height:22px;border-radius:2px;display:flex;' +
     'align-items:center;justify-content:center;transition:all .15s ease;' +
     (on ? 'background-color:var(--tint);color:var(--on-tint)'
         : 'box-shadow:inset 0 0 0 1.5px var(--separator);color:transparent') + '">' +
     icon('checkmark', 13) + '</span>';
 
-  const tag = (t, req) => '<span style="flex:none;font-size:11px;font-weight:700;padding:2px 6px;border-radius:5px;' +
+  const tag = (t, req) => '<span style="flex:none;font-size:11px;font-weight:700;padding:2px 6px;border-radius:2px;' +
     (req ? 'color:var(--tint);background:color-mix(in srgb, var(--tint) 14%, transparent)'
          : 'color:var(--label-tertiary);background:var(--fill-quaternary)') + '">' + t + '</span>';
 
@@ -239,13 +239,13 @@ function renderLegalSheet() {
   return '<div data-act="closeLegal" style="position:fixed;inset:0;z-index:110;background:rgba(0,0,0,.35);animation:tcFade .2s ease-out"></div>' +
     '<div style="position:fixed;left:0;right:0;bottom:0;z-index:111;display:flex;justify-content:center;pointer-events:none">' +
     '<div role="dialog" aria-modal="true" aria-label="' + esc(d.title) + '" style="pointer-events:auto;' +
-      'width:min(560px,100vw);max-height:88vh;overflow:auto;background:var(--bg);border-radius:20px 20px 0 0;' +
+      'width:min(560px,100vw);max-height:88vh;overflow:auto;background:var(--bg);border-radius:3px 3px 0 0;' +
       'box-shadow:var(--shadow-3);padding:12px 20px 30px;animation:tcSheet .3s cubic-bezier(.34,1.3,.64,1)">' +
       '<div style="width:38px;height:5px;border-radius:3px;background:var(--fill-secondary);margin:0 auto 12px"></div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px">' +
         '<h3 style="margin:0;font-size:19px;font-weight:700">' + esc(d.title) + '</h3>' +
         '<button data-act="closeLegal" aria-label="' + esc(t('a.close')) + '" style="border:none;cursor:pointer;width:30px;height:30px;' +
-          'border-radius:50%;background:var(--fill-tertiary);color:var(--label-secondary);display:flex;' +
+          'border-radius:3px;background:var(--fill-tertiary);color:var(--label-secondary);display:flex;' +
           'align-items:center;justify-content:center;padding:0">' + icon('xmark', 14) + '</button></div>' +
       '<div class="legal">' + d.body + '</div>' +
       '<div style="margin-top:22px;text-align:center">' +
@@ -305,10 +305,10 @@ function renderAuth() {
         (isLogin ? '' : renderAgree()) +
 
         (a.error ? '<div role="alert" style="margin-top:14px;font-size:13px;font-weight:600;color:#FF3B30;' +
-          'background:color-mix(in srgb, #FF3B30 12%, transparent);padding:10px 12px;border-radius:10px">' +
+          'background:color-mix(in srgb, #FF3B30 12%, transparent);padding:10px 12px;border-radius:3px">' +
           esc(a.error) + '</div>' : '') +
         (a.notice ? '<div role="status" style="margin-top:14px;font-size:13px;font-weight:600;color:#34C759;' +
-          'background:color-mix(in srgb, #34C759 14%, transparent);padding:10px 12px;border-radius:10px">' +
+          'background:color-mix(in srgb, #34C759 14%, transparent);padding:10px 12px;border-radius:3px">' +
           esc(a.notice) + '</div>' : '') +
 
         '<div data-raise="tint" style="display:block;margin-top:20px">' +
@@ -364,7 +364,7 @@ function renderSettingsSheet() {
           'maxlength="6" placeholder="••••••" value="' + esc(d.pin) + '" ' +
           'style="padding:12px 14px;font-size:16px;letter-spacing:.35em">' +
         (d.error ? '<div role="alert" style="margin-top:10px;font-size:13px;font-weight:600;color:#FF3B30;' +
-          'background:color-mix(in srgb, #FF3B30 12%, transparent);padding:10px 12px;border-radius:10px">' +
+          'background:color-mix(in srgb, #FF3B30 12%, transparent);padding:10px 12px;border-radius:3px">' +
           esc(d.error) + '</div>' : '') +
         '<div style="display:flex;gap:10px;margin-top:14px">' +
           '<button class="btn btn-gray btn-md" data-act="cancelDelete" style="flex:1"' +
@@ -379,13 +379,13 @@ function renderSettingsSheet() {
   return '<div data-act="closeSettings" style="position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.35);animation:tcFade .2s ease-out"></div>' +
     '<div style="position:fixed;left:0;right:0;bottom:0;z-index:101;display:flex;justify-content:center;pointer-events:none">' +
     '<div role="dialog" aria-modal="true" aria-label="설정" style="pointer-events:auto;width:min(560px,100vw);' +
-      'max-height:88vh;overflow:auto;background:var(--bg);border-radius:20px 20px 0 0;box-shadow:var(--shadow-3);' +
+      'max-height:88vh;overflow:auto;background:var(--bg);border-radius:3px 3px 0 0;box-shadow:var(--shadow-3);' +
       'padding:12px 20px 30px;animation:tcSheet .3s cubic-bezier(.34,1.3,.64,1)">' +
       '<div style="width:38px;height:5px;border-radius:3px;background:var(--fill-secondary);margin:0 auto 12px"></div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
         '<h3 style="margin:0;font-size:19px;font-weight:700">' + esc(t('set.title')) + '</h3>' +
         '<button data-act="closeSettings" aria-label="' + esc(t('a.close')) + '" style="border:none;cursor:pointer;width:30px;height:30px;' +
-          'border-radius:50%;background:var(--fill-tertiary);color:var(--label-secondary);display:flex;' +
+          'border-radius:3px;background:var(--fill-tertiary);color:var(--label-secondary);display:flex;' +
           'align-items:center;justify-content:center;padding:0">' + icon('xmark', 14) + '</button></div>' +
 
       '<div style="font-size:13px;font-weight:700;color:var(--label-secondary);margin:18px 4px 2px">' +
@@ -439,7 +439,7 @@ const AGE_BADGE = {
 };
 function ageBadge(u) {
   const b = (u.agreements && AGE_BADGE[u.agreements.age]) || ['adm.ageNone', 'var(--label-tertiary)'];
-  return '<span style="flex:none;font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;color:' +
+  return '<span style="flex:none;font-size:11px;font-weight:700;padding:2px 7px;border-radius:2px;color:' +
     b[1] + ';background:color-mix(in srgb, ' + b[1] + ' 14%, transparent)">' + esc(t(b[0])) + '</span>';
 }
 
@@ -481,7 +481,7 @@ function admRows() {
           (u.role === 'admin' ? '<span style="font-size:11px;font-weight:600;color:var(--tint)">' +
             esc(t('hdr.admin')) + '</span>' : '') +
           ageBadge(u) +
-          (blocked ? '<span style="font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;color:#FF3B30;' +
+          (blocked ? '<span style="font-size:11px;font-weight:700;padding:2px 7px;border-radius:2px;color:#FF3B30;' +
             'background:color-mix(in srgb, #FF3B30 14%, transparent)">' + esc(statusLabel(u.status)) +
             '</span>' : '') + '</div>' +
         '<div class="trunc" style="font-size:13px;color:var(--label-secondary);margin-top:1px">' +
@@ -518,7 +518,7 @@ function renderAdminSheet() {
   const week = Date.now() - 7 * 86400000;
   const isNew = (u) => !!(u.createdAt && u.createdAt.toDate && u.createdAt.toDate().getTime() >= week);
   const stat = (label, n, color) =>
-    '<div style="flex:1;min-width:0;background-color:var(--bg-secondary);border-radius:12px;padding:12px 14px">' +
+    '<div style="flex:1;min-width:0;background-color:var(--bg-secondary);border-radius:3px;padding:12px 14px">' +
       '<div style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:' + color + '">' + n + '</div>' +
       '<div class="trunc" style="font-size:12px;font-weight:600;color:var(--label-secondary);margin-top:2px">' +
         esc(label) + '</div></div>';
@@ -539,13 +539,13 @@ function renderAdminSheet() {
   return '<div data-act="closeAdmin" style="position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.35);animation:tcFade .2s ease-out"></div>' +
     '<div style="position:fixed;left:0;right:0;bottom:0;z-index:101;display:flex;justify-content:center;pointer-events:none">' +
     '<div role="dialog" aria-modal="true" style="pointer-events:auto;width:min(560px,100vw);max-height:88vh;overflow:auto;' +
-      'background:var(--bg);border-radius:20px 20px 0 0;box-shadow:var(--shadow-3);padding:12px 20px 30px;' +
+      'background:var(--bg);border-radius:3px 3px 0 0;box-shadow:var(--shadow-3);padding:12px 20px 30px;' +
       'animation:tcSheet .3s cubic-bezier(.34,1.3,.64,1)">' +
       '<div style="width:38px;height:5px;border-radius:3px;background:var(--fill-secondary);margin:0 auto 12px"></div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
         '<h3 style="margin:0;font-size:19px;font-weight:700">' + esc(t('adm.title')) + '</h3>' +
         '<button data-act="closeAdmin" aria-label="' + esc(t('a.close')) + '" style="border:none;cursor:pointer;width:30px;height:30px;' +
-          'border-radius:50%;background:var(--fill-tertiary);color:var(--label-secondary);display:flex;' +
+          'border-radius:3px;background:var(--fill-tertiary);color:var(--label-secondary);display:flex;' +
           'align-items:center;justify-content:center;padding:0">' + icon('xmark', 14) + '</button></div>' +
 
       stats + tools +

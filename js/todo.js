@@ -102,7 +102,7 @@ function renderSheet() {
       (on ? 'color-mix(in srgb, ' + c.color + ' 16%, transparent)' : 'var(--fill-tertiary)') +
       ';color:' + (on ? c.color : 'var(--label-secondary)') +
       (on ? ';box-shadow:inset 0 0 0 1.5px ' + c.color + ', var(--tc-raise-sm)' : '') + '">' +
-      '<span style="width:9px;height:9px;border-radius:50%;background:' + c.color + '"></span>' +
+      '<span style="width:9px;height:9px;border-radius:3px;background:' + c.color + '"></span>' +
       esc(catName(c)) + '</button>';
   }).join('');
 
@@ -148,7 +148,7 @@ function renderSheet() {
       // 매일 반복되는 것으로 읽힌다.
       (ev && f.hasSpan ? '<div style="font-size:12px;color:var(--label-tertiary);margin-top:6px">' +
         esc(t('form.evTimeHint')) + '</div>' : '')
-    : '<div style="padding:11px 14px;font-size:14px;color:var(--label-tertiary);background:var(--fill-quaternary);border-radius:12px">' +
+    : '<div style="padding:11px 14px;font-size:14px;color:var(--label-tertiary);background:var(--fill-quaternary);border-radius:3px">' +
       esc(t('item.allDay')) + '</div>';
 
   // 종류. 할 일과 일정은 달력에서 다르게 그려지므로(알약 / 막대) 제일 먼저 고른다.
@@ -174,18 +174,18 @@ function renderSheet() {
             esc(spanLabel(f)) + '</span></div>' +
         '<div id="formSpanWarn"' + (spanOk(f) ? ' hidden' : '') +
           ' style="font-size:12px;color:#FF3B30;margin-top:6px">' + esc(spanWarn(f)) + '</div>'
-      : '<div style="padding:11px 14px;font-size:14px;color:var(--label-tertiary);background:var(--fill-quaternary);border-radius:12px">' +
+      : '<div style="padding:11px 14px;font-size:14px;color:var(--label-tertiary);background:var(--fill-quaternary);border-radius:3px">' +
         esc(t('form.spanOne')) + '</div>');
 
   return '<div data-act="close" style="position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.35);animation:tcFade .2s ease-out"></div>' +
     '<div style="position:fixed;left:0;right:0;bottom:0;z-index:101;display:flex;justify-content:center;pointer-events:none">' +
     '<div id="sheet" role="dialog" aria-modal="true" style="pointer-events:auto;width:min(560px,100vw);max-height:88vh;overflow:auto;' +
-      'background:var(--bg);border-radius:20px 20px 0 0;box-shadow:var(--shadow-3);padding:12px 20px 30px;' +
+      'background:var(--bg);border-radius:3px 3px 0 0;box-shadow:var(--shadow-3);padding:12px 20px 30px;' +
       'animation:tcSheet .3s cubic-bezier(.34,1.3,.64,1)">' +
       '<div style="width:38px;height:5px;border-radius:3px;background:var(--fill-secondary);margin:0 auto 12px"></div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
         '<h3 style="margin:0;font-size:19px;font-weight:700">' + esc(t(state.editingId ? 'form.edit' : 'form.new')) + '</h3>' +
-        '<button data-act="close" aria-label="' + esc(t('a.close')) + '" style="border:none;cursor:pointer;width:30px;height:30px;border-radius:50%;' +
+        '<button data-act="close" aria-label="' + esc(t('a.close')) + '" style="border:none;cursor:pointer;width:30px;height:30px;border-radius:3px;' +
           'background:var(--fill-tertiary);color:var(--label-secondary);display:flex;align-items:center;justify-content:center;padding:0">' +
           icon('xmark', 14) + '</button></div>' + kindRow +
 
@@ -448,7 +448,7 @@ function catDragPaint() {
     r.style.position = held ? 'relative' : '';
     r.style.zIndex = held ? '2' : '';
     r.style.backgroundColor = held ? 'var(--bg-secondary)' : '';
-    r.style.borderRadius = held ? '10px' : '';
+    r.style.borderRadius = held ? '3px' : '';
     r.style.boxShadow = held ? 'var(--shadow-3)' : '';
   });
 }
@@ -474,7 +474,7 @@ function renderCatSheet() {
     const swatches = CAT_COLORS.map((c) => {
       const on = d.color === c;
       return '<button data-catcolor="' + c + '" aria-label="' + c + '" aria-pressed="' + on + '" ' +
-        'style="width:32px;height:32px;border-radius:50%;border:none;cursor:pointer;padding:0;' +
+        'style="width:32px;height:32px;border-radius:3px;border:none;cursor:pointer;padding:0;' +
         'background-color:' + c + (on ? ';box-shadow:0 0 0 2px var(--bg), 0 0 0 4px ' + c : '') + '"></button>';
     }).join('');
     body =
@@ -508,7 +508,7 @@ function renderCatSheet() {
       '<div data-catedit="' + esc(c.id) + '" style="display:flex;align-items:center;gap:12px;cursor:pointer;' +
         'user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;' +
         'padding:13px 4px;border-top:' + (i === 0 ? 'none' : '.5px solid var(--separator)') + '">' +
-        '<span style="width:12px;height:12px;border-radius:50%;flex:none;background-color:' + c.color + '"></span>' +
+        '<span style="width:12px;height:12px;border-radius:3px;flex:none;background-color:' + c.color + '"></span>' +
         '<span class="trunc" style="flex:1;font-size:15px;font-weight:600">' + esc(c.name) + '</span>' +
         (state.cats.length > 1 ? '<span aria-hidden="true" style="color:var(--label-quaternary);display:flex">' +
           icon('line.3.horizontal', 16) + '</span>' : '') +
@@ -533,13 +533,13 @@ function renderCatSheet() {
   return '<div data-act="closeCats" style="position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.35);animation:tcFade .2s ease-out"></div>' +
     '<div style="position:fixed;left:0;right:0;bottom:0;z-index:101;display:flex;justify-content:center;pointer-events:none">' +
     '<div role="dialog" aria-modal="true" style="pointer-events:auto;width:min(560px,100vw);max-height:88vh;overflow:auto;' +
-      'background:var(--bg);border-radius:20px 20px 0 0;box-shadow:var(--shadow-3);padding:12px 20px 30px;' +
+      'background:var(--bg);border-radius:3px 3px 0 0;box-shadow:var(--shadow-3);padding:12px 20px 30px;' +
       'animation:tcSheet .28s cubic-bezier(.32,.72,0,1)">' +
       '<div style="width:38px;height:5px;border-radius:3px;background:var(--fill-secondary);margin:0 auto 12px"></div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
         '<h3 style="margin:0;font-size:19px;font-weight:700">' +
           esc(t(d ? (d.id ? 'cat.edit' : 'cat.add') : 'cat.manage')) + '</h3>' +
-        '<button data-act="closeCats" aria-label="' + esc(t('a.close')) + '" style="border:none;cursor:pointer;width:30px;height:30px;border-radius:50%;' +
+        '<button data-act="closeCats" aria-label="' + esc(t('a.close')) + '" style="border:none;cursor:pointer;width:30px;height:30px;border-radius:3px;' +
           'background:var(--fill-tertiary);color:var(--label-secondary);display:flex;align-items:center;justify-content:center;padding:0">' +
           icon('xmark', 14) + '</button></div>' +
       body +
@@ -671,7 +671,7 @@ function renderGoalSheet() {
       ? '<input class="field" type="number" inputmode="numeric" data-g="d" min="1" max="' +
         lastDayOf(g.y, g.m) + '" value="' + goalDay(g) + '" style="padding:11px 14px;font-size:15px">'
       : '<div style="padding:11px 14px;font-size:14px;color:var(--label-tertiary);' +
-        'background-color:var(--fill-quaternary);border-radius:12px">' +
+        'background-color:var(--fill-quaternary);border-radius:3px">' +
         esc(t('goal.by', monthShort(g.m))) + '</div>');
 
   // 카테고리 칩. 입력 시트와 같은 .pri 를 쓴다 — 다만 data-cat 은 state.form 을
@@ -682,19 +682,19 @@ function renderGoalSheet() {
       (on ? 'color-mix(in srgb, ' + c.color + ' 16%, transparent)' : 'var(--fill-tertiary)') +
       ';color:' + (on ? c.color : 'var(--label-secondary)') +
       (on ? ';box-shadow:inset 0 0 0 1.5px ' + c.color + ', var(--tc-raise-sm)' : '') + '">' +
-      '<span style="width:9px;height:9px;border-radius:50%;background-color:' + c.color + '"></span>' +
+      '<span style="width:9px;height:9px;border-radius:3px;background-color:' + c.color + '"></span>' +
       esc(catName(c)) + '</button>';
   }).join('');
 
   return '<div data-act="closeGoal" style="position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.35);animation:tcFade .2s ease-out"></div>' +
     '<div style="position:fixed;left:0;right:0;bottom:0;z-index:101;display:flex;justify-content:center;pointer-events:none">' +
     '<div role="dialog" aria-modal="true" style="pointer-events:auto;width:min(560px,100vw);max-height:88vh;overflow:auto;' +
-      'background:var(--bg);border-radius:20px 20px 0 0;box-shadow:var(--shadow-3);padding:12px 20px 30px;' +
+      'background:var(--bg);border-radius:3px 3px 0 0;box-shadow:var(--shadow-3);padding:12px 20px 30px;' +
       'animation:tcSheet .3s cubic-bezier(.34,1.3,.64,1)">' +
       '<div style="width:38px;height:5px;border-radius:3px;background:var(--fill-secondary);margin:0 auto 12px"></div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
         '<h3 style="margin:0;font-size:19px;font-weight:700">' + esc(t(g.id ? 'goal.edit' : 'goal.new')) + '</h3>' +
-        '<button data-act="closeGoal" aria-label="' + esc(t('a.close')) + '" style="border:none;cursor:pointer;width:30px;height:30px;border-radius:50%;' +
+        '<button data-act="closeGoal" aria-label="' + esc(t('a.close')) + '" style="border:none;cursor:pointer;width:30px;height:30px;border-radius:3px;' +
           'background:var(--fill-tertiary);color:var(--label-secondary);display:flex;align-items:center;justify-content:center;padding:0">' +
           icon('xmark', 14) + '</button></div>' +
 
@@ -2063,21 +2063,24 @@ if (location.search.includes('selftest')) {
   ok(onBg !== offBg, 'the selected tab is filled and the others are not', onBg + ' vs ' + offBg);
   ok(/(, *0\)|\/ *0\))/.test(offBg) || offBg === 'transparent',
     'an unselected tab has no chip behind it at all', offBg);
-  // 고른 탭의 판은 바깥 캡슐과 **동심**이어야 곡률이 이어져 보인다:
-  //   바깥 반지름 − 캡슐 세로 패딩 == 안쪽 반지름.
-  // ★ px 리터럴로 적지 않는다 — 브라우저 확대에서 셋이 같은 비율로 소수가 되므로
-  //   **등식**은 살아 있지만 숫자는 달라진다(CLAUDE.md). 관심사는 관계 하나다.
-  //   getComputedStyle 은 선언값(999px)을 주므로 CSS 명세의 축소 규칙을 적용해 쓴 값을 낸다.
+  // 탭바와 그 안의 고른 칩은 **같은 각진 판**이다(옛 간판 리스킨).
+  // ★ 예전에는 "동심 캡슐" 을 쟀다 — 바깥 반지름 − 세로 패딩 == 안쪽 반지름. 캡슐이
+  //   사라지면서 그 등식은 성립할 수가 없어졌다(3 − 5 ≠ 3). 곡률이 없으면 곡률이
+  //   이어지는지 물을 것도 없으므로, 이 자리를 새 디자인의 요구사항으로 바꿨다.
+  // ★ px 리터럴과 비교하지 않는다 — 브라우저 확대에서 전부 소수가 된다(CLAUDE.md).
+  //   대신 **칩 자신의 높이**와 견준다: 캡슐이면 반지름이 정확히 높이의 절반이고,
+  //   칠한 판이면 그보다 훨씬 작다. 확대해도 둘이 같은 비율로 커져서 안 흔들린다.
   const usedR = (el) => {
     const r = el.getBoundingClientRect();
     const d = parseFloat(getComputedStyle(el).borderTopLeftRadius);
     return Math.min(d, d * Math.min(r.width / (d * 2), r.height / (d * 2)));
   };
-  const padY = parseFloat(getComputedStyle(bar).paddingTop);
-  ok(Math.abs((usedR(bar) - padY) - usedR(bar.querySelector('.seg-on'))) < 0.6,
-    'the selected tab\'s pill is concentric with the capsule around it',
-    'outer ' + usedR(bar).toFixed(2) + ' - pad ' + padY + ' vs inner ' +
-      usedR(bar.querySelector('.seg-on')).toFixed(2));
+  const chipEl = bar.querySelector('.seg-on');
+  const rBar = usedR(bar), rChip = usedR(chipEl);
+  const chipH = chipEl.getBoundingClientRect().height;
+  ok(rChip < chipH / 4 && Math.abs(rBar - rChip) < 0.6,
+    'the tab bar and its selected chip are the same painted rectangle — no capsule left over from the iOS skin',
+    'bar ' + rBar.toFixed(2) + ' chip ' + rChip.toFixed(2) + ' (capsule would be ' + (chipH / 2).toFixed(2) + ')');
   // 아이콘을 눌러도 탭이 먹혀야 한다 — 위임이 closest() 라 SVG 자식에서도 올라온다.
   bar.querySelector('[data-view="week"] svg').dispatchEvent(new MouseEvent('click', { bubbles: true }));
   eq(state.view, 'week', 'tapping the icon inside a tab switches the view, not just the label');

@@ -291,7 +291,7 @@ function barHtml(b, it) {
          : ';border-radius:' + rL + ' ' + rR + ' ' + rR + ' ' + rL +
            ';background-color:' + p.color + ';color:' + onColor(p.color)) +
     ';text-decoration:' + p.deco + ';opacity:' + p.op + '">' +
-    (one ? '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;' +
+    (one ? '<span style="display:inline-block;width:6px;height:6px;border-radius:3px;' +
       'margin-right:5px;vertical-align:middle;background-color:' + p.color + '"></span>' : '') +
     esc(p.title) + '</div>';
 }
@@ -841,11 +841,11 @@ function render() {
     // 로그인하지 않은 상태라는 걸 이미 말한다.
     (guestMode ? ''
       : '<span style="font-size:13px;font-weight:600;color:var(--label-secondary);background:var(--fill-quaternary);' +
-        'padding:6px 12px;border-radius:999px">' + esc(state.user.name) +
+        'padding:6px 12px;border-radius:2px">' + esc(state.user.name) +
         (isAdmin ? ' · ' + esc(t('hdr.admin')) : '') + '</span>') +
     (isAdmin ? '<button class="btn btn-gray btn-sm" data-act="admin">' + esc(t('hdr.signups')) +
       (pending ? '<span style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;' +
-        'padding:0 5px;margin-left:2px;border-radius:999px;background:#FF3B30;color:#fff;font-size:11px;font-weight:700">' +
+        'padding:0 5px;margin-left:2px;border-radius:2px;background:#FF3B30;color:#fff;font-size:11px;font-weight:700">' +
         pending + '</span>' : '') + '</button>' : '') +
     '<button class="btn btn-gray btn-sm" data-act="settings">' + esc(t('hdr.settings')) + '</button>' +
     (guestMode
@@ -910,7 +910,7 @@ function render() {
     const chip = (id, label, color) => {
       const on = (state.filter || '') === id;
       return '<button class="seg' + (on ? ' seg-on' : '') + '" data-filter="' + esc(id) + '">' +
-        (color ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;' +
+        (color ? '<span style="display:inline-block;width:8px;height:8px;border-radius:3px;' +
           'margin-right:5px;background-color:' + color + '"></span>' : '') + esc(label) + '</button>';
     };
     // ★ width:max-content — 칩이 몇 개든 **딱 그만큼만** 차지한다. 이게 없으면 칩이
@@ -949,7 +949,7 @@ function render() {
       return '<div style="display:flex;align-items:center;gap:12px;padding:13px 16px;border-top:' +
         (i === 0 ? 'none' : '.5px solid var(--separator)') + '">' +
         '<button data-gtoggle="' + esc(g.id) + '" aria-label="' + esc(t('goal.check')) + '" aria-pressed="' + done + '" ' +
-          'style="width:24px;height:24px;border-radius:50%;flex:none;cursor:pointer;padding:0;display:flex;' +
+          'style="width:24px;height:24px;border-radius:3px;flex:none;cursor:pointer;padding:0;display:flex;' +
           'align-items:center;justify-content:center;border:2px solid ' + (done ? c : 'var(--label-quaternary)') +
           ';background-color:' + (done ? c : 'transparent') + ';transition:all .15s ease">' +
           (done ? icon('checkmark', 13, '#ffffff') : '') + '</button>' +
@@ -960,7 +960,7 @@ function render() {
             esc(g.memo) + '</div>' : '') +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;flex:none">' +
-          '<span style="font-size:11px;font-weight:600;color:' + c + ';padding:3px 8px;border-radius:999px;' +
+          '<span style="font-size:11px;font-weight:600;color:' + c + ';padding:3px 8px;border-radius:2px;' +
             'background-color:color-mix(in srgb, ' + c + ' 16%, transparent)">' + esc(goalDue(g)) + '</span>' +
           '<span ' + open + ' style="cursor:pointer;color:var(--label-tertiary);display:flex">' +
             icon('chevron.right', 15) + '</span>' +
@@ -992,7 +992,7 @@ function render() {
     body += '<div style="display:flex;align-items:baseline;justify-content:space-between;margin:0 4px 10px">' +
         '<h2 style="margin:0;font-size:20px;font-weight:700">' + esc(t('goal.title')) + '</h2>' +
         '<span style="font-size:13px;font-weight:500;color:var(--label-secondary)">' + esc(gRemain) + '</span></div>' +
-      '<div class="card" style="border-radius:16px;border:.5px solid var(--separator);overflow:hidden">' +
+      '<div class="card" style="border-radius:3px;border:.5px solid var(--separator);overflow:hidden">' +
         goalRows + '</div>' +
       '<div style="margin:22px 4px 10px;font-size:20px;font-weight:700">' + esc(t('goal.months')) + '</div>' +
       // 격자 자체가 판이다 — 패딩 없이 12칸이 테두리에 딱 붙는다(레퍼런스의 12개월 블록).
@@ -1295,9 +1295,9 @@ function render() {
         (evt
           ? '<span aria-hidden="true" style="width:24px;height:24px;flex:none;display:flex;' +
             'align-items:center;justify-content:center">' +
-            '<span style="width:12px;height:12px;border-radius:4px;background-color:' + c + '"></span></span>'
+            '<span style="width:12px;height:12px;border-radius:2px;background-color:' + c + '"></span></span>'
           : '<button data-toggle="' + esc(it.id) + '" aria-label="' + esc(t('list.check')) + '" aria-pressed="' + done + '" ' +
-            'style="width:24px;height:24px;border-radius:50%;flex:none;cursor:pointer;padding:0;display:flex;' +
+            'style="width:24px;height:24px;border-radius:3px;flex:none;cursor:pointer;padding:0;display:flex;' +
             'align-items:center;justify-content:center;border:2px solid ' + (done ? c : 'var(--label-quaternary)') +
             ';background:' + (done ? c : 'transparent') + ';transition:all .15s ease">' +
             (done ? icon('checkmark', 13, '#ffffff') : '') + '</button>') +
@@ -1310,12 +1310,12 @@ function render() {
         '<div style="display:flex;align-items:center;gap:8px;flex:none">' +
           // 여러 날 배지. 시각 라벨만 있으면 '09:00–18:00' 이 하루 안의 범위로 읽힌다.
           (spanOf(it) > 1
-            ? '<span style="font-size:11px;font-weight:600;color:' + c + ';padding:3px 8px;border-radius:999px;' +
+            ? '<span style="font-size:11px;font-weight:600;color:' + c + ';padding:3px 8px;border-radius:2px;' +
               'background-color:color-mix(in srgb, ' + c + ' 16%, transparent)">' +
               esc(t('form.spanDays', spanOf(it))) + '</span>' : '') +
           (it.repeat && it.repeat !== 'none'
             ? '<span style="font-size:11px;font-weight:600;color:var(--label-secondary);background:var(--fill-quaternary);' +
-              'padding:3px 8px;border-radius:999px">' + esc(repLabel(it.repeat, it.days)) + '</span>' : '') +
+              'padding:3px 8px;border-radius:2px">' + esc(repLabel(it.repeat, it.days)) + '</span>' : '') +
           (it.time ? '<span style="font-size:13px;font-weight:500;color:var(--label-secondary);' +
             'font-variant-numeric:tabular-nums">' + esc(timeRange(it.time, it.endTime || '')) + '</span>' : '') +
           '<span ' + open + ' style="cursor:pointer;color:var(--label-tertiary);display:flex">' +
@@ -1334,7 +1334,7 @@ function render() {
     '<div style="display:flex;align-items:baseline;justify-content:space-between;margin:0 4px 10px">' +
       '<h2 style="margin:0;font-size:20px;font-weight:700">' + esc(selectedTitle) + '</h2>' +
       '<span style="font-size:13px;font-weight:500;color:var(--label-secondary)">' + esc(remainLabel) + '</span></div>' +
-    '<div class="card" style="border-radius:16px;border:.5px solid var(--separator);' +
+    '<div class="card" style="border-radius:3px;border:.5px solid var(--separator);' +
       'overflow:hidden">' + listHtml + '</div></div>';
 
   // -- 말씀 한 구절 ----------------------------------------------------------
@@ -1451,7 +1451,7 @@ function renderJumpPopover() {
   const row = (on, attr, label) =>
     '<button ' + attr + ' aria-pressed="' + on + '" style="display:block;width:100%;height:' + J_ITEM +
     'px;border:none;cursor:pointer;font-family:inherit;font-size:15px;font-weight:' + (on ? 700 : 500) +
-    ';border-radius:9px;padding:0;background-color:' + (on ? 'var(--tint)' : 'transparent') +
+    ';border-radius:2px;padding:0;background-color:' + (on ? 'var(--tint)' : 'transparent') +
     ';color:' + (on ? 'var(--on-tint)' : 'var(--label)') + '">' + esc(label) + '</button>';
   const head = (s) => '<div style="flex:1;font-size:12px;font-weight:700;color:var(--label-tertiary);' +
     'text-align:center;padding-bottom:6px">' + esc(s) + '</div>';
@@ -1463,7 +1463,7 @@ function renderJumpPopover() {
 
   return '<div role="dialog" aria-label="' + esc(t('jump.title')) + '" style="position:absolute;top:100%;' +
     'left:0;margin-top:8px;z-index:70;width:min(320px,calc(100vw - 32px));background-color:var(--bg);' +
-    'border-radius:16px;box-shadow:var(--shadow-3);padding:10px;' +
+    'border-radius:3px;box-shadow:var(--shadow-3);padding:10px;' +
     'animation:iosMenuIn var(--duration-fast) var(--ease-decelerate)">' +
     '<div style="display:flex;gap:6px">' + head(t('jump.year')) + head(t('jump.month')) + '</div>' +
     '<div style="display:flex;gap:6px">' + col('jcolY', years) + col('jcolM', months) + '</div>' +
