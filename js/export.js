@@ -60,7 +60,10 @@ const EX_COLORS = {
 // 그 속성을 읽으면 system 분기가 공짜다.
 const exColors = () => EX_COLORS[document.documentElement.getAttribute('data-theme')] || EX_COLORS.light;
 
-const EX_FAMILY = '"Pretendard Variable", Pretendard, -apple-system, "Segoe UI", sans-serif';
+// ★ 화면(css/style.css 의 --font-text)과 **같은 순서**라야 한다. 캔버스는 파싱 못
+//   하거나 아직 안 온 글꼴을 예외 없이 폴백으로 그려서, 어긋나면 화면과 다른 글꼴의
+//   PNG 가 조용히 나간다. 아래 openExport 가 document.fonts.ready 를 기다린다.
+const EX_FAMILY = 'Paperlogy, "Pretendard Variable", Pretendard, -apple-system, "Segoe UI", sans-serif';
 const exFont = (weight, size) => weight + ' ' + size + 'px ' + EX_FAMILY;
 
 // '#RRGGBB' + alpha → 'rgba(…)'. 캔버스 배경이 이미 불투명하므로 결과도 불투명하다.

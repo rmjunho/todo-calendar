@@ -1,6 +1,21 @@
+/* 페이퍼로지. 굵기 셋만 싣는다 — 9개를 다 실으면 12MB 다.
+   ★ cmap 을 직접 열어 확인했다: 글리프 14,093 자로 **한자 日月火水木金土 가 들어 있다.**
+     요일 줄이 폴백으로 새지 않는다(무료 한글 폰트는 한자를 빼는 경우가 많다).
+   ★ 앱이 쓰는 굵기는 500·600·700·800·900 이다. 500/700/900 만 선언해도 CSS 글꼴
+     매칭이 600→700, 800→900 으로 붙여 준다. 파일을 더 늘릴 이유가 없다.
+   ★ font-display:swap — 폰트가 늦어도 글자는 폴백으로 **바로** 보인다. block 으로
+     두면 최대 3초간 빈 화면이 된다. 대신 바뀌는 순간 한 번 출렁이는데, 그건
+     아무것도 안 보이는 것보다 낫다.
+   ★ Pretendard 를 폴백으로 남겨 둔다 — 페이퍼로지를 못 받아도 옛 화면이 나온다. */
+@font-face{font-family:Paperlogy;src:url('../fonts/Paperlogy-5Medium.ttf') format('truetype');
+  font-weight:500;font-style:normal;font-display:swap}
+@font-face{font-family:Paperlogy;src:url('../fonts/Paperlogy-7Bold.ttf') format('truetype');
+  font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:Paperlogy;src:url('../fonts/Paperlogy-9Black.ttf') format('truetype');
+  font-weight:900;font-style:normal;font-display:swap}
 :root{
-  --font-text:'Pretendard Variable',Pretendard,-apple-system,'Segoe UI',sans-serif;
-  --font-display:'Pretendard Variable',Pretendard,-apple-system,'Segoe UI',sans-serif;
+  --font-text:Paperlogy,'Pretendard Variable',Pretendard,-apple-system,'Segoe UI',sans-serif;
+  --font-display:Paperlogy,'Pretendard Variable',Pretendard,-apple-system,'Segoe UI',sans-serif;
   /* Raised look — the default treatment for every button and card. */
   --tc-sheen:linear-gradient(180deg,rgba(255,255,255,.34),rgba(255,255,255,.06) 48%,rgba(0,0,0,.06));
   /* Cards get their own sheen because .card clamps it to a fixed 96px band.
