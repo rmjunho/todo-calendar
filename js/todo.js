@@ -2600,7 +2600,9 @@ if (location.search.includes('selftest')) {
 
   state.view = 'month';
   render();
-  const mCells = [...APP().querySelectorAll('.cell')];
+  // ★ let 이다 — 아래 언어 전환이 render() 를 다시 돌려 이 노드들을 문서에서 떼어낸다.
+  //   떨어져 나간 노드의 getComputedStyle 은 빈 값을 줘서 검사가 조용히 NaN 이 된다.
+  let mCells = [...APP().querySelectorAll('.cell')];
   const mSheet = APP().querySelector('.cal-sheet');
   const mHead = APP().querySelector('.cal-head');
   // ★ 굵기를 숫자로 적지 않는다. 1.5px 로 뒀을 때 dpr 1.25 에서 안쪽 괘선과 **같은
@@ -2618,6 +2620,33 @@ if (location.search.includes('selftest')) {
     && parseFloat(getComputedStyle(mHead).borderBottomWidth) > innerW,
     'the weekday row is cut off by a double rule, heavier than the rules between the cells',
     getComputedStyle(mHead).borderBottomStyle + ' ' + getComputedStyle(mHead).borderBottomWidth);
+  // 요일은 [한자 / 영문] 두 줄이고 **로케일을 안 탄다** — 레퍼런스 달력이 그 구성이다.
+  // ko/en 양쪽에서 같은 글자가 나오는지까지 본다(dow() 로 되돌아가면 여기서 잡힌다).
+  const kLangCal = SETTINGS.lang;
+  const dowText = () => [...APP().querySelectorAll('.cal-head > div')].map((c) => c.textContent);
+  setSettings({ lang: 'ko' });
+  render();
+  const dowKo = dowText();
+  setSettings({ lang: 'en' });
+  render();
+  const dowEn = dowText();
+  setSettings({ lang: kLangCal });
+  render();
+  mCells = [...APP().querySelectorAll('.cell')];      // 위 render() 로 갈린 노드를 다시 잡는다
+  ok(dowKo.join() === dowEn.join() && dowKo[0].indexOf('日') === 0 && dowKo[0].indexOf('SUN') > 0,
+    'the weekday row prints hanja over the English abbreviation, and reads the same in either language',
+    'ko=' + dowKo[0] + ' en=' + dowEn[0]);
+  // 두 줄의 크기가 실제로 갈리는지. 한자가 영문보다 커야 레퍼런스처럼 읽힌다.
+  const hanjaPx = parseFloat(getComputedStyle(APP().querySelector('.cal-dow')).fontSize);
+  const enPx = parseFloat(getComputedStyle(APP().querySelector('.cal-dow-en')).fontSize);
+  ok(hanjaPx > enPx, 'the hanja leads and the English sits under it as a caption',
+    'hanja=' + hanjaPx + ' en=' + enPx);
+  // 날짜 숫자가 요일 글자보다 크다 — 달력에서 제일 먼저 읽혀야 하는 것이 날짜다.
+  // ★ 크기를 리터럴로 적지 않는다. 적으면 디자인을 만질 때마다 검사를 같이 고쳐야 한다.
+  const dayPx = parseFloat(getComputedStyle(mCells[10].querySelector('.cal-day')).fontSize);
+  ok(dayPx > hanjaPx, 'the date numeral is the biggest thing in the grid',
+    'day=' + dayPx + ' hanja=' + hanjaPx);
+
   // 일·평일·토가 서로 다른 잉크로 나온다. 셋을 **서로** 비교한다 — 기댓값을 적어
   // 두면 색 토큰을 바꿀 때마다 이 줄을 같이 고쳐야 하고, 그러면 검사가 아니게 된다.
   const ink = (i) => getComputedStyle(mCells[i].querySelector('.cal-day')).color;

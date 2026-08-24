@@ -406,6 +406,16 @@ function exSheet(ctx, C, x, y, w, h) {
 // 안쪽 괘선. 가로·세로 둘 다 두께 EX_RULE 이다.
 const exRuleH = (ctx, C, x, y, w) => { ctx.fillStyle = C.ruleIn; ctx.fillRect(x, y, w, EX_RULE); };
 const exRuleV = (ctx, C, x, y, h) => { ctx.fillStyle = C.ruleIn; ctx.fillRect(x, y, EX_RULE, h); };
+// 오늘 도장(빨간 사각 반전). ★ 폭을 글자에서 **재서** 잡는다 — 고정 40px 로 뒀더니
+// 두 자리 날짜(24)가 도장 밖으로 삐져나왔다. 캔버스에는 `padding` 이 없으니 여기서
+// 좌우 7px 씩 직접 준다. 높이는 칸이 허락하는 한도(중심 y+30, 알약이 y+52 시작)다.
+function exStamp(ctx, C, s, cx, cy, size) {
+  ctx.font = exFont(700, size);
+  const w = Math.max(size + 6, ctx.measureText(s).width + 14);
+  const h = size + 6;
+  ctx.fillStyle = C.sun;
+  ctx.fillRect(cx - w / 2, cy - h / 2, w, h);
+}
 // 요일 머리줄 아래의 이중괘선. 화면의 `border-bottom:3px double` 과 같은 뜻이다.
 function exRuleDouble(ctx, C, x, y, w) {
   ctx.fillStyle = C.label;
@@ -516,10 +526,7 @@ function exDrawMonth(ctx, C, m) {
     //   그러면 selftest 가 못 박은 이미지 높이가 달라진다.
     const isToday = d.ds === today;
     const cx = x + L.cellW / 2, cy = y + 30;
-    if (isToday) {
-      ctx.fillStyle = C.sun;
-      ctx.fillRect(cx - 20, cy - 20, 40, 40);
-    }
+    if (isToday) exStamp(ctx, C, String(d.day), cx, cy, 34);
     exText(ctx, String(d.day), cx, cy, exFont(700, 34),
       isToday ? '#FFFFFF' : d.dow === 0 ? C.sun : d.dow === 6 ? C.tint : C.label, 'center');
 
@@ -566,15 +573,15 @@ function exDrawWeek(ctx, C, m) {
     }
     // [한자 / 영문 / 날짜] 세 줄을 W_DOW(96) 안에 넣는다 — 월간과 같은 이유로
     // 머리줄 높이를 못 키운다(빈 주 이미지의 하한 598px 이 selftest 에 박혀 있다).
-    exText(ctx, DOW_HANJA[i], cx, EX_HEAD + 24, exFont(700, 24), exDowColor(C, i), 'center');
-    exText(ctx, DOW_EN[i], cx, EX_HEAD + 43, exFont(700, 12), exDowColor(C, i), 'center');
+    // ★ y 값은 아래에서 위로 잡은 것이다: 도장(높이 40)이 이중괘선 위 2px 에서
+    //   끝나야 하므로 중심이 68 이고(48~88), 그 위에 영문·한자가 차례로 앉는다.
+    //   한자를 월간의 26 보다 줄인 이유가 이것이다 — 여기는 줄이 하나 더 있다.
+    exText(ctx, DOW_HANJA[i], cx, EX_HEAD + 20, exFont(700, 22), exDowColor(C, i), 'center');
+    exText(ctx, DOW_EN[i], cx, EX_HEAD + 37, exFont(700, 11), exDowColor(C, i), 'center');
     // 월간과 같은 빨간 사각 도장. 날짜 색도 화면처럼 일/토가 갈린다.
     const isToday = d.ds === today;
-    if (isToday) {
-      ctx.fillStyle = C.sun;
-      ctx.fillRect(cx - 22, EX_HEAD + 50, 44, 44);
-    }
-    exText(ctx, String(d.day), cx, EX_HEAD + 72, exFont(700, 34),
+    if (isToday) exStamp(ctx, C, String(d.day), cx, EX_HEAD + 68, 34);
+    exText(ctx, String(d.day), cx, EX_HEAD + 68, exFont(700, 34),
       isToday ? '#FFFFFF' : i === 0 ? C.sun : i === 6 ? C.tint : C.label, 'center');
 
     const shown = d.rows.slice(0, L.fit);
