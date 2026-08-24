@@ -2602,7 +2602,19 @@ if (location.search.includes('selftest')) {
     const s = APP().querySelector('.cal-sheet');
     ok(s && parseFloat(getComputedStyle(s).borderTopLeftRadius) === 0,
       'the ' + v + ' sheet is square — a printed wall calendar has no rounded corners', v);
+    // 철끈 띠는 **판의 첫 자식**이라야 한다. 그 아래로 내려가면 달력 한가운데를
+    // 가로지르는 회색 띠가 된다(뷰마다 판의 첫 요소가 달라서 실제로 밀리기 쉽다).
+    const hang = s && s.querySelector('.cal-hang');
+    ok(hang && s.firstElementChild === hang,
+      'the ' + v + ' sheet is hung from a binding strip at its very top', v);
   });
+  // 종이와 벽이 **다른 색**이라야 걸려 있는 것으로 읽힌다. 둘이 같아지면 그림자만
+  // 남아 종이의 가장자리가 사라진다 — 색을 리터럴로 적지 않고 다른지만 본다.
+  const paperC = getComputedStyle(APP().querySelector('.cal-sheet')).backgroundColor;
+  const wallC = getComputedStyle(document.body).backgroundColor;
+  ok(paperC !== wallC,
+    'the paper reads as paper because the wall behind it is a different colour',
+    'paper=' + paperC + ' wall=' + wallC);
 
   state.view = 'month';
   render();
