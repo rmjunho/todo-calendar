@@ -37,7 +37,7 @@ const EX_COLORS = {
   //   .42→#999285(ruleIn) · .06→#E6DECC(head)
   //   card 를 고치면 이 다섯을 **다시 계산할 것.**
   light: {
-    page: '#E4DAC0', card: '#F3EBD8',
+    page: '#EAE1CB', card: '#F3EBD8',
     label: '#1C1813', label2: '#6E685E', label3: '#9D9789',
     sep: '#A19B8D', ruleIn: '#999285', head: '#E6DECC',
     calRed: '#D2282E', calBlue: '#1D4E9C',
@@ -885,7 +885,7 @@ function renderExportSheet() {
     '<div style="position:fixed;left:0;right:0;bottom:0;z-index:101;display:flex;justify-content:center;pointer-events:none">' +
     '<div role="dialog" aria-modal="true" aria-label="' + esc(t('exp.title')) + '" style="pointer-events:auto;' +
       'width:min(560px,100vw);max-height:88vh;overflow:auto;background-color:var(--bg);' +
-      'border-radius:3px 3px 0 0;box-shadow:var(--shadow-3);padding:12px 20px 30px;' +
+      'border-radius:20px 20px 0 0;box-shadow:var(--shadow-3);padding:12px 20px 30px;' +
       'animation:tcSheet .3s cubic-bezier(.34,1.3,.64,1)">' +
       '<div style="width:38px;height:5px;border-radius:3px;background-color:var(--fill-secondary);margin:0 auto 12px"></div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +

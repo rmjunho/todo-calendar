@@ -458,6 +458,82 @@ body{background-color:var(--bg-secondary);background-image:var(--hanji);
 .sign-chip{border:1.5px solid var(--sign-ink);border-radius:2px;
   font-weight:800;background-image:none;box-shadow:none}
 
+/* ===========================================================================
+   예외 두 곳 — 떠 있는 탭바와 바텀 시트는 **원래 iOS 재질** 그대로 (사용자 요청)
+   ---------------------------------------------------------------------------
+   ★ 방법이 핵심이다: 이 두 곳에서 **토큰을 지역적으로 다시 선언**한다. CSS 변수는
+     상속되므로 안쪽의 .btn / .seg / .field 가 알아서 옛 값을 집는다 — 부품마다
+     규칙을 새로 쓰지 않아도 된다.
+   ★ 다만 위 간판 블록에서 px 로 **직접 박은** 것들(.seg{border-radius:2px} 등)은
+     토큰이 아니라 안 따라온다. 그래서 아래에 명시도가 더 높은 규칙으로 되돌린다.
+   ★ 시트를 [role="dialog"] 로 잡는다 — 일곱 시트가 전부 이미 그 속성을 달고 있어서
+     마크업을 안 건드려도 된다. 새 시트를 만들면 role="dialog" 를 꼭 달 것.
+   값 출처: _ds/…/tokens/{colors,effects,spacing}.css 의 원본. =========================================================================== */
+.tabbar,[role="dialog"]{
+  --bg:#FFFFFF;--tint:#007AFF;--on-tint:#FFFFFF;
+  --label:rgba(0,0,0,1);--label-secondary:rgba(60,60,67,.6);
+  --label-tertiary:rgba(60,60,67,.3);--label-quaternary:rgba(60,60,67,.18);
+  --separator:rgba(60,60,67,.29);
+  --fill:rgba(120,120,128,.2);--fill-secondary:rgba(120,120,128,.16);
+  --fill-tertiary:rgba(118,118,128,.12);--fill-quaternary:rgba(116,116,128,.08);
+  --system-green:#34c759;
+  --radius-sm:10px;--radius-md:12px;--radius-lg:16px;--radius-xl:20px;--radius-capsule:999px;
+  --tc-sheen:linear-gradient(180deg,rgba(255,255,255,.34),rgba(255,255,255,.06) 48%,rgba(0,0,0,.06));
+  --tc-raise:inset 0 1px 0 rgba(255,255,255,.55),0 1px 2px rgba(0,0,0,.10),0 3px 8px rgba(0,0,0,.10),0 8px 18px rgba(0,0,0,.07);
+  --tc-raise-sm:inset 0 1px 0 rgba(255,255,255,.45),0 1px 2px rgba(0,0,0,.08),0 2px 6px rgba(0,0,0,.08);
+  --shadow-3:0 8px 24px rgba(0,0,0,.14);
+  --shadow-glass:0 6px 20px rgba(0,0,0,.18),0 1px 3px rgba(0,0,0,.12);
+  --material-thick:rgba(255,255,255,.84);
+  --glass-fill:rgba(255,255,255,.5);--glass-fill-hover:rgba(255,255,255,.62);
+  --glass-fill-pressed:rgba(255,255,255,.38);
+  --glass-highlight:rgba(255,255,255,.7);--glass-border:rgba(255,255,255,.5);
+}
+:root[data-theme="dark"] .tabbar,:root[data-theme="dark"] [role="dialog"]{
+  --bg:#000000;--tint:#0a84ff;
+  --label:rgba(255,255,255,1);--label-secondary:rgba(235,235,245,.6);
+  --label-tertiary:rgba(235,235,245,.3);--label-quaternary:rgba(235,235,245,.16);
+  --separator:rgba(84,84,88,.6);
+  --fill:rgba(120,120,128,.36);--fill-secondary:rgba(120,120,128,.32);
+  --fill-tertiary:rgba(118,118,128,.24);--fill-quaternary:rgba(118,118,128,.18);
+  --system-green:#30d158;
+  --tc-sheen:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.03) 48%,rgba(0,0,0,.18));
+  --tc-raise:inset 0 1px 0 rgba(255,255,255,.10),0 1px 2px rgba(0,0,0,.5),0 4px 10px rgba(0,0,0,.45),0 10px 22px rgba(0,0,0,.4);
+  --tc-raise-sm:inset 0 1px 0 rgba(255,255,255,.08),0 1px 2px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.4);
+  --shadow-3:0 8px 24px rgba(0,0,0,.6);
+  --shadow-glass:0 6px 20px rgba(0,0,0,.55),0 1px 3px rgba(0,0,0,.4);
+  --material-thick:rgba(37,37,37,.88);
+  --glass-fill:rgba(120,120,128,.36);--glass-fill-hover:rgba(140,140,148,.44);
+  --glass-fill-pressed:rgba(110,110,118,.28);
+  --glass-highlight:rgba(255,255,255,.25);--glass-border:rgba(255,255,255,.16);
+}
+/* 위에서 px 로 박아 둔 간판 값들을 이 두 곳 안에서만 되돌린다. */
+.tabbar{border-radius:var(--radius-capsule);background-color:var(--material-thick);
+  -webkit-backdrop-filter:blur(var(--blur-thick)) saturate(var(--backdrop-saturate));
+  backdrop-filter:blur(var(--blur-thick)) saturate(var(--backdrop-saturate));
+  box-shadow:inset 0 0 0 .5px var(--separator),var(--shadow-3)}
+.tabbar .seg{border-radius:var(--radius-capsule)}
+.tabbar .seg-on{color:var(--tint)}
+.tabbar .seg-on::before{background-color:color-mix(in srgb,var(--tint) 13%,transparent)}
+[role="dialog"] .seg-wrap{border-radius:999px;
+  box-shadow:inset 0 1px 3px rgba(0,0,0,.10),inset 0 0 0 .5px var(--separator)}
+[role="dialog"] .seg{border-radius:999px}
+[role="dialog"] .field{border-radius:12px}
+[role="dialog"] .pri{border-radius:999px}
+[role="dialog"] .picker-btn{border-radius:999px}
+[role="dialog"] .picker-menu{border-radius:var(--radius-lg)}
+[role="dialog"] .card:not(.cal-sheet){border-radius:16px}
+[role="dialog"] .sw{border-radius:var(--radius-capsule);box-shadow:none}
+[role="dialog"] .sw span{border-radius:50%;
+  box-shadow:0 3px 8px rgba(0,0,0,.15),0 1px 1px rgba(0,0,0,.16)}
+[role="dialog"] .btn-glass{
+  -webkit-backdrop-filter:blur(var(--blur-glass)) saturate(var(--backdrop-saturate));
+  backdrop-filter:blur(var(--blur-glass)) saturate(var(--backdrop-saturate));
+  box-shadow:inset 0 1px 0 var(--glass-highlight),inset 0 0 0 .5px var(--glass-border),var(--shadow-glass)}
+[role="dialog"] [data-raise="glass"] .btn{
+  box-shadow:inset 0 1px 0 var(--glass-highlight),inset 0 0 0 .5px var(--glass-border),0 1px 2px rgba(0,0,0,.08),0 4px 10px rgba(0,0,0,.10),0 12px 26px rgba(0,0,0,.12)}
+[role="dialog"] [data-raise="tint"] .btn{
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 2px 4px color-mix(in srgb,var(--tint) 35%,transparent),0 6px 14px color-mix(in srgb,var(--tint) 30%,transparent),0 14px 30px color-mix(in srgb,var(--tint) 25%,transparent)}
+
 /* --- 약관 본문. 회원가입 모달과 terms.html / privacy.html 이 같이 쓴다.
    본문은 js/legal.js 한 곳에만 있고 이 스타일이 양쪽에 똑같이 걸린다. --- */
 .legal{font-size:15px;line-height:1.75;color:var(--label);word-break:keep-all}
