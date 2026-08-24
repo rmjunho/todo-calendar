@@ -22,16 +22,23 @@
 //      그건 화면 토큰과 **일부러** 달라야 한다.
 // 값 출처: _ds/…/tokens/colors.css — 그쪽을 고치면 여기도 같이 고칠 것.
 const EX_COLORS = {
+  // ruleIn/head 는 화면의 --cal-rule-in / --fill-quaternary 를 **카드 배경 위에
+  // 미리 합성한 값**이다. 캔버스에는 색 혼합 토큰이 없어서 여기서 풀어 적는다.
+  //   밝은 테마  rgba(0,0,0,.42)     over #FFFFFF = #949494
+  //   어두운 테마 rgba(255,255,255,.42) over #1C1C1E = #7B7B7D
+  // 바깥 틀은 label 을 그대로 쓴다 — 화면의 --cal-rule 이 var(--label) 이다.
   light: {
     page: '#F2F2F7', card: '#FFFFFF',
     label: '#000000', label2: '#6E6E73', label3: '#8E8E93',
-    sep: '#D8D8DC', tint: '#007AFF', onTint: '#FFFFFF', sun: '#FF3B30',
+    sep: '#D8D8DC', ruleIn: '#949494', head: '#F1F1F2',
+    tint: '#007AFF', onTint: '#FFFFFF', sun: '#FF3B30',
     pillA: 0.16, doneA: 0.42
   },
   dark: {
     page: '#000000', card: '#1C1C1E',
     label: '#FFFFFF', label2: '#A0A0A6', label3: '#6E6E73',
-    sep: '#38383A', tint: '#0A84FF', onTint: '#FFFFFF', sun: '#FF453A',
+    sep: '#38383A', ruleIn: '#7B7B7D', head: '#2A2A2C',
+    tint: '#0A84FF', onTint: '#FFFFFF', sun: '#FF453A',
     pillA: 0.28, doneA: 0.40
   }
 };
@@ -382,6 +389,29 @@ function exLine(ctx, x1, y, x2, c) {
   ctx.fillStyle = c;
   ctx.fillRect(x1, y, x2 - x1, 1);
 }
+// --- 옛 인쇄 달력 격자 (화면의 .cal-* 와 짝) ---------------------------------
+// 캔버스는 화면의 약 2배 좌표계다(칸 폭은 비슷한데 글자가 13px→24px). 그래서
+// 괘선도 화면의 두 배로 둔다 — 안쪽 1px→2, 바깥 틀 2px→4.
+const EX_RULE = 2, EX_FRAME = 4;
+// 종이 한 장. 둥근 모서리 대신 각진 판 + 잉크 틀이다.
+// ★ 틀은 판 **안쪽**으로 그린다(x+F/2). 밖으로 그리면 EX_PAD 여백을 잡아먹어
+//   좌우 끝에서 틀이 캔버스 경계에 붙어 잘린다.
+function exSheet(ctx, C, x, y, w, h) {
+  ctx.fillStyle = C.card;
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = C.label;
+  ctx.lineWidth = EX_FRAME;
+  ctx.strokeRect(x + EX_FRAME / 2, y + EX_FRAME / 2, w - EX_FRAME, h - EX_FRAME);
+}
+// 안쪽 괘선. 가로·세로 둘 다 두께 EX_RULE 이다.
+const exRuleH = (ctx, C, x, y, w) => { ctx.fillStyle = C.ruleIn; ctx.fillRect(x, y, w, EX_RULE); };
+const exRuleV = (ctx, C, x, y, h) => { ctx.fillStyle = C.ruleIn; ctx.fillRect(x, y, EX_RULE, h); };
+// 요일 머리줄 아래의 이중괘선. 화면의 `border-bottom:3px double` 과 같은 뜻이다.
+function exRuleDouble(ctx, C, x, y, w) {
+  ctx.fillStyle = C.label;
+  ctx.fillRect(x, y - 6, w, EX_RULE);
+  ctx.fillRect(x, y, w, EX_RULE);
+}
 // 한 줄 라벨. 잘릴 일이 없는 짧은 문자열 전용.
 function exText(ctx, s, x, y, font, color, align) {
   ctx.font = font;
@@ -415,20 +445,30 @@ function exFooter(ctx, C, h) {
   exText(ctx, t('exp.brand'), EX_PAD, y, exFont(600, 22), C.label3);
   exText(ctx, dateLabel(new Date()), EX_W - EX_PAD, y, exFont(500, 22), C.label3, 'right');
 }
-// 요일 색은 화면과 같은 규칙 — 일요일 빨강, 토요일 tint, 나머지는 보조 라벨.
-const exDowColor = (C, i) => (i === 0 ? C.sun : i === 6 ? C.tint : C.label2);
+// 요일 색은 화면과 같은 규칙 — 일요일 빨강, 토요일 tint, 나머지는 **잉크 검정**.
+// (옛 달력 격자로 바꾸면서 화면의 평일 글자도 label-secondary → label 이 됐다.)
+const exDowColor = (C, i) => (i === 0 ? C.sun : i === 6 ? C.tint : C.label);
 
 function exDrawMonth(ctx, C, m) {
   const L = m.layout;
   const today = fmt(new Date());
-  exRect(ctx, EX_PAD, EX_HEAD, EX_GRID, M_DOW + L.weeks * M_ROW, 24);
-  ctx.fillStyle = C.card;
-  ctx.fill();
+  const gridH = M_DOW + L.weeks * M_ROW;
+  exSheet(ctx, C, EX_PAD, EX_HEAD, EX_GRID, gridH);
+  // 요일 머리줄의 옅은 띠 + 아래 이중괘선. 화면의 .cal-head 와 같은 구성이다.
+  ctx.fillStyle = C.head;
+  ctx.fillRect(EX_PAD + EX_FRAME, EX_HEAD + EX_FRAME, EX_GRID - EX_FRAME * 2, M_DOW - EX_FRAME);
+  // 세로 괘선은 머리줄부터 판 끝까지 한 번에 긋는다 — 칸마다 끊으면 알약 배경
+  // 위에서 색이 어긋난다(알약은 칸 루프 안에서 나중에 그려진다).
+  for (let i = 1; i < 7; i++) {
+    exRuleV(ctx, C, EX_PAD + L.cellW * i, EX_HEAD + EX_FRAME, gridH - EX_FRAME * 2);
+  }
+  exRuleDouble(ctx, C, EX_PAD + EX_FRAME, EX_HEAD + M_DOW, EX_GRID - EX_FRAME * 2);
 
   const names = dow();
   for (let i = 0; i < 7; i++) {
+    // 평일도 잉크 검정이다 — 화면의 요일 줄과 같다(예전엔 보조 회색이었다).
     exText(ctx, names[i], EX_PAD + L.cellW * (i + 0.5), EX_HEAD + M_DOW / 2,
-      exFont(600, 24), exDowColor(C, i), 'center');
+      exFont(700, 24), exDowColor(C, i), 'center');
   }
 
   for (let i = 0; i < m.days.length; i++) {
@@ -439,7 +479,8 @@ function exDrawMonth(ctx, C, m) {
     // 막대가 먹은 높이. 알약과 `+N개` 는 이만큼 아래에서 시작한다.
     const off = L.rowH[wk] - M_ROW;
     if (col === 0) {
-      exLine(ctx, EX_PAD, y, EX_PAD + EX_GRID, C.sep);
+      // 주 사이의 가로 괘선. 첫 주 위는 안 긋는다 — 바로 위가 요일 줄의 이중선이다.
+      if (wk > 0) exRuleH(ctx, C, EX_PAD + EX_FRAME, y, EX_GRID - EX_FRAME * 2);
       // 막대는 칸 경계를 가로지르므로 칸 루프 **밖의** 좌표계로 그린다.
       // 잘린 쪽(cutL/cutR)은 여백 없이 칸 끝까지 붙여 "이어진다" 를 보여 준다.
       (L.bars && L.bars[wk] ? L.bars[wk].bars : []).forEach((b) => {
@@ -464,16 +505,15 @@ function exDrawMonth(ctx, C, m) {
     ctx.save();
     if (!d.inMonth) ctx.globalAlpha = 0.35;
 
+    // 오늘은 파란 원이 아니라 **빨간 사각 반전**이다 — 화면의 .cal-day 와 같다.
     const isToday = d.ds === today;
     const cx = x + L.cellW / 2, cy = y + 30;
     if (isToday) {
-      ctx.beginPath();
-      ctx.arc(cx, cy, 19, 0, Math.PI * 2);
-      ctx.fillStyle = C.tint;
-      ctx.fill();
+      ctx.fillStyle = C.sun;
+      ctx.fillRect(cx - 19, cy - 19, 38, 38);
     }
-    exText(ctx, String(d.day), cx, cy, exFont(isToday ? 700 : 600, 24),
-      isToday ? C.onTint : d.dow === 0 ? C.sun : d.dow === 6 ? C.tint : C.label, 'center');
+    exText(ctx, String(d.day), cx, cy, exFont(700, 24),
+      isToday ? '#FFFFFF' : d.dow === 0 ? C.sun : d.dow === 6 ? C.tint : C.label, 'center');
 
     const shown = d.rows.slice(0, 3);
     for (let k = 0; k < shown.length; k++) {
@@ -498,9 +538,12 @@ function exDrawWeek(ctx, C, m) {
   const L = m.layout;
   const today = fmt(new Date());
   const cardH = L.h - EX_HEAD - EX_FOOT;
-  exRect(ctx, EX_PAD, EX_HEAD, EX_GRID, cardH, 24);
-  ctx.fillStyle = C.card;
-  ctx.fill();
+  exSheet(ctx, C, EX_PAD, EX_HEAD, EX_GRID, cardH);
+  // 머리줄 띠는 요일 글자 + 날짜까지 덮는다(화면의 .cal-head 가 그 둘을 한 칸에 든다).
+  // 머리줄이 끝나는 자리는 막대 띠가 있으면 barTop, 없으면 bodyTop 이다.
+  const headBottom = L.barH ? L.barTop : L.bodyTop;
+  ctx.fillStyle = C.head;
+  ctx.fillRect(EX_PAD + EX_FRAME, EX_HEAD + EX_FRAME, EX_GRID - EX_FRAME * 2, headBottom - EX_HEAD - EX_FRAME);
 
   const names = dow();
   for (let i = 0; i < 7; i++) {
@@ -509,21 +552,20 @@ function exDrawWeek(ctx, C, m) {
     // 세로 구분선은 막대 띠를 **가로지르지 않는다** — 막대가 열을 넘나드는 자리라
     // 선이 그 위를 지나면 하나짜리 막대 여럿으로 읽힌다. 띠가 없으면 예전 그대로.
     if (i > 0) {
-      ctx.fillStyle = C.sep;
       if (L.barH) {
-        ctx.fillRect(x, EX_HEAD + 12, 1, L.barTop - EX_HEAD - 12);
-        ctx.fillRect(x, L.bodyTop, 1, EX_HEAD + cardH - 24 - L.bodyTop);
-      } else ctx.fillRect(x, EX_HEAD + 12, 1, cardH - 24);
+        exRuleV(ctx, C, x, EX_HEAD + EX_FRAME, L.barTop - EX_HEAD - EX_FRAME);
+        exRuleV(ctx, C, x, L.bodyTop, EX_HEAD + cardH - EX_FRAME - L.bodyTop);
+      } else exRuleV(ctx, C, x, EX_HEAD + EX_FRAME, cardH - EX_FRAME * 2);
     }
-    exText(ctx, names[i], cx, EX_HEAD + 30, exFont(600, 22), exDowColor(C, i), 'center');
+    exText(ctx, names[i], cx, EX_HEAD + 30, exFont(700, 22), exDowColor(C, i), 'center');
+    // 월간과 같은 빨간 사각 반전. 날짜 색도 화면처럼 일/토가 갈린다.
     const isToday = d.ds === today;
     if (isToday) {
-      ctx.beginPath();
-      ctx.arc(cx, EX_HEAD + 66, 22, 0, Math.PI * 2);
-      ctx.fillStyle = C.tint;
-      ctx.fill();
+      ctx.fillStyle = C.sun;
+      ctx.fillRect(cx - 22, EX_HEAD + 44, 44, 44);
     }
-    exText(ctx, String(d.day), cx, EX_HEAD + 66, exFont(700, 28), isToday ? C.onTint : C.label, 'center');
+    exText(ctx, String(d.day), cx, EX_HEAD + 66, exFont(700, 28),
+      isToday ? '#FFFFFF' : i === 0 ? C.sun : i === 6 ? C.tint : C.label, 'center');
 
     const shown = d.rows.slice(0, L.fit);
     for (let k = 0; k < shown.length; k++) {
@@ -563,9 +605,13 @@ function exDrawWeek(ctx, C, m) {
         exClip(ctx, b.title, bx + 13, by + 22, bw - 26, exFont(600, 22), onColor(b.color));
       }
     });
-    exLine(ctx, EX_PAD, L.barTop, EX_PAD + EX_GRID, C.sep);
+    // 머리줄이 끝나는 자리가 이중괘선이다. 막대 띠가 있으면 그 위(barTop),
+    // 없으면 본문 위(bodyTop) — 화면에서 .cal-head 의 아래 이중선이 그 자리다.
+    exRuleDouble(ctx, C, EX_PAD + EX_FRAME, L.barTop, EX_GRID - EX_FRAME * 2);
+    exRuleH(ctx, C, EX_PAD + EX_FRAME, L.bodyTop, EX_GRID - EX_FRAME * 2);
+  } else {
+    exRuleDouble(ctx, C, EX_PAD + EX_FRAME, L.bodyTop, EX_GRID - EX_FRAME * 2);
   }
-  exLine(ctx, EX_PAD, L.bodyTop, EX_PAD + EX_GRID, C.sep);
 }
 
 // 아젠다 한 줄. 일간 뷰와 월·주의 상세 목록이 **같은 렌더러**를 쓴다.
@@ -627,9 +673,7 @@ function exDrawRow(ctx, C, r, x, y, w) {
 
 function exDrawDay(ctx, C, m) {
   const L = m.layout;
-  exRect(ctx, EX_PAD, EX_HEAD, EX_GRID, L.h - EX_HEAD - EX_FOOT, 24);
-  ctx.fillStyle = C.card;
-  ctx.fill();
+  exSheet(ctx, C, EX_PAD, EX_HEAD, EX_GRID, L.h - EX_HEAD - EX_FOOT);
 
   if (!m.rows.length) {
     exText(ctx, t('list.empty'), EX_W / 2, EX_HEAD + L.bodyH / 2, exFont(600, 30), C.label2, 'center');
@@ -649,9 +693,7 @@ function exDrawDay(ctx, C, m) {
 function exDrawDetail(ctx, C, m) {
   const L = m.layout, D = L.detail;
   const cardH = L.h - L.detailTop - EX_FOOT;
-  exRect(ctx, EX_PAD, L.detailTop, EX_GRID, cardH, 24);
-  ctx.fillStyle = C.card;
-  ctx.fill();
+  exSheet(ctx, C, EX_PAD, L.detailTop, EX_GRID, cardH);
 
   const x = EX_PAD + 26, w = EX_GRID - 52;
   let y = L.detailTop;

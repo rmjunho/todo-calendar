@@ -197,7 +197,11 @@ input:focus,textarea:focus{outline:2px solid var(--tint);outline-offset:-1px}
    ★ .card 보다 **뒤에** 와야 이긴다(명시도가 0,1,0 으로 같다). 순서를 바꾸지 말 것.
    ★ 인라인 style 의 border/border-radius 는 이 규칙을 이긴다 — 그래서
      calendar.js 쪽 네 카드에서 인라인 border 를 뺐다. 되살리지 말 것. */
-.cal-sheet{border:1.5px solid var(--cal-rule);border-radius:0;overflow:hidden;
+/* ★ 2px 이다. 1.5px 로 뒀더니 dpr 1.25 에서 **안쪽 괘선(1px)과 똑같은 굵기**로
+   나왔다(실측: 둘 다 0.8px). 크롬이 테두리 폭을 device px 로 **내림**해서
+   1.5×1.25=1.875 → 1 device px 이 된다. 2px 이면 어느 배율에서도 안쪽 괘선의
+   두 배로 남는다 — 바깥 틀이 틀로 읽히려면 그래야 한다. */
+.cal-sheet{border:2px solid var(--cal-rule);border-radius:0;overflow:hidden;
   box-shadow:0 1px 2px rgba(0,0,0,.06),0 6px 16px rgba(0,0,0,.07)}
 /* 요일 머리줄. 레퍼런스 넷이 전부 머리줄을 **이중괘선**으로 끊는다. */
 .cal-head{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));
