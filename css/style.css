@@ -264,6 +264,138 @@ input:focus,textarea:focus{outline:2px solid var(--tint);outline-offset:-1px}
 .cal-axis::before{content:"";position:absolute;top:0;bottom:0;left:50px;
   border-left:1px solid var(--cal-rule-in)}
 
+/* ===========================================================================
+   옛 간판 (레퍼런스: 손으로 칠한 국내 옛 간판들)
+   ---------------------------------------------------------------------------
+   ★ _ds/ 는 원본 그대로 둔다. index.html 이 _ds → css/style.css 순으로 걸므로
+     여기서 같은 이름의 토큰을 다시 선언하면 명시도가 같아도 **뒤에 온 쪽이 이긴다.**
+     그래서 색 하나 고치면 버튼·시트·탭바·약관 페이지까지 한꺼번에 따라온다.
+   ★ 간판의 정체는 색보다 **재질**이다: 유리도 그라디언트도 번지는 그림자도 없고,
+     납작한 페인트 판 + 굵은 먹 테두리 + 벽에서 뜬 딱딱한 그림자뿐이다. 그래서
+     --tc-sheen 을 none 으로 죽이고 --tc-raise 를 하드 그림자로 바꾼다.
+   ★ 카테고리 팔레트(CAT_COLORS)는 **안 건드린다** — firestore.rules 의 catColor()
+     가 같은 집합을 강제하고, 이미 저장된 카테고리가 옛 색을 들고 있다.
+   =========================================================================== */
+:root{
+  /* 간판 원색. 앱 어디서나 이 셋이 강조색이다. */
+  --sign-ink:#1C1813;          /* 테두리·그림자에 쓰는 먹 */
+  --sign-red:#D2282E;
+  --sign-blue:#1D4E9C;
+  --sign-yellow:#F2C230;
+  /* 바탕 — 벽에 걸린 판때기(page)와 그 위에 칠한 판(card). */
+  --bg-secondary:#E4DAC0;
+  --bg:#F3EBD8;
+  --bg-tertiary:#F3EBD8;
+  --bg-grouped:#E4DAC0;
+  --bg-grouped-secondary:#F3EBD8;
+  --bg-grouped-tertiary:#E4DAC0;
+  /* 글자 — 순검정이 아니라 따뜻한 먹이다. 페인트에는 순색이 없다. */
+  --label:#1C1813;
+  --label-secondary:rgba(28,24,19,.62);
+  --label-tertiary:rgba(28,24,19,.40);
+  --label-quaternary:rgba(28,24,19,.22);
+  --separator:rgba(28,24,19,.38);
+  --separator-opaque:#8A7F6B;
+  --fill:rgba(28,24,19,.18);
+  --fill-secondary:rgba(28,24,19,.14);
+  --fill-tertiary:rgba(28,24,19,.10);
+  --fill-quaternary:rgba(28,24,19,.06);
+  --tint:var(--sign-blue);
+  /* ★ 순백이 아니라 크림이다. 간판 글자는 흰 페인트라도 바탕색을 탄다. */
+  --on-tint:#F3EBD8;
+  --system-green:#2C7A4B;
+  /* 유리 재질을 전부 **불투명 페인트**로 죽인다. */
+  --material-thick:#F3EBD8;
+  --glass-fill:#F3EBD8;
+  --glass-fill-hover:#EBE1CA;
+  --glass-fill-pressed:#DFD3B6;
+  --glass-border:var(--sign-ink);
+  --glass-highlight:transparent;
+  /* 모서리 — 칠한 판이라 아주 살짝만 둥글다. 캡슐은 없다. */
+  --radius-sm:2px;--radius-md:3px;--radius-lg:3px;--radius-xl:3px;--radius-capsule:3px;
+  /* 그림자 — 번지지 않는다. 판이 벽에서 떠 있는 만큼만 먹으로 진다. */
+  --tc-sheen:none;
+  --tc-card-sheen:none;
+  --tc-raise:0 0 0 1.5px var(--sign-ink),2px 2px 0 var(--sign-ink);
+  --tc-raise-sm:0 0 0 1.5px var(--sign-ink),2px 2px 0 var(--sign-ink);
+  --tc-card-shadow:0 0 0 2px var(--sign-ink),4px 4px 0 var(--sign-ink);
+  --shadow-glass:2px 2px 0 var(--sign-ink);
+  --shadow-3:0 0 0 2px var(--sign-ink),4px 4px 0 var(--sign-ink);
+  /* 달력 격자의 잉크도 같은 통에서 나온다 — 두 팔레트를 따로 두면 어긋난다. */
+  --cal-red:var(--sign-red);
+  --cal-blue:var(--sign-blue);
+  --cal-paper:var(--bg);
+  --cal-rule:var(--sign-ink);
+  --cal-rule-in:color-mix(in srgb,var(--sign-ink) 42%,transparent);
+}
+/* 밤에 본 간판 — 때 탄 나무판에 크림 글자. 먹과 크림의 자리가 통째로 바뀐다. */
+:root[data-theme="dark"]{
+  --sign-ink:#EFE7D3;
+  --sign-red:#F0605A;
+  --sign-blue:#7FA9E4;
+  --sign-yellow:#F2C230;
+  --bg-secondary:#14110C;
+  --bg:#221D15;
+  --bg-tertiary:#2C261C;
+  --bg-grouped:#14110C;
+  --bg-grouped-secondary:#221D15;
+  --bg-grouped-tertiary:#2C261C;
+  --label:#EFE7D3;
+  --label-secondary:rgba(239,231,211,.62);
+  --label-tertiary:rgba(239,231,211,.40);
+  --label-quaternary:rgba(239,231,211,.22);
+  --separator:rgba(239,231,211,.34);
+  --separator-opaque:#6B6152;
+  --fill:rgba(239,231,211,.18);
+  --fill-secondary:rgba(239,231,211,.14);
+  --fill-tertiary:rgba(239,231,211,.10);
+  --fill-quaternary:rgba(239,231,211,.06);
+  --on-tint:#14110C;
+  --system-green:#4CA96E;
+  --material-thick:#221D15;
+  --glass-fill:#2C261C;
+  --glass-fill-hover:#37301F;
+  --glass-fill-pressed:#241F17;
+}
+
+/* --- 하드코딩된 모서리·재질을 간판으로 되돌린다 -----------------------------
+   아래 값들은 토큰이 아니라 이 파일 위쪽에 px 로 박혀 있어서 :root 만 고쳐서는
+   안 따라온다. **정의보다 뒤에 와야** 이긴다 — 이 블록을 위로 옮기지 말 것. */
+.card{border-radius:3px}
+.field{border-radius:2px}
+.seg-wrap{border-radius:3px;box-shadow:0 0 0 1.5px var(--sign-ink)}
+.seg{border-radius:2px}
+.pri{border-radius:3px}
+.picker-btn{border-radius:3px}
+.picker-menu button{border-radius:2px}
+/* 스위치. 트랙만 각지고 손잡이가 둥글면 서로 다른 앱의 부품처럼 보인다. */
+.sw{border-radius:3px;box-shadow:0 0 0 1.5px var(--sign-ink)}
+.sw span{border-radius:2px;box-shadow:none}
+/* 유리 버튼은 이제 유리가 아니다 — 블러를 끄고 납작한 판으로 만든다.
+   backdrop-filter 를 남겨 두면 배경이 비쳐 먹 테두리가 흐려진다. */
+.btn-glass{-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:var(--tc-raise)}
+[data-raise="glass"] .btn{box-shadow:var(--tc-raise)}
+[data-raise="tint"] .btn{box-shadow:var(--tc-raise)}
+.tabbar{-webkit-backdrop-filter:none;backdrop-filter:none}
+.picker-menu{border-radius:3px;-webkit-backdrop-filter:none;backdrop-filter:none}
+/* 고른 탭의 판. 옅은 tint 덮개가 아니라 **칠해진 색판**이다. */
+.tabbar .seg-on{color:var(--on-tint)}
+.tabbar .seg-on::before{background-color:var(--sign-blue)}
+
+/* --- 제목·배지만 간판 글자 -------------------------------------------------
+   본문은 그대로 둔다. 간판의 두꺼운 획을 본문에까지 씌우면 할 일 목록처럼
+   글자가 빽빽한 곳에서 못 읽는다(사용자가 고른 조건이기도 하다).
+   ★ -webkit-text-stroke 를 안 쓴다 — 한글은 획 사이가 좁아서 테두리가 안쪽으로
+     파고들어 'ㅁ'·'ㅂ' 의 속공간이 메워진다. text-shadow 는 **바깥쪽에만** 진다. */
+.sign-title{font-weight:900;letter-spacing:-1px;color:var(--bg);
+  text-shadow:-1.5px 0 var(--sign-ink),1.5px 0 var(--sign-ink),
+    0 -1.5px var(--sign-ink),0 1.5px var(--sign-ink),3px 3px 0 var(--sign-ink)}
+/* 작은 라벨용. 테두리 없이 굵기와 자간만 — 12px 짜리에 외곽선을 두르면 덩어리가 된다. */
+.sign-label{font-weight:800;letter-spacing:.5px}
+/* 배지·칩. 납작한 색판에 먹 테두리 — 간판 구석의 작은 색 블록이 이 모양이다. */
+.sign-chip{border:1.5px solid var(--sign-ink);border-radius:2px;
+  font-weight:800;background-image:none;box-shadow:none}
+
 /* --- 약관 본문. 회원가입 모달과 terms.html / privacy.html 이 같이 쓴다.
    본문은 js/legal.js 한 곳에만 있고 이 스타일이 양쪽에 똑같이 걸린다. --- */
 .legal{font-size:15px;line-height:1.75;color:var(--label);word-break:keep-all}
