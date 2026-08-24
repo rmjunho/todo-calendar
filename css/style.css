@@ -176,11 +176,64 @@ input:focus,textarea:focus{outline:2px solid var(--tint);outline-offset:-1px}
 .pri{display:flex;align-items:center;gap:6px;border:none;cursor:pointer;padding:0 14px;height:36px;
   border-radius:999px;font-family:inherit;font-size:13px;font-weight:600;transition:all .15s ease;
   background-image:var(--tc-sheen);box-shadow:var(--tc-raise-sm)}
-.cell{min-height:96px;padding:5px 4px;border-top:.5px solid var(--separator);cursor:pointer;overflow:hidden}
+/* ★ border-top 이 아래 --cal-rule-in 을 쓴다. 두께를 .5 → 1 로 올렸으므로
+   calendar.js 의 barSpacer 도 **같이 1px** 이어야 한다(막대 층의 시작 y). */
+.cell{min-height:96px;padding:5px 4px;border-top:1px solid var(--cal-rule-in);cursor:pointer;overflow:hidden}
 .pill{font-size:10.5px;font-weight:600;padding:2px 6px;border-radius:5px;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}
 .row-title{font-size:16px;font-weight:600}
 .trunc{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* --- 옛 인쇄 달력 격자 (레퍼런스: 국내 인쇄소 벽걸이 달력) -------------------
+   년(12칸)·월·주·일 **본문 네 곳에만** 걸린다. 헤더·필터 칩·탭바는 그대로
+   iOS 질감이다 — 사용자가 표시한 자리가 거기까지였다.
+   ★ 괘선 색을 var(--label) 에 묶는 이유: 레퍼런스는 인쇄물이라 다크 모드가 없다.
+     잉크를 #000 으로 박으면 어두운 테마에서 격자가 통째로 사라진다. label 이면
+     밝은 테마는 흰 종이에 검정, 어두운 테마는 그대로 반전된 판이 된다.
+     applyTheme() 이 늘 data-theme 을 찍으므로 두 테마가 자동으로 갈린다. */
+:root{--cal-rule:var(--label);--cal-rule-in:color-mix(in srgb,var(--label) 42%,transparent)}
+/* 달력 판. .card 의 둥근 모서리를 되돌리되 그림자를 0 으로 지우지는 않는다 —
+   바탕(--bg-secondary) 위에 **종이 한 장이 놓인** 느낌은 남아야 한다.
+   ★ .card 보다 **뒤에** 와야 이긴다(명시도가 0,1,0 으로 같다). 순서를 바꾸지 말 것.
+   ★ 인라인 style 의 border/border-radius 는 이 규칙을 이긴다 — 그래서
+     calendar.js 쪽 네 카드에서 인라인 border 를 뺐다. 되살리지 말 것. */
+.cal-sheet{border:1.5px solid var(--cal-rule);border-radius:0;overflow:hidden;
+  box-shadow:0 1px 2px rgba(0,0,0,.06),0 6px 16px rgba(0,0,0,.07)}
+/* 요일 머리줄. 레퍼런스 넷이 전부 머리줄을 **이중괘선**으로 끊는다. */
+.cal-head{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));
+  border-bottom:3px double var(--cal-rule);background-color:var(--fill-quaternary)}
+.cal-head > *{border-left:1px solid var(--cal-rule-in)}
+.cal-head > *:first-child{border-left:none}
+/* 7열 격자의 세로 괘선. 가로 괘선은 .cell 의 border-top 이 이미 든다.
+   ★ 막대 층([data-bars])은 이 격자의 **형제**라 괘선이 안 걸린다 — 걸리면
+     기간 막대 위에 세로줄이 그어져 하루짜리 여럿으로 읽힌다. */
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+.cal-grid > *{border-left:1px solid var(--cal-rule-in)}
+.cal-grid > *:first-child{border-left:none}
+/* 날짜 숫자판. 동그란 칩이 아니라 각진 숫자다. tabular-nums 가 핵심 —
+   레퍼런스에서 숫자가 세로로 딱 맞아떨어지는 게 그 달력의 정체성이다.
+   ★ 26px 정사각과 margin-bottom 4 는 **바꾸지 말 것**: calendar.js 의 barSpacer
+     가 이 높이를 그대로 베껴서 기간 막대 층의 시작 y 를 맞춘다. */
+.cal-day{width:26px;height:26px;margin:0 auto 4px;display:flex;align-items:center;
+  justify-content:center;font-size:15px;font-weight:700;line-height:1;
+  font-variant-numeric:tabular-nums}
+/* 년 뷰 12칸. gap 을 없애고 이웃끼리 괘선을 나눠 쓴다 — 레퍼런스 2023 달력
+   왼쪽 페이지의 12개월 블록이 이 모양이다. 바깥 테두리는 .cal-sheet 가 이미
+   그리므로 첫 행·첫 열의 괘선을 뺀다(안 빼면 이중선이 된다). */
+.cal-months{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+.cal-months > button{border:none;border-top:1px solid var(--cal-rule-in);
+  border-left:1px solid var(--cal-rule-in);border-radius:0;cursor:pointer;
+  font-family:inherit;padding:14px 6px;display:flex;flex-direction:column;
+  align-items:center;gap:3px;background-color:transparent}
+.cal-months > button:nth-child(4n+1){border-left:none}
+.cal-months > button:nth-child(-n+4){border-top:none}
+/* 일 뷰 시간축. 시간 라벨 칸과 본문 사이에 세로 괘선을 세운다 — 레퍼런스
+   아래쪽 MEMO 칸을 끊는 그 선이다.
+   ★ left:50 은 눈금 줄의 실제 구조에서 나온 값이다: 라벨 42 + gap 8. 눈금선이
+     시작하는 x 와 **같은 자리**라 둘이 정확히 T 자로 만난다. 라벨 폭이나 gap 을
+     바꾸면 이 50 도 같이 고칠 것. */
+.cal-axis::before{content:"";position:absolute;top:0;bottom:0;left:50px;
+  border-left:1px solid var(--cal-rule-in)}
 
 /* --- 약관 본문. 회원가입 모달과 terms.html / privacy.html 이 같이 쓴다.
    본문은 js/legal.js 한 곳에만 있고 이 스타일이 양쪽에 똑같이 걸린다. --- */
