@@ -864,7 +864,8 @@ function render() {
         'text-align:left;cursor:pointer;display:block">' +
         '<div style="font-size:13px;font-weight:600;color:var(--tint)">' + esc(todayLabel) + '</div>' +
         '<div style="display:flex;align-items:center;gap:6px">' +
-          '<h1 style="margin:2px 0 0;font-size:30px;font-weight:700;letter-spacing:.2px">' + esc(monthLabel) + '</h1>' +
+          // 간판 글자. 크림 글자에 먹 외곽선 — 모양은 .sign-title 이 든다(style.css).
+          '<h1 class="sign-title" style="margin:2px 0 0;font-size:32px">' + esc(monthLabel) + '</h1>' +
           icon('chevron.up.chevron.down', 17, 'var(--label-tertiary)') +
         '</div>' +
       '</button>' + (state.jump ? renderJumpPopover() : '') + '</div>' +
@@ -960,7 +961,7 @@ function render() {
             esc(g.memo) + '</div>' : '') +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;flex:none">' +
-          '<span style="font-size:11px;font-weight:600;color:' + c + ';padding:3px 8px;border-radius:2px;' +
+          '<span class="sign-chip" style="font-size:11px;color:' + c + ';padding:2px 7px;' +
             'background-color:color-mix(in srgb, ' + c + ' 16%, transparent)">' + esc(goalDue(g)) + '</span>' +
           '<span ' + open + ' style="cursor:pointer;color:var(--label-tertiary);display:flex">' +
             icon('chevron.right', 15) + '</span>' +
@@ -990,11 +991,14 @@ function render() {
     }
 
     body += '<div style="display:flex;align-items:baseline;justify-content:space-between;margin:0 4px 10px">' +
-        '<h2 style="margin:0;font-size:20px;font-weight:700">' + esc(t('goal.title')) + '</h2>' +
+        '<h2 class="sign-head" style="margin:0;font-size:20px">' + esc(t('goal.title')) + '</h2>' +
         '<span style="font-size:13px;font-weight:500;color:var(--label-secondary)">' + esc(gRemain) + '</span></div>' +
       '<div class="card" style="border-radius:3px;border:.5px solid var(--separator);overflow:hidden">' +
         goalRows + '</div>' +
-      '<div style="margin:22px 4px 10px;font-size:20px;font-weight:700">' + esc(t('goal.months')) + '</div>' +
+      // ★ 바깥 div 가 여백을 들고, 밑줄은 안쪽 span 이 든다 — .sign-head 가
+      //   inline-block 이라 밑줄이 글자 폭까지만 그어진다.
+      '<div style="margin:22px 4px 10px"><span class="sign-head" style="font-size:20px">' +
+        esc(t('goal.months')) + '</span></div>' +
       // 격자 자체가 판이다 — 패딩 없이 12칸이 테두리에 딱 붙는다(레퍼런스의 12개월 블록).
       '<div class="card cal-sheet cal-months">' + months + '</div>';
   }
@@ -1310,12 +1314,13 @@ function render() {
         '<div style="display:flex;align-items:center;gap:8px;flex:none">' +
           // 여러 날 배지. 시각 라벨만 있으면 '09:00–18:00' 이 하루 안의 범위로 읽힌다.
           (spanOf(it) > 1
-            ? '<span style="font-size:11px;font-weight:600;color:' + c + ';padding:3px 8px;border-radius:2px;' +
+            ? '<span class="sign-chip" style="font-size:11px;color:' + c + ';padding:2px 7px;' +
               'background-color:color-mix(in srgb, ' + c + ' 16%, transparent)">' +
               esc(t('form.spanDays', spanOf(it))) + '</span>' : '') +
           (it.repeat && it.repeat !== 'none'
-            ? '<span style="font-size:11px;font-weight:600;color:var(--label-secondary);background:var(--fill-quaternary);' +
-              'padding:3px 8px;border-radius:2px">' + esc(repLabel(it.repeat, it.days)) + '</span>' : '') +
+            ? '<span class="sign-chip" style="font-size:11px;color:var(--label);' +
+              'background-color:var(--fill-quaternary);padding:2px 7px">' +
+              esc(repLabel(it.repeat, it.days)) + '</span>' : '') +
           (it.time ? '<span style="font-size:13px;font-weight:500;color:var(--label-secondary);' +
             'font-variant-numeric:tabular-nums">' + esc(timeRange(it.time, it.endTime || '')) + '</span>' : '') +
           '<span ' + open + ' style="cursor:pointer;color:var(--label-tertiary);display:flex">' +
@@ -1332,7 +1337,7 @@ function render() {
   //   한 개도 들어가지 않는다(위 year view 주석). 위 계산은 그대로 두는 게 싸다.
   if (state.view !== 'year') html += '<div style="margin-top:22px">' +
     '<div style="display:flex;align-items:baseline;justify-content:space-between;margin:0 4px 10px">' +
-      '<h2 style="margin:0;font-size:20px;font-weight:700">' + esc(selectedTitle) + '</h2>' +
+      '<h2 class="sign-head" style="margin:0;font-size:20px">' + esc(selectedTitle) + '</h2>' +
       '<span style="font-size:13px;font-weight:500;color:var(--label-secondary)">' + esc(remainLabel) + '</span></div>' +
     '<div class="card" style="border-radius:3px;border:.5px solid var(--separator);' +
       'overflow:hidden">' + listHtml + '</div></div>';
