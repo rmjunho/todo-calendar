@@ -1318,8 +1318,11 @@ function render() {
   // ★ 본문과 출처의 회색을 한 단계 다르게 둔다. 같은 톤이면 출처가 본문처럼 읽힌다.
   // ★ 언어가 엇갈려 있다(한국어 화면 = 영문 본문). i18n.js 의 주석을 볼 것 — 의도된 것이다.
   html += '<div data-verse style="text-align:center;margin:26px 0 0;padding:0 8px">' +
+    // ★ text-wrap:balance — 줄 길이를 고르게 나눈다. 없으면 폰에서 마지막 줄만
+    //   짧게 남아(301/321/212px, 실측) 문장이 흘러내린 것처럼 보인다.
+    //   글꼴·크기·색은 건드리지 않는다. 줄 나누기만 바꾼다.
     '<p style="margin:0 auto;max-width:620px;font-size:13px;line-height:1.8;' +
-      'color:var(--label-secondary)">' +
+      'text-wrap:balance;color:var(--label-secondary)">' +
       t('verse.text').split('\n').map(esc).join('<br>') + '</p>' +
     '<div style="margin-top:6px;font-size:12px;font-weight:600;letter-spacing:.3px;' +
       'color:var(--label-tertiary)">' + esc(t('verse.ref')) + '</div></div>';

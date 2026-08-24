@@ -2453,8 +2453,17 @@ if (location.search.includes('selftest')) {
   ok(vKo.indexOf('Proverbs') >= 0 && vEn.indexOf('잠언') >= 0,
     'the verse is crossed on purpose — the Korean screen shows the English text, and the other way round',
     'ko=' + vKo.slice(0, 16) + ' / en=' + vEn.slice(0, 16));
+  // 두 본문이 줄을 다르게 다룬다. 국문은 잠언의 두 짝이라 그 자리에서 끊고, 영문은
+  // 통으로 흘려 balance 가 나눈다 — 세미콜론에서 강제로 끊으면 폰에서 짧은 꼬리가
+  // 두 번 생긴다(375px 에서 301/144/302/84px 로 실측).
   ok(!!document.querySelector('[data-verse] p br'),
-    'the passage keeps the line break it was written with instead of running on as one line');
+    'the Korean couplet keeps its own break — the two halves belong on two lines');
+  setSettings({ lang: 'ko' });
+  render();
+  const vP = document.querySelector('[data-verse] p');
+  ok(!vP.querySelector('br') && getComputedStyle(vP).textWrap === 'balance',
+    'the English runs as one flow and is balanced instead — a hard break leaves a short tail on a phone',
+    'br=' + !!vP.querySelector('br') + ' wrap=' + getComputedStyle(vP).textWrap);
   // 자리가 본문 **맨 끝**이다(떠 있는 캡슐 바 바로 위). 위쪽으로 다시 올라가면 이 검사가 잡는다.
   const vEl = document.querySelector('[data-verse]');
   ok(vEl.parentElement.lastElementChild === vEl,

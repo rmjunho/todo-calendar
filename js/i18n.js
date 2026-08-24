@@ -155,7 +155,10 @@ const STR = {
     //     **국문** 본문이 나옵니다. 오타가 아니라 그렇게 보이길 원해서 넣은 것이니
     //     "짝이 안 맞는다" 고 서로 바꾸지 마세요.
     // 줄바꿈은 '\n' 하나로 표시하고, 그리는 쪽에서 esc() 한 뒤 <br> 로 바꿉니다.
-    'verse.text': 'Trust in the LORD with all your heart and lean not on your own understanding;\n' +
+    // ★ 영문에는 '\n' 을 넣지 않는다. 세미콜론에서 강제로 끊으면 폰(375px)에서
+    //   301 → 144 → 302 → 84px 로 짧은 꼬리가 두 번 생긴다(실측). 통으로 흘려 두면
+    //   text-wrap:balance 가 3줄을 261/276/298px 로 고르게 나눈다.
+    'verse.text': 'Trust in the LORD with all your heart and lean not on your own understanding; ' +
       'in all your ways submit to him, and he will make your paths straight.',
     'verse.ref': '- Proverbs 3:5-6 (NIV) -',
     'guest.name': '손님',
@@ -437,6 +440,7 @@ const STR = {
     'hdr.settings': 'Settings',
     'hdr.logout': 'Sign out',
     // ★★ 위 ko 쪽 주석 참고 — 영어 화면에는 국문 본문이 나옵니다. 의도된 것입니다.
+    // ★ 국문은 '\n' 을 **남긴다**. 잠언의 두 짝(대구)이라 그 자리에서 끊는 것이 맞다.
     'verse.text': '너는 마음을 다하여 여호와를 신뢰하고 네 명철을 의지하지 말라\n' +
       '너는 범사에 그를 인정하라 그리하면 네 길을 지도하시리라',
     'verse.ref': '- 잠언 3:5-6 (개역개정) -',
