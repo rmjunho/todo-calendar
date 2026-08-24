@@ -2432,6 +2432,32 @@ if (location.search.includes('selftest')) {
     'the original ids are reused so a to-do still points at its own category');
   eq(guestCount(), 3, 'the count offered on sign-in covers to-dos, categories and goals');
 
+  // --- 말씀 줄 ---
+  // ★ 언어가 엇갈린 것이 **의도**다. 이 검사가 그 사실을 붙잡아 둔다 — 안 그러면
+  //   다음에 보는 사람이 "짝이 안 맞는다" 며 서로 바꿔 놓는다.
+  const keepPref = { theme: SETTINGS.theme, lang: SETTINGS.lang, view: SETTINGS.view };
+  const keepView = state.view;
+  VIEWS.forEach((v) => {
+    state.view = v;
+    render();
+    ok(!!document.querySelector('[data-verse]'),
+      'the verse is drawn in the ' + v + ' view too — unlike the kind tabs above it', v);
+  });
+  state.view = 'month';
+  setSettings({ lang: 'ko' });
+  render();
+  const vKo = document.querySelector('[data-verse]').textContent;
+  setSettings({ lang: 'en' });
+  render();
+  const vEn = document.querySelector('[data-verse]').textContent;
+  ok(vKo.indexOf('Proverbs') >= 0 && vEn.indexOf('잠언') >= 0,
+    'the verse is crossed on purpose — the Korean screen shows the English text, and the other way round',
+    'ko=' + vKo.slice(0, 16) + ' / en=' + vEn.slice(0, 16));
+  ok(!!document.querySelector('[data-verse] p br'),
+    'the passage keeps the line break it was written with instead of running on as one line');
+  setSettings(keepPref);
+  state.view = keepView;
+
   if (keepGuest === null) localStorage.removeItem(GUEST_KEY);
   else localStorage.setItem(GUEST_KEY, keepGuest);
   Object.assign(state, keepData);

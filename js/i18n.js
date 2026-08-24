@@ -150,6 +150,14 @@ const STR = {
     'hdr.settings': '설정',
     'hdr.logout': '로그아웃',
     // 손님 모드 — 로그인하지 않고 쓰는 상태
+    // ───────── 말씀 한 구절 (유형 탭 아래) ─────────
+    // ★★ 언어가 **일부러 엇갈려** 있습니다. 한국어 화면에는 **영문**, 영어 화면에는
+    //     **국문** 본문이 나옵니다. 오타가 아니라 그렇게 보이길 원해서 넣은 것이니
+    //     "짝이 안 맞는다" 고 서로 바꾸지 마세요.
+    // 줄바꿈은 '\n' 하나로 표시하고, 그리는 쪽에서 esc() 한 뒤 <br> 로 바꿉니다.
+    'verse.text': 'Trust in the LORD with all your heart and lean not on your own understanding;\n' +
+      'in all your ways submit to him, and he will make your paths straight.',
+    'verse.ref': '- Proverbs 3:5-6 (NIV) -',
     'guest.name': '손님',
     'guest.login': '로그인',
     'guest.hint': '로그인하지 않고 쓰는 중입니다. 할 일은 이 브라우저에만 저장되고, 방문 기록을 지우면 사라집니다.',
@@ -428,6 +436,10 @@ const STR = {
     'hdr.signups': 'Admin',
     'hdr.settings': 'Settings',
     'hdr.logout': 'Sign out',
+    // ★★ 위 ko 쪽 주석 참고 — 영어 화면에는 국문 본문이 나옵니다. 의도된 것입니다.
+    'verse.text': '너는 마음을 다하여 여호와를 신뢰하고 네 명철을 의지하지 말라\n' +
+      '너는 범사에 그를 인정하라 그리하면 네 길을 지도하시리라',
+    'verse.ref': '- 잠언 3:5-6 (개역개정) -',
     'guest.name': 'Guest',
     'guest.login': 'Sign in',
     'guest.hint': 'You are using the app without an account. To-dos stay in this browser only and are lost if you clear site data.',
