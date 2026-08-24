@@ -5,7 +5,7 @@
 > **이 파일은 매 세션 읽힙니다. 갱신할 때 늘리지 말고 낡은 내용을 지우세요.**
 
 **최종 갱신:** 2026-08-24 · **본진:** `C:\Users\LENOVO\dev\todo-calendar` (git `main`)
-**되돌릴 지점:** 태그 `design-before-vintage` = 옛 달력 격자를 넣기 직전 커밋
+**되돌릴 지점:** 태그 `design-before-vintage`(옛 달력 격자 직전) · `design-before-signboard`(옛 간판 리스킨 직전)
 **배포됨:** <https://todo-calendar.kro.kr> (GitHub Pages + `CNAME`) · 보안 규칙도 배포 완료
 
 기능은 다 붙었습니다 — 손님 모드·계정·약관 동의·기기 간 동기화·본인 탈퇴·테마 3종·언어 2종·
@@ -766,6 +766,26 @@ PIN 재인증 → todos 삭제 → users + usernames 삭제 → Auth 계정 삭�
      큰 날짜를 **기존 높이 안에** 넣었습니다 — 주간은 세 줄이라 한자를 월간(26)보다
      작은 22 로 씁니다. y 값은 도장 아래에서 위로 역산한 것이라 하나만 고치면 겹칩니다.
 6. **`_ds/` 는 원본 그대로 두세요.** `css/style.css` 에서 토큰을 덮어쓰면 됩니다.
+   **앱 전체가 "옛 간판" 스킨입니다**(사용자가 손으로 칠한 국내 옛 간판 사진을
+   레퍼런스로 골랐습니다). 규칙은 `css/style.css` 맨 아래 `옛 간판` 블록 한 곳에 있고,
+   `index.html` 이 `_ds` → `css/style.css` 순으로 걸어서 **뒤에 온 선언이 이깁니다.**
+   - 바탕 `--bg-secondary #E4DAC0`(판때기) / `--bg #F3EBD8`(칠한 판), 글자 `--label #1C1813`(먹).
+     원색 `--sign-red #D2282E` · `--sign-blue #1D4E9C`(= `--tint`) · `--sign-yellow #F2C230`.
+     어두운 테마는 먹과 크림의 자리를 통째로 바꿉니다.
+   - **재질이 정체성입니다**: `--tc-sheen: none`, `--tc-raise` 는 번지는 그림자가 아니라
+     `0 0 0 1.5px 먹, 2px 2px 0 먹` 하드 그림자, 유리 버튼·탭바·팝오버는 `backdrop-filter`
+     를 껐습니다. 그라디언트나 blur 를 되살리면 간판이 아니라 iOS 로 돌아갑니다.
+   - 모서리는 전부 2~3px 입니다. **인라인 `border-radius` 는 CSS 를 이기므로**
+     `calendar.js`/`auth.js`/`todo.js`/`export.js` 안의 값도 같이 각지게 고쳤습니다
+     (`999px`·`50%`·`16px` 이 남아 있으면 그 부품만 iOS 로 튑니다).
+   - ⚠️ **`.card:not(.cal-sheet)`** 의 `:not()` 을 지우지 마세요. 이 블록이 `.cal-sheet`
+     정의보다 **뒤**라서, 그냥 `.card` 로 쓰면 명시도가 같아 나중 규칙이 이기고 달력 판이
+     둥글어집니다(실제로 그렇게 만들었다가 selftest 4개가 잡았습니다).
+   - 제목·배지만 간판 글자입니다(`.sign-title` 크림+먹 외곽선, `.sign-head` 굵은 밑줄,
+     `.sign-chip` 먹 테두리). **본문은 그대로** — 두꺼운 획을 목록에까지 씌우면 못 읽습니다.
+     `-webkit-text-stroke` 를 쓰지 마세요: 한글은 테두리가 안쪽으로 파고들어 속공간이 메워집니다.
+   - `export.js` 의 `EX_COLORS` 가 같은 팔레트를 **캔버스용으로 미리 합성한** 값입니다.
+     화면 색을 고치면 그 표의 `label2/label3/sep/ruleIn/head` 를 다시 계산하세요.
 7. **7열 격자는 `repeat(7, minmax(0,1fr))`.** `1fr`(=`minmax(auto,1fr)`)로 쓰면 nowrap
    제목(`.trunc`·`.pill`)의 min-content 가 열을 밀어내 나머지 요일이 화면 밖으로 나가고,
    `.cal-sheet` 가 `overflow:hidden` 이라 가로 스크롤도 안 됩니다. **월간·주간 양쪽 다**
