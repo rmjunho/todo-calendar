@@ -214,9 +214,20 @@ input:focus,textarea:focus{outline:2px solid var(--tint);outline-offset:-1px}
 /* ★ background-color 는 --cal-paper 다(따뜻한 흰색). 일간 뷰에서 인접 블록을 가르는
    `border-right` 도 **같은 토큰**이라야 한다 — 예전에는 둘 다 var(--bg) 여서 맞았다.
    한쪽만 바꾸면 겹치는 일정 사이에 흰 줄이 아니라 색 줄이 생긴다(§디자인 5). */
+/* ★ 그림자만 **부드럽다.** 앱의 나머지는 전부 딱딱한 먹 그림자인데(칠한 간판),
+   이것 하나는 벽에 **걸린 종이**라 빛이 번지는 것이 맞다. 두 재질을 일부러
+   갈라 놓은 것이니 --tc-card-shadow 로 되돌리지 말 것. */
 .cal-sheet{border:2px solid var(--cal-rule);border-radius:0;overflow:hidden;
   background-color:var(--cal-paper);
-  box-shadow:0 1px 2px rgba(0,0,0,.06),0 6px 16px rgba(0,0,0,.07)}
+  box-shadow:0 3px 4px rgba(0,0,0,.10),0 12px 26px rgba(0,0,0,.14)}
+/* 판 맨 위의 철끈 띠와 걸이 구멍(레퍼런스 1989·2023 달력의 그 부분).
+   ★ 구멍은 **벽 색**으로 뚫는다 — 종이색으로 칠하면 뚫린 것이 아니라 흰 점이 된다.
+   ★ 여기만 border-radius 가 50% 다. 앱 전체를 각지게 했지만 펀치 구멍은 원이다. */
+.cal-hang{position:relative;height:22px;flex:none;
+  background-color:var(--fill-quaternary);border-bottom:1px solid var(--cal-rule-in)}
+.cal-hang::after{content:"";position:absolute;left:50%;top:6px;width:11px;height:11px;
+  margin-left:-5.5px;border-radius:50%;background-color:var(--bg-secondary);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.35)}
 /* 요일 머리줄. 레퍼런스 넷이 전부 머리줄을 **이중괘선**으로 끊는다. */
 .cal-head{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));
   border-bottom:3px double var(--cal-rule);background-color:var(--fill-quaternary)}
@@ -324,7 +335,9 @@ input:focus,textarea:focus{outline:2px solid var(--tint);outline-offset:-1px}
   /* 달력 격자의 잉크도 같은 통에서 나온다 — 두 팔레트를 따로 두면 어긋난다. */
   --cal-red:var(--sign-red);
   --cal-blue:var(--sign-blue);
-  --cal-paper:var(--bg);
+  /* ★ 종이는 판때기(--bg)가 아니라 **순백**이다. 사용자가 고른 그림이 "흰 종이가
+     벽에 걸려 있다" 라서, 벽(크림)과 종이(흰색)가 갈려야 걸린 것으로 읽힌다. */
+  --cal-paper:#FFFFFF;
   --cal-rule:var(--sign-ink);
   --cal-rule-in:color-mix(in srgb,var(--sign-ink) 42%,transparent);
 }
@@ -352,6 +365,8 @@ input:focus,textarea:focus{outline:2px solid var(--tint);outline-offset:-1px}
   --fill-quaternary:rgba(239,231,211,.06);
   --on-tint:#14110C;
   --system-green:#4CA96E;
+  /* 밤에는 순백 종이가 눈을 찌른다 — 벽보다 밝되 흰색은 아닌 값으로. */
+  --cal-paper:#2E2820;
   --material-thick:#221D15;
   --glass-fill:#2C261C;
   --glass-fill-hover:#37301F;

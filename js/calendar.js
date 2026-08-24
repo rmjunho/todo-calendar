@@ -247,6 +247,10 @@ const barSpacer =
 // 그리는 층의 최대 개수. 넘친 막대는 **버리지 않고** 그 날의 `+N개` 로 넘긴다.
 // 상한이 없으면 겹치는 주의 높이가 그대로 늘어난다 — 그걸 막으려고 종류 필터를 만든 것이다.
 // 주간이 더 깊은 이유는 그 화면이 한 주만 보여 주는 자리라서다(막대 띠가 칸 위에 따로 있다).
+// 판 맨 위의 철끈 띠 + 걸이 구멍. 네 뷰가 **같은 한 줄**을 쓴다 — 뷰마다 따로 쓰면
+// 하나 고칠 때 셋이 남는다. 모양은 css/style.css 의 .cal-hang 이 든다.
+// aria-hidden: 읽어 줄 내용이 없는 장식이다.
+const calHang = '<div class="cal-hang" aria-hidden="true"></div>';
 const MONTH_LANES = 3, WEEK_LANES = 6;
 // 주간 칸이 접기 전에 보여 주는 항목 수. 근거는 렌더 쪽 주석(실측).
 const WEEK_FIT = 7;
@@ -1000,7 +1004,7 @@ function render() {
       '<div style="margin:22px 4px 10px"><span class="sign-head" style="font-size:20px">' +
         esc(t('goal.months')) + '</span></div>' +
       // 격자 자체가 판이다 — 패딩 없이 12칸이 테두리에 딱 붙는다(레퍼런스의 12개월 블록).
-      '<div class="card cal-sheet cal-months">' + months + '</div>';
+      '<div class="card cal-sheet">' + calHang + '<div class="cal-months">' + months + '</div></div>';
   }
 
   // -- month view -----------------------------------------------------------
@@ -1078,8 +1082,7 @@ function render() {
         bars + '</div>';
     }
     // 7열 minmax(0,1fr) 의 근거는 .cal-grid / .cal-head 쪽 주석에 있다.
-    body += '<div class="card cal-sheet">' +
-      '<div class="cal-head">' + heads + '</div>' + grid + '</div>';
+    body += '<div class="card cal-sheet">' + calHang + '<div class="cal-head">' + heads + '</div>' + grid + '</div>';
   }
 
   // -- week view ------------------------------------------------------------
@@ -1160,8 +1163,7 @@ function render() {
       'px);border-bottom:1px solid var(--cal-rule-in)">' +
       wshown.map((r) => barHtml(r, byId[r.id])).join('') + '</div>' : '';
     // ★ 막대 띠는 .cal-grid 를 **안 쓴다** — 세로 괘선이 막대 위를 지나면 안 된다.
-    body += '<div class="card cal-sheet">' +
-      '<div class="cal-head">' + heads + '</div>' + wbars +
+    body += '<div class="card cal-sheet">' + calHang + '<div class="cal-head">' + heads + '</div>' + wbars +
       '<div class="cal-grid">' + cols + '</div></div>';
   }
 
@@ -1265,8 +1267,10 @@ function render() {
     }
 
     // ⚠️ 이 카드의 padding 16 은 DAY_PX.cardPad 와 같은 값이어야 한다(위 주석).
-    body += '<div class="card cal-sheet" style="padding:16px 16px 20px">' + allDayBlock +
-      axis + '</div>';
+    // ★ 패딩이 판이 아니라 **안쪽 래퍼**로 내려갔다 — 철끈 띠는 판 끝까지 꽉 차야
+    //   철끈으로 읽힌다. DAY_PX.cardPad 와 같아야 한다는 등식은 그대로다.
+    body += '<div class="card cal-sheet">' + calHang +
+      '<div style="padding:16px 16px 20px">' + allDayBlock + axis + '</div></div>';
   }
 
   // 감싸는 div 는 **늘** 있다. 애니메이션이 붙을 때만 생기게 하면 DOM 모양이 렌더마다
