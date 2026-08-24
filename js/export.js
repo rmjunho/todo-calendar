@@ -22,15 +22,20 @@
 //      그건 화면 토큰과 **일부러** 달라야 한다.
 // 값 출처: _ds/…/tokens/colors.css — 그쪽을 고치면 여기도 같이 고칠 것.
 const EX_COLORS = {
-  // ruleIn/head 는 화면의 --cal-rule-in / --fill-quaternary 를 **카드 배경 위에
-  // 미리 합성한 값**이다. 캔버스에는 색 혼합 토큰이 없어서 여기서 풀어 적는다.
-  //   밝은 테마  rgba(0,0,0,.42)     over #FFFFFF = #949494
-  //   어두운 테마 rgba(255,255,255,.42) over #1C1C1E = #7B7B7D
-  // 바깥 틀은 label 을 그대로 쓴다 — 화면의 --cal-rule 이 var(--label) 이다.
+  // ★ card 는 화면의 --cal-paper 와 같은 값이다(옛 달력의 따뜻한 종이).
+  // ★ ruleIn/head 는 화면의 --cal-rule-in / --fill-quaternary 를 **그 종이 위에
+  //   미리 합성한 값**이다 — 캔버스에는 color-mix 가 없어서 여기서 풀어 적는다.
+  //     밝은 테마  rgba(0,0,0,.42)       over #FCFAF6 = #929190
+  //     어두운 테마 rgba(255,255,255,.42) over #1C1C1E = #7B7B7D
+  //   card 를 고치면 이 둘도 **다시 계산할 것.** 바깥 틀은 label 을 그대로 쓴다
+  //   (화면의 --cal-rule 이 var(--label) 이다).
+  // ★ calRed / calBlue 는 **격자 전용 오프셋 잉크**다. tint/sun 은 그대로 두었다 —
+  //   상세 목록의 체크·배지가 여전히 그 색이고, 화면에서도 --tint 는 안 건드렸다.
   light: {
-    page: '#F2F2F7', card: '#FFFFFF',
+    page: '#F2F2F7', card: '#FCFAF6',
     label: '#000000', label2: '#6E6E73', label3: '#8E8E93',
-    sep: '#D8D8DC', ruleIn: '#949494', head: '#F1F1F2',
+    sep: '#D8D8DC', ruleIn: '#929190', head: '#F2EFE9',
+    calRed: '#DE2E24', calBlue: '#1450A3',
     tint: '#007AFF', onTint: '#FFFFFF', sun: '#FF3B30',
     pillA: 0.16, doneA: 0.42
   },
@@ -38,6 +43,7 @@ const EX_COLORS = {
     page: '#000000', card: '#1C1C1E',
     label: '#FFFFFF', label2: '#A0A0A6', label3: '#6E6E73',
     sep: '#38383A', ruleIn: '#7B7B7D', head: '#2A2A2C',
+    calRed: '#FF6B5E', calBlue: '#6FA6FF',
     tint: '#0A84FF', onTint: '#FFFFFF', sun: '#FF453A',
     pillA: 0.28, doneA: 0.40
   }
@@ -413,7 +419,7 @@ function exStamp(ctx, C, s, cx, cy, size) {
   ctx.font = exFont(700, size);
   const w = Math.max(size + 6, ctx.measureText(s).width + 14);
   const h = size + 6;
-  ctx.fillStyle = C.sun;
+  ctx.fillStyle = C.calRed;
   ctx.fillRect(cx - w / 2, cy - h / 2, w, h);
 }
 // 요일 머리줄 아래의 이중괘선. 화면의 `border-bottom:3px double` 과 같은 뜻이다.
@@ -457,7 +463,7 @@ function exFooter(ctx, C, h) {
 }
 // 요일 색은 화면과 같은 규칙 — 일요일 빨강, 토요일 tint, 나머지는 **잉크 검정**.
 // (옛 달력 격자로 바꾸면서 화면의 평일 글자도 label-secondary → label 이 됐다.)
-const exDowColor = (C, i) => (i === 0 ? C.sun : i === 6 ? C.tint : C.label);
+const exDowColor = (C, i) => (i === 0 ? C.calRed : i === 6 ? C.calBlue : C.label);
 
 function exDrawMonth(ctx, C, m) {
   const L = m.layout;
@@ -509,7 +515,7 @@ function exDrawMonth(ctx, C, m) {
           ctx.fill();
           exClip(ctx, b.title, bx + 20, by + 15, bw - 27, exFont(600, 19), b.color);
         } else {
-          exRect(ctx, bx, by, bw, M_BAR_H, 7);
+          exRect(ctx, bx, by, bw, M_BAR_H, 2);
           ctx.fillStyle = b.color;
           ctx.fill();
           exClip(ctx, b.title, bx + 7, by + 15, bw - 14, exFont(600, 19), onColor(b.color));
@@ -527,14 +533,14 @@ function exDrawMonth(ctx, C, m) {
     const isToday = d.ds === today;
     const cx = x + L.cellW / 2, cy = y + 30;
     if (isToday) exStamp(ctx, C, String(d.day), cx, cy, 34);
-    exText(ctx, String(d.day), cx, cy, exFont(700, 34),
-      isToday ? '#FFFFFF' : d.dow === 0 ? C.sun : d.dow === 6 ? C.tint : C.label, 'center');
+    exText(ctx, String(d.day), cx, cy, exFont(800, 34),
+      isToday ? '#FFFFFF' : exDowColor(C, d.dow), 'center');
 
     const shown = d.rows.slice(0, 3);
     for (let k = 0; k < shown.length; k++) {
       const r = shown[k];
       const py = y + 52 + off + k * 34;
-      exRect(ctx, x + 5, py, L.cellW - 10, 30, 7);
+      exRect(ctx, x + 5, py, L.cellW - 10, 30, 2);
       ctx.fillStyle = exAlpha(r.color, C.pillA);
       ctx.fill();
       ctx.save();
@@ -581,14 +587,14 @@ function exDrawWeek(ctx, C, m) {
     // 월간과 같은 빨간 사각 도장. 날짜 색도 화면처럼 일/토가 갈린다.
     const isToday = d.ds === today;
     if (isToday) exStamp(ctx, C, String(d.day), cx, EX_HEAD + 68, 34);
-    exText(ctx, String(d.day), cx, EX_HEAD + 68, exFont(700, 34),
-      isToday ? '#FFFFFF' : i === 0 ? C.sun : i === 6 ? C.tint : C.label, 'center');
+    exText(ctx, String(d.day), cx, EX_HEAD + 68, exFont(800, 34),
+      isToday ? '#FFFFFF' : exDowColor(C, i), 'center');
 
     const shown = d.rows.slice(0, L.fit);
     for (let k = 0; k < shown.length; k++) {
       const r = shown[k];
       const y = L.bodyTop + 12 + k * W_ITEM;
-      exRect(ctx, x + 5, y, L.colW - 10, W_ITEM - 8, 9);
+      exRect(ctx, x + 5, y, L.colW - 10, W_ITEM - 8, 2);
       ctx.fillStyle = exAlpha(r.color, C.pillA);
       ctx.fill();
       ctx.save();
@@ -616,7 +622,7 @@ function exDrawWeek(ctx, C, m) {
         ctx.fill();
         exClip(ctx, b.title, bx + 29, by + 22, bw - 42, exFont(600, 22), b.color);
       } else {
-        exRect(ctx, bx, by, bw, W_BAR_H, 9);
+        exRect(ctx, bx, by, bw, W_BAR_H, 2);
         ctx.fillStyle = b.color;
         ctx.fill();
         exClip(ctx, b.title, bx + 13, by + 22, bw - 26, exFont(600, 22), onColor(b.color));
@@ -720,7 +726,7 @@ function exDrawDetail(ctx, C, m) {
     // 날짜 헤더는 할 일이 있는 날만 온다 — 빈 날은 groups 단계에서 이미 빠졌다.
     const d = parse(g.ds);
     exText(ctx, shortDay(d), x, y + DT_HEAD / 2 + 4, exFont(700, 26),
-      d.getDay() === 0 ? C.sun : d.getDay() === 6 ? C.tint : C.label2);
+      exDowColor(C, d.getDay()));
     y += DT_HEAD;
     for (let k = 0; k < g.rows.length; k++) y += exDrawRow(ctx, C, g.rows[k], x, y, w);
   }

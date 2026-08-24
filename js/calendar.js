@@ -273,7 +273,9 @@ const barOne = (b) => b.start === b.end;
 function barHtml(b, it) {
   const p = pill(it, b.start);            // 색·취소선은 회차 **시작일** 기준이다
   const one = barOne(b);
-  const rL = b.cutL ? '2px' : '5px', rR = b.cutR ? '2px' : '5px';
+  // 각진 격자에 맞춰 모서리를 깎았다. 잘린 쪽(cutL/cutR)은 0 이라 칸 끝에 딱 붙어
+  // "이어진다" 가 그대로 읽히고, 안 잘린 쪽만 2px 로 끝을 표시한다.
+  const rL = b.cutL ? '0' : '2px', rR = b.cutR ? '0' : '2px';
   return '<div class="pill" ' + openAttr(p, b.start) +
     ' style="pointer-events:auto;cursor:pointer;align-self:start;line-height:13px;height:' + BAR_H +
     // 1번 줄은 자리 맞추기용이라(barSpacer) 층은 2번 줄부터다.
@@ -980,10 +982,10 @@ function render() {
     for (let i = 0; i < 12; i++) {
       const n = gl.filter((g) => g.scope === 'month' && g.m === i).length;
       months += '<button data-ym="' + i + '"' +
-        (n ? ' style="background-color:color-mix(in srgb, #FF3B30 8%, transparent)"' : '') + '>' +
+        (n ? ' style="background-color:color-mix(in srgb, var(--cal-red) 10%, transparent)"' : '') + '>' +
         '<span class="trunc" style="max-width:100%;font-size:15px;font-weight:700;color:var(--label);' +
           'font-variant-numeric:tabular-nums">' + esc(monthShort(i)) + '</span>' +
-        '<span style="font-size:12px;font-weight:600;color:' + (n ? '#FF3B30' : 'var(--label-tertiary)') + '">' +
+        '<span style="font-size:12px;font-weight:700;color:' + (n ? 'var(--cal-red)' : 'var(--label-tertiary)') + '">' +
           esc(n ? t('goal.count', n) : '–') + '</span></button>';
     }
 
@@ -1002,7 +1004,8 @@ function render() {
     // 요일은 [한자 / 영문] 두 줄이다 — 레퍼런스 달력이 전부 이 구성이다.
     // 평일 글자는 보조 회색이 아니라 잉크 검정이다. 세로 괘선과 아래 이중선은
     // .cal-head 가 든다(css/style.css). 글자 값은 dow() 가 아니라 DOW_HANJA/DOW_EN 이다.
-    const dowInk = (i) => (i === 0 ? '#FF3B30' : i === 6 ? 'var(--tint)' : 'var(--label)');
+    // 잉크 3색. iOS 의 #FF3B30 / --tint 가 아니라 옛 달력의 오프셋 빨강·파랑이다.
+    const dowInk = (i) => (i === 0 ? 'var(--cal-red)' : i === 6 ? 'var(--cal-blue)' : 'var(--label)');
     let heads = '';
     for (let i = 0; i < 7; i++) {
       heads += '<div style="text-align:center;padding:8px 0 7px;color:' + dowInk(i) + '">' +
@@ -1050,9 +1053,9 @@ function render() {
         //   찍는 도장이 그 모양이다. 크기(26px)와 아래 여백(4)은 .cal-day 가 들고,
         //   그 값은 barSpacer 와 짝이라 바꾸면 막대 층이 어긋난다.
         cells += '<div class="cell" data-day="' + ds + '" style="background-color:' +
-          (isSel ? 'color-mix(in srgb, var(--tint) 7%, transparent)' : 'transparent') + ';opacity:' + (inM ? 1 : 0.35) + '">' +
-          '<div class="cal-day" style="background-color:' + (isToday ? '#FF3B30' : 'transparent') +
-            ';color:' + (isToday ? '#fff' : d.getDay() === 0 ? '#FF3B30' : d.getDay() === 6 ? 'var(--tint)' : 'var(--label)') + '">' +
+          (isSel ? 'color-mix(in srgb, var(--cal-blue) 9%, transparent)' : 'transparent') + ';opacity:' + (inM ? 1 : 0.35) + '">' +
+          '<div class="cal-day" style="background-color:' + (isToday ? 'var(--cal-red)' : 'transparent') +
+            ';color:' + (isToday ? '#fff' : dowInk(d.getDay())) + '">' +
             d.getDate() + '</div>' +
           (lanes ? '<div data-barspace style="height:' + (lanes * BAR_ROW) + 'px"></div>' : '') +
           '<div style="display:flex;flex-direction:column;gap:2px">' + pills + more + '</div></div>';
@@ -1078,6 +1081,8 @@ function render() {
   // -- week view ------------------------------------------------------------
   if (state.view === 'week') {
     // 주 시작은 일요일 고정이고, 배열 순서는 getDay() 색인이다 (DOW_HANJA/DOW_EN 도 같다).
+    // 잉크 3색은 월간의 dowInk 와 같은 규칙이다 — 열 색인이 곧 요일이라 인자만 다르다.
+    const wInk = (i) => (i === 0 ? 'var(--cal-red)' : i === 6 ? 'var(--cal-blue)' : 'var(--label)');
     const ws = addDays(sel, -selD.getDay());
     // ★ 열 하나가 [머리 + 본문] 을 통째로 들던 것을 [머리 줄] · [막대 띠] · [본문 줄]
     //   셋으로 갈랐다 — 기간 막대는 열을 가로지르므로 열 안에 넣을 수가 없다.
@@ -1112,7 +1117,7 @@ function render() {
       const list = cellItems(items, ds);
       const pills = list.slice(0, WEEK_FIT).map((it) => {
         const p = pill(it, ds);
-        return '<div ' + openAttr(p, ds) + ' style="cursor:pointer;padding:4px 7px;border-radius:6px;background:' +
+        return '<div ' + openAttr(p, ds) + ' style="cursor:pointer;padding:4px 7px;border-radius:2px;background-color:' +
           p.bg + ';opacity:' + p.op + '">' +
           '<div class="trunc" style="font-size:11px;font-weight:600;color:' + p.color + ';text-decoration:' + p.deco + '">' +
           esc(p.title) + '</div></div>';
@@ -1125,14 +1130,14 @@ function render() {
         ? '<div data-day="' + ds + '" style="cursor:pointer;font-size:10px;color:var(--label-tertiary);padding:0 7px">' +
           esc(t('cell.more', hid)) + '</div>' : '';
       heads += '<div data-day="' + ds + '" style="cursor:pointer;text-align:center;padding:8px 4px 8px;color:' +
-            (i === 0 ? '#FF3B30' : i === 6 ? 'var(--tint)' : 'var(--label)') + '">' +
+            wInk(i) + '">' +
           '<div class="cal-dow">' + DOW_HANJA[i] + '</div>' +
           '<div class="cal-dow-en">' + DOW_EN[i] + '</div>' +
           // 월간과 같은 각진 숫자판. 주간은 칸이 넓어 더 키운다(barSpacer 와 무관하다 —
           // 자리 맞추기가 필요한 것은 월간 칸뿐이다).
           '<div class="cal-day" style="width:36px;height:36px;font-size:24px;margin:5px auto 0;background-color:' +
-            (isToday ? '#FF3B30' : isSel ? 'var(--fill-tertiary)' : 'transparent') +
-            ';color:' + (isToday ? '#fff' : d.getDay() === 0 ? '#FF3B30' : d.getDay() === 6 ? 'var(--tint)' : 'var(--label)') +
+            (isToday ? 'var(--cal-red)' : isSel ? 'var(--fill-tertiary)' : 'transparent') +
+            ';color:' + (isToday ? '#fff' : wInk(i)) +
             '">' + d.getDate() + '</div></div>';
       // min-height 는 **본문 줄만의** 높이다(머리 줄은 위로 빠져 있다). 예전 320 에서
       // 머리 몫 64 를 뺀 값으로 정했고, 그 뒤 머리 줄이 두 줄 + 큰 숫자로 커졌지만
@@ -1163,7 +1168,7 @@ function render() {
     const allDay = dayList.filter((it) => !it.time).map((it) => {
       const p = pill(it, sel);
       return '<div ' + openAttr(p, sel) + ' style="cursor:pointer;font-size:12px;font-weight:600;padding:5px 11px;' +
-        'border-radius:999px;background:' + p.bg + ';color:' + p.color + ';text-decoration:' + p.deco +
+        'border-radius:2px;background-color:' + p.bg + ';color:' + p.color + ';text-decoration:' + p.deco +
         ';opacity:' + p.op + '">' + esc(p.title) + '</div>';
     }).join('');
     const allDayBlock = allDay
@@ -1198,9 +1203,9 @@ function render() {
       if (sel === today && nowMin >= range.startMin && nowMin <= range.endMin) {
         const top = (nowMin - range.startMin) * range.pxPerHour / 60;
         nowLine = '<div data-now style="position:absolute;left:' + (DAY_PX.axisW - 6) +
-          'px;right:0;height:2px;border-radius:1px;background-color:#FF3B30;z-index:2;top:' + top + 'px">' +
-          '<div style="position:absolute;left:-5px;top:-3px;width:8px;height:8px;border-radius:50%;' +
-          'background-color:#FF3B30"></div></div>';
+          'px;right:0;height:2px;background-color:var(--cal-red);z-index:2;top:' + top + 'px">' +
+          '<div style="position:absolute;left:-5px;top:-4px;width:9px;height:9px;' +
+          'background-color:var(--cal-red)"></div></div>';
       }
 
       const placed = dayLayout(timedItems, range);
@@ -1216,7 +1221,10 @@ function render() {
         // 인접한 열은 카드 배경색 2px 로 가른다 — .card 가 var(--bg) 라 **같은 토큰**이고,
         // 블록 배경이 반투명이라 그 자리만 카드색이 드러나 밝은/어두운 양쪽에서 맞는다.
         // 겹치지 않는 날(cols===1)과 마지막 열에는 안 붙인다 — 기존 화면이 그대로다.
-        const gap = (b.cols > 1 && b.col < b.cols - 1) ? ';border-right:2px solid var(--bg)' : '';
+        // ★ 이 색은 카드 배경과 **같은 토큰**이라야 한다. 종이색이 --cal-paper 가
+        //   되면서 var(--bg) 에서 같이 옮겼다 — 한쪽만 두면 겹치는 일정 사이에
+        //   종이색이 아니라 흰 줄이 그어진다.
+        const gap = (b.cols > 1 && b.col < b.cols - 1) ? ';border-right:2px solid var(--cal-paper)' : '';
         // overflow:hidden 은 취향이 아니라 안전장치다 — 높이는 BLOCK_MIN_H/MARK_H 로 고정인데
         // 글자 높이는 글꼴이 정한다(line-height 를 안 건다). CDN 이 늦어 폴백으로 그려지면
         // 한 줄이 29.2px 까지 커지므로, 최악에도 블록 **밖**으로는 절대 안 나가게 잘라 둔다.
@@ -1239,7 +1247,7 @@ function render() {
               ';opacity:.75">' + esc(p.range) + '</div>' : '');
         return '<div ' + openAttr(p, sel) + ' data-block="' + esc(b.id) + '" style="' + pos +
           // 좌우 패딩 8 은 위 T_FULL 산식(inset 21)의 일부다 — 같이 고칠 것.
-          ';border-radius:9px;padding:5px ' + (tier === 'bar' ? 4 : 8) + 'px;background-color:' + p.bg +
+          ';border-radius:2px;padding:5px ' + (tier === 'bar' ? 4 : 8) + 'px;background-color:' + p.bg +
           ';border-left:3px solid ' + p.color + '">' + body + '</div>';
       }).join('');
 

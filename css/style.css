@@ -179,7 +179,9 @@ input:focus,textarea:focus{outline:2px solid var(--tint);outline-offset:-1px}
 /* ★ border-top 이 아래 --cal-rule-in 을 쓴다. 두께를 .5 → 1 로 올렸으므로
    calendar.js 의 barSpacer 도 **같이 1px** 이어야 한다(막대 층의 시작 y). */
 .cell{min-height:96px;padding:5px 4px;border-top:1px solid var(--cal-rule-in);cursor:pointer;overflow:hidden}
-.pill{font-size:10.5px;font-weight:600;padding:2px 6px;border-radius:5px;white-space:nowrap;
+/* ★ 모서리를 5 → 2 로 깎았다. 각진 괘선 격자 안에서 둥근 알약만 iOS 로 남아
+   따로 놀았다. 색·글자 크기는 그대로다(데이터가 정하는 값이라 건드릴 것이 아니다). */
+.pill{font-size:10.5px;font-weight:600;padding:2px 6px;border-radius:2px;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}
 .row-title{font-size:16px;font-weight:600}
 .trunc{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -191,7 +193,15 @@ input:focus,textarea:focus{outline:2px solid var(--tint);outline-offset:-1px}
      잉크를 #000 으로 박으면 어두운 테마에서 격자가 통째로 사라진다. label 이면
      밝은 테마는 흰 종이에 검정, 어두운 테마는 그대로 반전된 판이 된다.
      applyTheme() 이 늘 data-theme 을 찍으므로 두 테마가 자동으로 갈린다. */
-:root{--cal-rule:var(--label);--cal-rule-in:color-mix(in srgb,var(--label) 42%,transparent)}
+/* 인쇄 잉크 3색 + 종이. **달력 격자 안에서만** 쓴다.
+   ★ --tint 를 물들이지 않는 이유: 버튼·탭바·링크·포커스 링이 전부 그 토큰이라
+     건드리면 앱 전체가 같이 바뀐다. CAT_COLORS 도 못 건드린다 —
+     firestore.rules 의 catColor() 가 **같은 집합**을 강제한다(§디자인 8).
+   ★ 빨강/파랑이 iOS 색(#FF3B30 / #007AFF)이 아니라 옛 달력의 오프셋 잉크다.
+     어두운 테마는 검은 종이 위에서 대비가 나야 해서 같은 색을 못 쓴다 — 밝게 올린다. */
+:root{--cal-rule:var(--label);--cal-rule-in:color-mix(in srgb,var(--label) 42%,transparent);
+  --cal-red:#DE2E24;--cal-blue:#1450A3;--cal-paper:#FCFAF6}
+:root[data-theme="dark"]{--cal-red:#FF6B5E;--cal-blue:#6FA6FF;--cal-paper:var(--bg)}
 /* 달력 판. .card 의 둥근 모서리를 되돌리되 그림자를 0 으로 지우지는 않는다 —
    바탕(--bg-secondary) 위에 **종이 한 장이 놓인** 느낌은 남아야 한다.
    ★ .card 보다 **뒤에** 와야 이긴다(명시도가 0,1,0 으로 같다). 순서를 바꾸지 말 것.
@@ -201,7 +211,11 @@ input:focus,textarea:focus{outline:2px solid var(--tint);outline-offset:-1px}
    나왔다(실측: 둘 다 0.8px). 크롬이 테두리 폭을 device px 로 **내림**해서
    1.5×1.25=1.875 → 1 device px 이 된다. 2px 이면 어느 배율에서도 안쪽 괘선의
    두 배로 남는다 — 바깥 틀이 틀로 읽히려면 그래야 한다. */
+/* ★ background-color 는 --cal-paper 다(따뜻한 흰색). 일간 뷰에서 인접 블록을 가르는
+   `border-right` 도 **같은 토큰**이라야 한다 — 예전에는 둘 다 var(--bg) 여서 맞았다.
+   한쪽만 바꾸면 겹치는 일정 사이에 흰 줄이 아니라 색 줄이 생긴다(§디자인 5). */
 .cal-sheet{border:2px solid var(--cal-rule);border-radius:0;overflow:hidden;
+  background-color:var(--cal-paper);
   box-shadow:0 1px 2px rgba(0,0,0,.06),0 6px 16px rgba(0,0,0,.07)}
 /* 요일 머리줄. 레퍼런스 넷이 전부 머리줄을 **이중괘선**으로 끊는다. */
 .cal-head{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));
@@ -221,12 +235,16 @@ input:focus,textarea:focus{outline:2px solid var(--tint);outline-offset:-1px}
    레퍼런스에서 숫자가 세로로 딱 맞아떨어지는 게 그 달력의 정체성이다.
    ★ 26px 정사각과 margin-bottom 4 는 **바꾸지 말 것**: calendar.js 의 barSpacer
      가 이 높이를 그대로 베껴서 기간 막대 층의 시작 y 를 맞춘다. */
+/* ★ 800 + 음수 자간이다. 레퍼런스의 숫자는 굵고 살짝 좁은 그로테스크인데, 그 글꼴을
+   따로 불러오지는 않는다 — CDN 글꼴이 늦으면 폴백으로 그려져 여기저기 실측값이
+   흔들린다(주간 WEEK_FIT·일간 blockTier 가 전부 글꼴 폭에 걸려 있다). 가진 글꼴의
+   무게와 자간으로 최대한 맞춘다. */
 .cal-day{width:30px;height:30px;margin:0 auto 4px;display:flex;align-items:center;
-  justify-content:center;font-size:20px;font-weight:700;line-height:1;
+  justify-content:center;font-size:20px;font-weight:800;line-height:1;letter-spacing:-.5px;
   font-variant-numeric:tabular-nums}
 /* 요일은 [한자 / 영문] 두 줄이다 — 레퍼런스 달력이 전부 이 구성이다(日 위, SUN 아래).
    글자 값은 i18n.js 의 DOW_HANJA / DOW_EN 이고 **일부러 로케일을 안 탄다**. */
-.cal-dow{font-size:17px;font-weight:700;line-height:1.15}
+.cal-dow{font-size:17px;font-weight:800;line-height:1.15}
 .cal-dow-en{font-size:9px;font-weight:700;letter-spacing:.8px;line-height:1.2;opacity:.72}
 /* 년 뷰 12칸. gap 을 없애고 이웃끼리 괘선을 나눠 쓴다 — 레퍼런스 2023 달력
    왼쪽 페이지의 12개월 블록이 이 모양이다. 바깥 테두리는 .cal-sheet 가 이미
