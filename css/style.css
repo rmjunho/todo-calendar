@@ -331,14 +331,18 @@ body{background-color:var(--bg-secondary);background-image:var(--hanji);
        300px 격자가 눈에 띄기 시작한다. */
   --hanji:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' seed='11'/%3E%3CfeColorMatrix values='0 0 0 0 0.60 0 0 0 0 0.53 0 0 0 0 0.38 0 0 0 0.13 0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23g)'/%3E%3Cg stroke='%23B7A67C' stroke-width='0.9' stroke-linecap='round' opacity='.42'%3E%3Cline x1='22' y1='36' x2='46' y2='30'/%3E%3Cline x1='72' y1='112' x2='98' y2='120'/%3E%3Cline x1='141' y1='58' x2='160' y2='49'/%3E%3Cline x1='209' y1='92' x2='233' y2='99'/%3E%3Cline x1='56' y1='201' x2='79' y2='207'/%3E%3Cline x1='121' y1='251' x2='147' y2='243'/%3E%3Cline x1='191' y1='179' x2='207' y2='196'/%3E%3Cline x1='248' y1='41' x2='265' y2='59'/%3E%3C/g%3E%3Cg stroke='%23A9A497' stroke-width='0.8' stroke-linecap='round' opacity='.34'%3E%3Cline x1='31' y1='259' x2='51' y2='267'/%3E%3Cline x1='166' y1='214' x2='191' y2='209'/%3E%3Cline x1='239' y1='241' x2='263' y2='233'/%3E%3Cline x1='96' y1='151' x2='113' y2='141'/%3E%3Cline x1='272' y1='139' x2='287' y2='157'/%3E%3Cline x1='12' y1='121' x2='29' y2='113'/%3E%3C/g%3E%3C/svg%3E");
   /* 바탕 — 한지 벽(page)과 그 위에 칠한 판(card).
-     ★ 벽을 조금 밝혔다(#E4DAC0 → #EAE1CB). 한지는 사용자가 준 사진처럼 옅은 미색이고,
-       그래도 흰 종이(--cal-paper)와는 갈린다 — selftest 가 그 둘이 다른지 잰다. */
-  --bg-secondary:#EAE1CB;
-  --bg:#F3EBD8;
-  --bg-tertiary:#F3EBD8;
-  --bg-grouped:#E4DAC0;
-  --bg-grouped-secondary:#F3EBD8;
-  --bg-grouped-tertiary:#E4DAC0;
+     ★ 흰색 쪽으로 두 번 올렸다: #E4DAC0 → #EAE1CB → **#F4EFE3**(사용자 요청).
+       벽 < 판 < 달력 종이 순으로 **흰색에 가까워지는 3단**을 유지한다:
+         벽 #F4EFE3 · 판 #FCF9F2 · 종이 #FFFFFF
+       이 순서가 깨지면 달력이 벽에 걸린 것으로 안 읽힌다. 세 값을 같이 볼 것.
+     ★ 벽이 밝아진 만큼 한지 결이 상대적으로 더 드러난다 — 알갱이 알파(.13)를
+       올리지 말 것. 지금도 충분하고, 올리면 300px 타일 이음매가 보이기 시작한다. */
+  --bg-secondary:#F4EFE3;
+  --bg:#FCF9F2;
+  --bg-tertiary:#FCF9F2;
+  --bg-grouped:#F4EFE3;
+  --bg-grouped-secondary:#FCF9F2;
+  --bg-grouped-tertiary:#F4EFE3;
   /* 글자 — 순검정이 아니라 따뜻한 먹이다. 페인트에는 순색이 없다. */
   --label:#1C1813;
   --label-secondary:rgba(28,24,19,.62);
@@ -352,13 +356,13 @@ body{background-color:var(--bg-secondary);background-image:var(--hanji);
   --fill-quaternary:rgba(28,24,19,.06);
   --tint:var(--sign-blue);
   /* ★ 순백이 아니라 크림이다. 간판 글자는 흰 페인트라도 바탕색을 탄다. */
-  --on-tint:#F3EBD8;
+  --on-tint:#FCF9F2;
   --system-green:#2C7A4B;
   /* 유리 재질을 전부 **불투명 페인트**로 죽인다. */
-  --material-thick:#F3EBD8;
-  --glass-fill:#F3EBD8;
-  --glass-fill-hover:#EBE1CA;
-  --glass-fill-pressed:#DFD3B6;
+  --material-thick:#FCF9F2;
+  --glass-fill:#FCF9F2;
+  --glass-fill-hover:#F3EEE1;
+  --glass-fill-pressed:#E9E2D0;
   --glass-border:var(--sign-ink);
   --glass-highlight:transparent;
   /* 모서리 — 칠한 판이라 아주 살짝만 둥글다. 캡슐은 없다. */

@@ -36,21 +36,29 @@ const EX_COLORS = {
   //   ink=(28,24,19) over card=(243,235,216) — .62→#6E685E · .40→#9D9789 · .38→#A19B8D
   //   .42→#999285(ruleIn) · .06→#E6DECC(head)
   //   card 를 고치면 이 다섯을 **다시 계산할 것.**
+  // ★ card 는 화면의 --cal-paper(#FFFFFF)와 **같아야 한다.** 한동안 크림(#F3EBD8)으로
+  //   남아 있어서 화면 달력은 흰 종이인데 내보낸 PNG 만 크림이었다 — 조용히 어긋나는
+  //   종류라 눈으로는 나란히 놓기 전까지 모른다. page 는 --bg-secondary(한지 벽)다.
+  //   ink=(28,24,19) over card=(255,255,255) — .62→#72706D · .40→#A4A3A1 · .38→#A9A7A5
+  //   .42→#A09E9C(ruleIn) · .06→#F1F1F1(head)
   light: {
-    page: '#EAE1CB', card: '#F3EBD8',
-    label: '#1C1813', label2: '#6E685E', label3: '#9D9789',
-    sep: '#A19B8D', ruleIn: '#999285', head: '#E6DECC',
+    page: '#F4EFE3', card: '#FFFFFF',
+    label: '#1C1813', label2: '#72706D', label3: '#A4A3A1',
+    sep: '#A9A7A5', ruleIn: '#A09E9C', head: '#F1F1F1',
     calRed: '#D2282E', calBlue: '#1D4E9C',
-    tint: '#1D4E9C', onTint: '#F3EBD8', sun: '#D2282E',
+    tint: '#1D4E9C', onTint: '#FCF9F2', sun: '#D2282E',
     pillA: 0.16, doneA: 0.42
   },
   // 어두운 테마: 때 탄 나무판에 크림 글자. 같은 방식으로 합성했다.
   //   cream=(239,231,211) over card=(34,29,21) — .62→#A19A8B · .40→#746E61 · .34→#686256
   //   .42→#787265(ruleIn) · .06→#2E2920(head)
+  // 어두운 테마도 같은 규칙. card 는 화면의 어두운 테마 --cal-paper(#2E2820)다.
+  //   cream=(239,231,211) over card=(46,40,32) — .62→#A69E8F · .40→#7B7468 · .34→#70695D
+  //   .42→#7F786B(ruleIn) · .06→#3A332B(head)
   dark: {
-    page: '#14110C', card: '#221D15',
-    label: '#EFE7D3', label2: '#A19A8B', label3: '#746E61',
-    sep: '#686256', ruleIn: '#787265', head: '#2E2920',
+    page: '#14110C', card: '#2E2820',
+    label: '#EFE7D3', label2: '#A69E8F', label3: '#7B7468',
+    sep: '#70695D', ruleIn: '#7F786B', head: '#3A332B',
     calRed: '#F0605A', calBlue: '#7FA9E4',
     tint: '#7FA9E4', onTint: '#14110C', sun: '#F0605A',
     pillA: 0.28, doneA: 0.40
