@@ -268,21 +268,24 @@ const barOne = (b) => b.start === b.end;
 function barHtml(b, it) {
   const p = pill(it, b.start);            // 색·취소선은 회차 **시작일** 기준이다
   const one = barOne(b);
-  const rL = b.cutL ? '2px' : '5px', rR = b.cutR ? '2px' : '5px';
   return '<div class="pill" ' + openAttr(p, b.start) +
     ' style="pointer-events:auto;cursor:pointer;align-self:start;line-height:13px;height:' + BAR_H +
     // 1번 줄은 자리 맞추기용이라(barSpacer) 층은 2번 줄부터다.
 'px;grid-column:' + (b.from + 1) + '/' + (b.to + 2) + ';grid-row:' + (b.lane + 2) +
     ';margin-left:' + (b.cutL ? 0 : 3) + 'px;margin-right:' + (b.cutR ? 0 : 3) + 'px' +
-    // ★ 여러 날 일정은 **원색 판**이다. 할 일 알약(같은 색 16% 틴트)과 같은 옅은 판을
-    //   쓰던 때는 둘을 가를 단서가 '위 줄이냐 칸 안이냐' 뿐이었다. 글자색은 색깔마다
-    //   onColor() 가 고른다 — 흰색 고정이면 초록·주황 위에서 안 읽힌다.
-    //   하루짜리는 판이 없으므로(사용자 요청) 대신 **색 점**을 앞에 붙인다. 그래야
-    //   "채워진 색이 보이면 일정" 이라는 규칙이 둘 다에 걸린다.
-    // 패딩·높이는 그대로다 — 글자 자리가 여러 날 막대와 같은 줄에 선다.
+    // ★ 여러 날 일정은 **색 밑줄 + 잉크 글자**다(사용자 요청). 예전에는 원색 판에
+    //   onColor() 가 고른 글자색이었다. 할 일 알약(같은 색 16% 틴트)과는 이제
+    //   '밑줄이냐 판이냐' 로 갈린다. 하루짜리는 그대로 **색 점** + 색 글자다.
+    // ★ 밑줄을 border-bottom 이 **아니라** inset box-shadow 로 긋는다.
+    //   box-sizing:border-box 라 테두리는 height:17px 안에서 글자 자리를 3px
+    //   빼앗아 line-height:13px 이 잘린다(.pill 은 overflow:hidden 이다).
+    //   box-shadow 는 레이아웃을 한 픽셀도 안 건드리므로 BAR_H·lane 계산·
+    //   barSpacer 등식이 전부 그대로 남는다. border 로 바꾸지 말 것.
+    // ★ 모서리는 0 이다 — 배경이 없어진 판에 둥근 모서리는 밑줄 끝만 휘게 한다.
+    //   "이어진다"(cutL/cutR)는 이제 margin 0 이 밑줄을 칸 끝까지 붙여서 보여 준다.
     (one ? ';background-color:transparent;color:' + p.color
-         : ';border-radius:' + rL + ' ' + rR + ' ' + rR + ' ' + rL +
-           ';background-color:' + p.color + ';color:' + onColor(p.color)) +
+         : ';background-color:transparent;border-radius:0;color:var(--label)' +
+           ';box-shadow:inset 0 -3px 0 ' + p.color) +
     ';text-decoration:' + p.deco + ';opacity:' + p.op + '">' +
     (one ? '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;' +
       'margin-right:5px;vertical-align:middle;background-color:' + p.color + '"></span>' : '') +
@@ -1035,7 +1038,11 @@ function render() {
         cells += '<div class="cell" data-day="' + ds + '" style="background:' +
           (isSel ? 'color-mix(in srgb, var(--tint) 7%, transparent)' : 'transparent') + ';opacity:' + (inM ? 1 : 0.35) + '">' +
           '<div style="width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;' +
-            'font-size:13px;margin:0 auto 4px;font-weight:' + (isToday || isSel ? 700 : 500) +
+            // ★ 오른쪽 정렬이다(사용자 요청, **월간 뷰만**). 주간 뷰의 날짜는 머리
+            //   줄 한가운데라 그대로 두었다. auto 를 왼쪽 마진에 몰아 오른쪽으로 민다.
+            //   높이(26)와 아래 여백(4)은 안 건드렸다 — barSpacer 가 그 둘을 그대로
+            //   베껴 막대 층의 시작 y 를 맞춘다. 정렬만 바뀌고 자리 계산은 그대로다.
+            'font-size:13px;margin:0 0 4px auto;font-weight:' + (isToday || isSel ? 700 : 500) +
             ';background:' + (isToday ? 'var(--tint)' : 'transparent') +
             ';color:' + (isToday ? '#fff' : d.getDay() === 0 ? '#FF3B30' : d.getDay() === 6 ? 'var(--tint)' : 'var(--label)') + '">' +
             d.getDate() + '</div>' +

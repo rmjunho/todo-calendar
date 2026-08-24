@@ -2195,10 +2195,14 @@ if (location.search.includes('selftest')) {
   render();
   eq(APP().querySelectorAll('[data-bars] .pill').length, 2,
     'a two-day event across Saturday becomes one piece per week');
-  ok([...APP().querySelectorAll('[data-bars] .pill')].every((b) => !clear(getComputedStyle(b).backgroundColor)),
-    'and both halves keep their chip — each covers one column, but the event is not over');
+  // ★ 예전에는 "두 조각 다 판을 유지한다" 였다. 여러 날 일정이 원색 판에서
+  //   **색 밑줄**로 바뀌면서(사용자 요청) 같은 성질을 밑줄로 본다 — 조각이 갈려도
+  //   둘 다 밑줄을 달고 있어야 "아직 안 끝났다" 가 읽힌다.
+  ok([...APP().querySelectorAll('[data-bars] .pill')]
+    .every((b) => getComputedStyle(b).boxShadow.indexOf('inset') >= 0),
+    'and both halves keep their underline — each covers one column, but the event is not over');
 
-  // 일정을 할 일과 갈라 보이게 하는 것: 여러 날은 **원색 판**, 하루짜리는 **색 점**.
+  // 일정을 할 일과 갈라 보이게 하는 것: 여러 날은 **색 밑줄**, 하루짜리는 **색 점**.
   // 할 일 알약은 같은 색의 16% 틴트 + 색 글자 그대로다.
   // ★ onColor 의 조건식(L > 0.179)을 기댓값으로 옮겨 적지 않는다 — 여기서 세는 것은
   //   WCAG 대비비고, 그건 onColor 가 어떤 규칙을 쓰든 독립적으로 성립해야 할 성질이다.
@@ -2226,9 +2230,15 @@ if (location.search.includes('selftest')) {
   const allBars = [...APP().querySelectorAll('[data-bars] .pill')];
   const multi = allBars.find((b) => b.textContent.indexOf('휴가') >= 0);
   const single = allBars.find((b) => b.textContent.indexOf('회의') >= 0);
-  ok(!clear(getComputedStyle(multi).backgroundColor)
+  // 여러 날은 **색 밑줄 + 잉크 글자**, 하루짜리는 판 없이 **색 점 + 색 글자**.
+  // ★ 밑줄은 inset box-shadow 다(border 가 아니다) — 테두리로 그으면 17px 안에서
+  //   글자 자리를 3px 빼앗아 잘린다. 그래서 배경이 아니라 그림자를 본다.
+  // ★ 두 글자색이 서로 달라야 한다는 성질은 그대로다: 여러 날은 잉크, 하루짜리는 색.
+  ok(clear(getComputedStyle(multi).backgroundColor)
+    && getComputedStyle(multi).boxShadow.indexOf('inset') >= 0
     && getComputedStyle(multi).color !== getComputedStyle(single).color,
-    'a multi-day event fills its bar and flips the text colour — a to-do pill never does');
+    'a multi-day event is underlined in its colour instead of filled, and its label stays ink',
+    getComputedStyle(multi).boxShadow + ' / ' + getComputedStyle(multi).color);
   ok(clear(getComputedStyle(single).backgroundColor) && !!single.querySelector('span'),
     'a one-day event keeps its bare text but gains a dot, so “dark colour = event” holds for both');
 

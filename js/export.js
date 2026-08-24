@@ -446,7 +446,7 @@ function exDrawMonth(ctx, C, m) {
         const bx = EX_PAD + b.from * L.cellW + (b.cutL ? 0 : 5);
         const bw = (b.to - b.from + 1) * L.cellW - (b.cutL ? 0 : 5) - (b.cutR ? 0 : 5);
         const by = y + 52 + b.lane * M_BAR_ROW;
-        // 여러 날은 진한 판 + 흰 글자, 하루짜리는 판 없이 진한 점 + 색 글자 (화면과 같다).
+        // 여러 날은 **색 밑줄 + 잉크 글자**, 하루짜리는 진한 점 + 색 글자 (화면과 같다).
         if (b.one) {
           ctx.beginPath();
           ctx.arc(bx + 11, by + 15, 4, 0, Math.PI * 2);
@@ -454,18 +454,20 @@ function exDrawMonth(ctx, C, m) {
           ctx.fill();
           exClip(ctx, b.title, bx + 20, by + 15, bw - 27, exFont(600, 19), b.color);
         } else {
-          exRect(ctx, bx, by, bw, M_BAR_H, 7);
           ctx.fillStyle = b.color;
-          ctx.fill();
-          exClip(ctx, b.title, bx + 7, by + 15, bw - 14, exFont(600, 19), onColor(b.color));
+          ctx.fillRect(bx, by + M_BAR_H - 3, bw, 3);
+          // 글자를 3px 위로 올린다 — 밑줄 자리를 비켜야 겹치지 않는다.
+          exClip(ctx, b.title, bx + 7, by + 12, bw - 14, exFont(600, 19), C.label);
         }
       });
     }
     ctx.save();
     if (!d.inMonth) ctx.globalAlpha = 0.35;
 
+    // ★ 날짜는 **오른쪽 정렬**이다(화면의 월간 뷰와 같다). cellW-26 이 숫자의 중심이라
+    //   두 자리 수도 오른쪽에 7px 여백을 남기고, 오늘 동그라미(r=19)도 안 잘린다.
     const isToday = d.ds === today;
-    const cx = x + L.cellW / 2, cy = y + 30;
+    const cx = x + L.cellW - 26, cy = y + 30;
     if (isToday) {
       ctx.beginPath();
       ctx.arc(cx, cy, 19, 0, Math.PI * 2);
@@ -557,10 +559,10 @@ function exDrawWeek(ctx, C, m) {
         ctx.fill();
         exClip(ctx, b.title, bx + 29, by + 22, bw - 42, exFont(600, 22), b.color);
       } else {
-        exRect(ctx, bx, by, bw, W_BAR_H, 9);
+        // 월간과 같은 규칙 — 색 밑줄 + 잉크 글자. 띠가 커서 밑줄도 4px 이다.
         ctx.fillStyle = b.color;
-        ctx.fill();
-        exClip(ctx, b.title, bx + 13, by + 22, bw - 26, exFont(600, 22), onColor(b.color));
+        ctx.fillRect(bx, by + W_BAR_H - 4, bw, 4);
+        exClip(ctx, b.title, bx + 13, by + 18, bw - 26, exFont(600, 22), C.label);
       }
     });
     exLine(ctx, EX_PAD, L.barTop, EX_PAD + EX_GRID, C.sep);
