@@ -895,18 +895,6 @@ function render() {
       kchip('', t('kind.all')) + kchip('todo', t('kind.todo')) + kchip('event', t('kind.event')) + '</div>';
   }
 
-  // -- 말씀 한 구절 ----------------------------------------------------------
-  // 유형 탭 바로 아래. ★ 유형 탭은 월간·주간에서만 그려지지만 이 줄은 **네 화면 모두**에
-  // 그린다 — 탭에 붙은 장식이 아니라 앱을 열 때마다 보는 문장이다.
-  // ★ 본문과 출처의 회색을 한 단계 다르게 둔다. 같은 톤이면 출처가 본문처럼 읽힌다.
-  // ★ 언어가 엇갈려 있다(한국어 화면 = 영문 본문). i18n.js 의 주석을 볼 것 — 의도된 것이다.
-  html += '<div data-verse style="text-align:center;margin:2px 0 16px;padding:0 8px">' +
-    '<p style="margin:0 auto;max-width:620px;font-size:13px;line-height:1.8;' +
-      'color:var(--label-secondary)">' +
-      t('verse.text').split('\n').map(esc).join('<br>') + '</p>' +
-    '<div style="margin-top:6px;font-size:12px;font-weight:600;letter-spacing:.3px;' +
-      'color:var(--label-tertiary)">' + esc(t('verse.ref')) + '</div></div>';
-
   // -- category filter ------------------------------------------------------
   // 카테고리가 하나도 없으면 줄 자체를 안 그린다 — '전체' 칩만 있는 줄은 정보가 0이다.
   // .seg-wrap / .seg 를 그대로 재사용한다 (새 CSS 규칙 0개 — 요일 선택 줄과 같은 방식).
@@ -1322,6 +1310,19 @@ function render() {
       '<span style="font-size:13px;font-weight:500;color:var(--label-secondary)">' + esc(remainLabel) + '</span></div>' +
     '<div class="card" style="border-radius:16px;border:.5px solid var(--separator);' +
       'overflow:hidden">' + listHtml + '</div></div>';
+
+  // -- 말씀 한 구절 ----------------------------------------------------------
+  // 본문의 **맨 마지막**이다 — 아래 떠 있는 캡슐 바 바로 위에 놓인다(page 의
+  // padding-bottom 130px 이 그 자리를 비워 둔다).
+  // ★ 네 화면 모두에 그린다. 어느 뷰의 부속이 아니라 화면을 닫는 문장이다.
+  // ★ 본문과 출처의 회색을 한 단계 다르게 둔다. 같은 톤이면 출처가 본문처럼 읽힌다.
+  // ★ 언어가 엇갈려 있다(한국어 화면 = 영문 본문). i18n.js 의 주석을 볼 것 — 의도된 것이다.
+  html += '<div data-verse style="text-align:center;margin:26px 0 0;padding:0 8px">' +
+    '<p style="margin:0 auto;max-width:620px;font-size:13px;line-height:1.8;' +
+      'color:var(--label-secondary)">' +
+      t('verse.text').split('\n').map(esc).join('<br>') + '</p>' +
+    '<div style="margin-top:6px;font-size:12px;font-weight:600;letter-spacing:.3px;' +
+      'color:var(--label-tertiary)">' + esc(t('verse.ref')) + '</div></div>';
 
   html += '</div>'; // /page
 

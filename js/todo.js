@@ -2455,6 +2455,10 @@ if (location.search.includes('selftest')) {
     'ko=' + vKo.slice(0, 16) + ' / en=' + vEn.slice(0, 16));
   ok(!!document.querySelector('[data-verse] p br'),
     'the passage keeps the line break it was written with instead of running on as one line');
+  // 자리가 본문 **맨 끝**이다(떠 있는 캡슐 바 바로 위). 위쪽으로 다시 올라가면 이 검사가 잡는다.
+  const vEl = document.querySelector('[data-verse]');
+  ok(vEl.parentElement.lastElementChild === vEl,
+    'the verse closes the page — nothing of the calendar comes after it');
   setSettings(keepPref);
   state.view = keepView;
 
