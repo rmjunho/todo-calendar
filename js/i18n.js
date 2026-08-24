@@ -223,7 +223,7 @@ const STR = {
     'cat.empty': '아직 카테고리가 없습니다',
     'cat.emptyHint': '이름과 색을 정해 만들어 보세요',
     'cat.dupe': '같은 이름의 카테고리가 있습니다',
-    'cat.reorder': '길게 눌러 끌면 순서를 바꿀 수 있습니다',
+    'cat.reorder': '손잡이를 잡고 끌거나, 줄을 길게 눌러 순서를 바꿉니다',
     'cat.max': (n) => '카테고리는 최대 ' + n + '개까지 만들 수 있습니다',
     // ★ 삭제해도 할 일은 안 지워진다는 걸 문장에서 분명히 한다 — 되돌릴 수 없는
     //   조작이라 개수를 눈으로 보여 주는 것이 유일한 방어선이다.
@@ -502,7 +502,7 @@ const STR = {
     'cat.empty': 'No categories yet',
     'cat.emptyHint': 'Give one a name and a colour',
     'cat.dupe': 'A category with that name already exists',
-    'cat.reorder': 'Press and hold a row, then drag it into place',
+    'cat.reorder': 'Drag the handle, or press and hold a row, to reorder',
     'cat.max': (n) => 'You can have at most ' + n + ' categories',
     'cat.delConfirm': (n) => n === 0
       ? 'Delete this category?'

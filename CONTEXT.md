@@ -244,7 +244,7 @@ firebase.js                                                        (ESM 모듈)
 | **`formOk`** | **저장 가능 조건의 단일 소스.** 버튼 `disabled` · 안내 문구 · `saveForm` 가드가 전부 이것만 본다 |
 | **`syncSheet`** | **입력 위임이 `render()` 대신 부르는 것.** 저장 버튼 · 종료 안내 · 날짜 옆 요일 — 아래 지뢰 참고 |
 | **`renderCatSheet` / `catOk` / `syncCatSheet`** | **카테고리 시트. `catDraft` 가 null 이면 목록, 있으면 편집기** (입력 시트와 같은 모양). `catOk` 가 저장 가능 조건의 단일 소스(빈 이름·20자 초과·중복) — 버튼 `disabled`·중복 안내·`saveCatDraft` 가드가 전부 이것만 본다. 이름 칸은 uncontrolled 라 파생 표시는 `syncCatSheet` 가 DOM 을 직접 맞춘다.<br>★ 이름 칸에 **인라인 패딩을 직접 붙인다**(`12px 14px` · `16px`) — `.field` 는 패딩을 안 줘서 맨몸으로 쓰면 브라우저 기본 높이(18px)로 납작하다. 16px 은 폰에서 그보다 작으면 누를 때 화면이 자동 확대되기 때문 |
-| **`catDragPaint` / `catDragDrop` / `catDragEnd`** (+ `CAT_HOLD_MS` 400 · `CAT_SLOP` 10) | **길게 눌러 순서 끌기.** 위임은 `app` 의 `pointerdown`·`pointermove`·`touchmove` 와 **창 단위**의 `pointerup`·`pointercancel` 이다(마우스를 `#app` 밖에서 떼면 app 리스너로 안 온다).<br>★ 끄는 동안 **`render()` 를 한 번도 안 부른다** — `#app` 을 갈아엎으면 손가락이 잡은 줄이 사라진다(로그인 화면 키보드와 같은 원리). `syncSheet` 처럼 줄의 `transform` 만 민다.<br>★ 한 줄 높이는 **이웃한 두 줄의 간격을 잰다.** 첫 줄만 위 테두리(.5px)가 없어서 높이가 다르다.<br>★ 400ms 안에 움직이면 **스크롤로 본다.** 안 그러면 시트를 굴리려는 손짓이 전부 순서 바꾸기가 된다. 잡힌 뒤에는 `touchmove` 를 `preventDefault` 해서 시트가 같이 안 굴러간다 — `app`(div)에 걸어야 non-passive 다. 줄에 `user-select:none` 이 없으면 400ms 동안 안드로이드가 글자를 선택해 끌기가 시작도 못 한다.<br>★ 놓은 뒤 따라오는 `click` **하나를 삼킨다**(`catDragged`) — 안 삼키면 손을 떼는 순간 편집기가 같이 열린다 |
+| **`catDragPaint` / `catDragDrop` / `catDragEnd`** (+ `CAT_HOLD_MS` 400 · `CAT_SLOP` 10 · `CAT_LIFT` 1.03) | **순서 끌기 — 손잡이(`data-cathandle`)는 누르는 즉시, 줄 본문은 길게 눌러야 잡힌다.** 위임은 `app` 의 `pointerdown`·`pointermove`·`touchmove` 와 **창 단위**의 `pointerup`·`pointercancel` 이다(마우스를 `#app` 밖에서 떼면 app 리스너로 안 온다).<br>★ 끄는 동안 **`render()` 를 한 번도 안 부른다** — `#app` 을 갈아엎으면 손가락이 잡은 줄이 사라진다(로그인 화면 키보드와 같은 원리). `syncSheet` 처럼 DOM 을 직접 민다.<br>★ **잡힌 줄은 `translate`/`scale` 개별 속성, 비켜 주는 줄은 `transform`.** 가른 이유는 transition 이다 — 뜨는 것(`scale`·그림자 .16s)만 부드럽고 **이동에는 transition 이 없어야** 줄이 손에서 안 뒤처진다. 잡힌 줄의 이동을 `transform` 으로 되돌리면 그 구분이 무너진다. `scale` 은 1.03 이 천장 — 레이아웃은 안 건드려도 **스크롤 넓이에는 잡혀서** 더 키우면 시트에 가로 스크롤바가 생긴다.<br>★ 한 줄 높이는 **이웃한 두 줄의 간격을 잰다.** 첫 줄만 위 테두리(.5px)가 없어서 높이가 다르다.<br>★ 줄 본문은 **400ms 안에 움직이면 스크롤로 본다** — 안 그러면 시트를 굴리려는 손짓이 전부 순서 바꾸기가 된다. 손잡이는 안 기다리는 대신 `touch-action:none` 이 필요하다(없으면 브라우저가 스크롤을 먼저 채 간다). 손잡이의 위아래 `padding:10px` 과 **같은 크기의 음수 margin** 이 짝 — 누르는 띠만 36px 로 넓히고 줄 높이는 안 움직인다. 잡힌 뒤에는 `touchmove` 를 `preventDefault` 한다 — `app`(div)에 걸어야 non-passive 다. 줄에 `user-select:none` 이 없으면 400ms 동안 안드로이드가 글자를 선택해 끌기가 시작도 못 한다.<br>★ 놓은 뒤 따라오는 `click` **하나를 삼킨다**(`catDragged`) — 안 삼키면 손을 떼는 순간 편집기가 같이 열린다 |
 | **`renderGoalSheet` / `openGoal` / `saveGoalDraft` / `delGoal` / `toggleGoal` / `syncGoalSheet`** | **목표 시트.** 입력 시트와 같은 모양이되 셋이 다르다 — 날짜가 아니라 **기한**(올해 안에 / 그 달까지 / 그 달 며칠까지), **년은 안 고른다**(지금 보는 `state.cy` 에 붙는다. 고르게 하면 저장한 목표가 다른 해로 사라진다), **반복 없음**(목표는 기간 자체라 '매주'가 성립 안 함). `saveGoalDraft` 는 규칙의 `hasOnly` 때문에 **여덟 키를 통으로** 보내고 편집 때 `done` 을 이어받는다 |
 | **`goalDay` / `lastDayOf`** | **말일 클램프.** 2월에 31 을 저장하면 `goalDue()` 의 `new Date(y,1,31)` 이 **3월 3일로 샌다.** 입력칸 `max` 는 브라우저 힌트일 뿐이라 저장 직전에 다시 조인다 |
 | **`commitCatOrder` / `saveCatDraft` / `delCat`** | **낙관적 업데이트가 필수다** — 시트가 열린 동안 `sheetBusy()` 가 스냅샷 렌더를 막으므로 `state.cats` 를 직접 안 고치면 방금 만든 카테고리가 **시트를 닫을 때까지 안 보인다**.<br>`commitCatOrder(list)` 가 저장의 단일 통로다: 받은 차례대로 `order` 를 **0..n-1 로 전부 다시 매겨** 보낸다(상한 10이라 한 번에). 이렇게 하면 `order` 없는 옛 문서·삭제로 생긴 번호 구멍·새 항목을 몇 번에 끼울지가 한꺼번에 사라지고 "목록의 자리 = order" 규칙만 남는다.<br>★ `saveCatDraft` 는 편집일 때 **있던 자리를 지킨다.** 이름을 고쳤다고 순서가 튀면 직접 정해 둔 차례가 이름순으로 되돌아간 것처럼 보인다. `fb.saveCat` 이 `setDoc`(통째 교체)이라 `order` 를 같이 안 실으면 실제로 그렇게 된다. `delCat` 은 카테고리 문서 하나만 지운다(번호 구멍은 다음 저장 때 정리된다) |
@@ -404,7 +404,7 @@ batch 500 한계, 부분 실패 시 상태가 갈리는 것, 그리고 **오프�
   cy, cm, selected: 'YYYY-MM-DD',   // ★ 연간 뷰는 cy 만 씁니다 (cm·selected 안 봄)
   items: [],           // 로그인한 계정의 할 일
   cats: [],            // categories 스냅샷. 세우는 기준은 sortCats() 하나 (order → 이름)
-  catDrag: null,       // 관리 목록에서 길게 눌러 끄는 중 { id, from, to, y0, dy, rowH, on, timer }
+  catDrag: null,       // 관리 목록에서 끄는 중 { id, from, to, y0, dy, rowH, on, timer }
   goals: [],           // goals 스냅샷. 정렬 안 함 — goalsIn() 이 그릴 때 세운다
   goalDraft: null,     // 목표 시트. null = 닫힘 (exp·jump 와 같은 방식, 여는 플래그 없음)
                        //   { id, title, scope, y, m, hasDay, d, categoryId, memo }
@@ -963,10 +963,13 @@ JS 를 안 돌리는 크롤러에게 **빈 페이지**입니다(확인함). 이 
 기본 기능은 규칙·코드 모두 올라갔고 **실기기(안드로이드 크롬)에서 확인했습니다** —
 카테고리 저장이 Firestore 에 실제로 쓰입니다.
 
-**순서 바꾸기(`order` + 길게 눌러 끌기)는 코드만 끝났습니다.** §0 의 빨간 문단대로 규칙을
+**순서 바꾸기(`order` + 끌기)는 코드만 끝났습니다.** §0 의 빨간 문단대로 규칙을
 먼저 올려야 저장이 통과합니다. 폰 실기기 확인도 **아직입니다** — 브라우저 창이 안 떠서
 터치 제스처를 여기서 잴 수 없었고, 잰 것은 합성 pointer 이벤트로 도는 로직뿐입니다.
-특히 **끌 때 시트가 같이 굴러가지 않는지**는 기기에서 봐야 압니다.
+특히 **끌 때 시트가 같이 굴러가지 않는지**(손잡이의 `touch-action:none` 포함)는
+기기에서 봐야 압니다. 뜨는 애니메이션도 탭이 `hidden` 이라 시계가 0 에 멈춰서,
+`getAnimations()` 로 160ms 를 **직접 돌려** 끝값(scale 1.03 · 그림자 · 반경 10px)만
+확인했습니다 — 실제로 부드럽게 도는지는 화면에서 봐야 합니다.
 
 칩 줄은 이제 **찌부러지지 않고 가로로 흐릅니다**(§4 CSS 함정 0). 카테고리 5개·긴 이름에서
 줄이 안 밀리던 것이 이것 때문이었습니다.

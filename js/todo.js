@@ -415,6 +415,12 @@ function syncCatSheet() {
 // 손짓이 전부 순서 바꾸기가 된다. 가만히 400ms → 잡기, 그 전에 움직이면 스크롤.
 const CAT_HOLD_MS = 400;
 const CAT_SLOP = 10;        // 잡히기 전 이만큼 넘게 움직이면 스크롤로 본다
+// 잡힌 줄이 살짝 떠오르는 정도. 1.03 을 넘기지 말 것 — scale 은 자리(레이아웃)를
+// 안 바꾸지만 **스크롤 넓이에는 잡힌다.** 시트 좌우 여백이 20px 이라 그 안에서
+// 커지는 동안은 조용하고, 더 키우면 시트에 가로 스크롤바가 생긴다.
+const CAT_LIFT = '1.03';
+const CAT_LIFT_TR = 'scale .16s ease, box-shadow .16s ease, ' +
+  'background-color .16s ease, border-radius .16s ease';
 let catDragged = false;     // 방금 끝난 끌기 — 뒤따라오는 click 을 한 번 삼킨다
 
 const catRows = () => [...document.querySelectorAll('[data-catedit]')];
@@ -441,10 +447,21 @@ function catDragPaint() {
   }
   rows.forEach((r, j) => {
     const held = j === g.from;
-    const shift = held ? (g.dy || 0)
+    const shift = held ? 0
       : (g.from < j && j <= g.to) ? -g.rowH
       : (g.to <= j && j < g.from) ? g.rowH : 0;
     r.style.transform = shift ? 'translateY(' + shift + 'px)' : '';
+    // ★ 잡힌 줄만 transform 이 아니라 translate/scale **개별 CSS 속성**을 쓴다.
+    //   이유는 transition 을 갈라 걸어야 하기 때문이다 — 손가락을 따라가는 값에
+    //   transition 이 걸리면 줄이 손에서 뒤처지는데, transform 한 덩어리로는
+    //   "뜨는 것만 부드럽게, 따라오는 건 즉시" 를 나눌 수가 없다. 그래서
+    //   translate 는 transition 대상에서 빼고 scale 에만 건다.
+    //   ⚠️ 잡힌 줄의 이동을 transform 으로 되돌리지 말 것 — 되돌리는 순간
+    //     아래 transition 이 이동에도 걸려서 끌기가 미끄덩거린다.
+    r.style.translate = held ? '0 ' + (g.dy || 0) + 'px' : '';
+    r.style.scale = held ? CAT_LIFT : '';
+    // 자리를 비켜 주는 줄은 미끄러지듯 옮겨 가야 순서가 바뀐 게 눈에 보인다.
+    r.style.transition = held ? CAT_LIFT_TR : 'transform .16s ease';
     r.style.position = held ? 'relative' : '';
     r.style.zIndex = held ? '2' : '';
     r.style.backgroundColor = held ? 'var(--bg-secondary)' : '';
@@ -510,7 +527,16 @@ function renderCatSheet() {
         'padding:13px 4px;border-top:' + (i === 0 ? 'none' : '.5px solid var(--separator)') + '">' +
         '<span style="width:12px;height:12px;border-radius:50%;flex:none;background-color:' + c.color + '"></span>' +
         '<span class="trunc" style="flex:1;font-size:15px;font-weight:600">' + esc(c.name) + '</span>' +
-        (state.cats.length > 1 ? '<span aria-hidden="true" style="color:var(--label-quaternary);display:flex">' +
+        // ★ 손잡이는 **잡자마자 끄는** 자리다(pointerdown 위임 참고). 그래서
+        //   touch-action:none 이 필요하다 — 이게 없으면 폰에서 손잡이 위에서 시작한
+        //   손짓을 브라우저가 스크롤로 먼저 채 가고, 그 뒤엔 preventDefault 도 늦다.
+        // ★ 위아래 padding 과 **같은 크기의 음수 margin** 이 짝이다. 16px 아이콘은
+        //   손가락에 너무 작아 누르는 띠만 36px 로 넓히고, margin 이 그만큼 도로
+        //   빼서 줄 높이는 한 픽셀도 안 움직인다. 좌우로는 안 넓힌다 — 가로 음수
+        //   margin 은 줄의 gap:12px 을 갉아먹어 아이콘 사이가 붙어 보인다.
+        (state.cats.length > 1 ? '<span data-cathandle aria-hidden="true" ' +
+          'style="color:var(--label-quaternary);display:flex;cursor:grab;' +
+          'touch-action:none;padding:10px 0;margin:-10px 0">' +
           icon('line.3.horizontal', 16) + '</span>' : '') +
         '<span style="color:var(--label-tertiary);display:flex">' + icon('chevron.right', 15) + '</span></div>'
     ).join('') +
@@ -971,6 +997,11 @@ app.addEventListener('pointerdown', (e) => {
   const g = { id: row.dataset.catedit, from: from, to: from,
     y0: e.clientY, dy: 0, rowH: 0, on: false, timer: 0 };
   state.catDrag = g;
+  // ★ 손잡이에서 시작했으면 **기다리지 않는다.** 400ms 는 "이 줄을 굴리려는 건지
+  //   옮기려는 건지" 를 가리려고 두는 시간인데, 손잡이는 그 답을 이미 말하고 있다.
+  //   줄 본문에서 시작한 손짓은 시트를 굴리려는 것일 수 있으니 그대로 길게 눌러야
+  //   잡힌다 — 여기서 타이머를 걷어내면 폰에서 스크롤이 전부 순서 바꾸기가 된다.
+  if (e.target.closest('[data-cathandle]')) { g.on = true; return catDragPaint(); }
   g.timer = setTimeout(() => { g.on = true; catDragPaint(); }, CAT_HOLD_MS);
 });
 app.addEventListener('pointermove', (e) => {
@@ -1942,6 +1973,32 @@ if (location.search.includes('selftest')) {
   // 끄는 **동안**에는 render() 를 부르면 안 된다 — 잡은 줄이 문서에서 사라지면
   // 손가락이 놓친다(로그인 화면에서 키보드가 바로 닫히던 것과 같은 원리).
   render();
+
+  // ★ 손잡이는 **기다리지 않는다** — 400ms 를 세는 건 줄 본문에서 시작했을 때뿐이다.
+  //   타이머를 기다려 보고 통과시키면 손잡이가 400ms 뒤에 잡혀도 검사가 안 걸리므로,
+  //   누른 **직후에 이미 잡혀 있는지**를 본다.
+  const grip = document.querySelector('[data-catedit] [data-cathandle]');
+  ok(!!grip, 'every row carries a handle to grab');
+  grip.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientY: 0 }));
+  ok(!!state.catDrag && state.catDrag.on,
+    'pressing the handle grabs the row at once — there is no hold to wait out');
+  // ★ 여기서는 getComputedStyle 이 아니라 **인라인 값**을 본다. 뜨는 걸 transition 에
+  //   맡겼기 때문에, 누른 직후 계산값은 목표(1.03)가 아니라 **시작값(1)** 이 잡힌다.
+  //   계산값으로 재면 "안 뜨게" 바꿔 놔도 1 vs none 이라 그냥 통과해 버린다.
+  const held = [...document.querySelectorAll('[data-catedit]')];
+  ok(parseFloat(held[0].style.scale) > 1 && !held[1].style.scale
+    && held[0].style.boxShadow !== held[1].style.boxShadow,
+    'and the grabbed row lifts off the list while the rows under it stay flat',
+    (held[0].style.scale || 'none') + ' / ' + (held[1].style.scale || 'none'));
+  const lift = held.map((r) => getComputedStyle(r));
+  // 뜨는 건 부드럽게, 따라오는 건 즉시다. 잡힌 줄의 **이동**에 transition 이 걸리면
+  // 줄이 손가락에서 뒤처진다 — translate·transform·all 중 무엇으로도 걸리면 안 된다.
+  ok(['translate', 'transform', 'all'].every((p) => lift[0].transitionProperty.indexOf(p) < 0),
+    'the held row never eases its travel, so it keeps up with the finger',
+    lift[0].transitionProperty);
+  catDragEnd(false);
+  render();
+
   const heldRow = document.querySelectorAll('[data-catedit]')[0];
   state.catDrag = { id: 'a', from: 0, to: 2, y0: 0, dy: 90, rowH: 44, on: true, timer: 0 };
   catDragPaint();
