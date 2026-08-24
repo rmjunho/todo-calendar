@@ -233,9 +233,12 @@ const BAR_H = 17, BAR_GAP = 2, BAR_ROW = BAR_H + BAR_GAP;
 // 잡는다 — dpr 1 에서 실측해 보니 실제 자리는 36 이었다(0.5px 어긋남).
 // 그래서 **같은 모양의 빈 칸을 하나 그려서** 첫 줄 높이를 브라우저가 재게 한다.
 // 이러면 배율·dpr 이 뭐든 칸의 계산과 막대 층의 계산이 어긋날 수가 없다.
+// ★ 이 border-top 두께는 css/style.css 의 .cell 과 **같아야 한다**(지금 1px).
+//   옛 달력 격자로 괘선을 .5 → 1 로 올릴 때 여기를 같이 안 올리면 막대 층이
+//   주마다 0.5px 씩 위로 뜬다.
 const barSpacer =
   '<div aria-hidden="true" style="grid-column:1/8;grid-row:1;visibility:hidden;' +
-    'border-top:.5px solid transparent;padding:5px 0 4px">' +
+    'border-top:1px solid transparent;padding:5px 0 4px">' +
   // padding-bottom 4 로 준다 — 자식의 margin-bottom 은 부모 밖으로 새어(마진 상쇄)
   // 높이에 안 들어간다. 칸 쪽은 뒤에 형제가 있어서 그 4px 이 그대로 산다.
   '<div style="height:26px"></div></div>';
@@ -967,15 +970,18 @@ function render() {
     // 완료한 목표도 센다: "그 달 전체 목표" 가 개수의 뜻이다.
     // ★ 눌러도 뷰만 월간으로 바뀐다. 목표는 월간 달력에 안 나오므로 여기서
     //   가는 곳은 그 달의 **할 일** 화면이다 — 목표는 이 목록에서만 본다.
+    // ★ 모양은 .cal-months 가 든다(css/style.css) — 칸끼리 괘선을 나눠 쓰는 격자라
+    //   여기서 인라인으로 테두리를 주면 이중선이 된다.
+    //   목표가 있는 달은 tint 파랑이 아니라 **빨강**이다. 요일 의미가 없는 격자라
+    //   빨강이 비어 있고, 옛 달력에서 빨강 = 표시해 둔 날이다.
     let months = '';
     for (let i = 0; i < 12; i++) {
       const n = gl.filter((g) => g.scope === 'month' && g.m === i).length;
-      months += '<button data-ym="' + i + '" style="border:none;cursor:pointer;font-family:inherit;' +
-        'padding:14px 6px;border-radius:14px;display:flex;flex-direction:column;align-items:center;gap:3px;' +
-        'background-color:' + (n ? 'color-mix(in srgb, var(--tint) 9%, transparent)' : 'var(--fill-quaternary)') + '">' +
-        '<span class="trunc" style="max-width:100%;font-size:13px;font-weight:600;color:var(--label)">' +
-          esc(monthShort(i)) + '</span>' +
-        '<span style="font-size:12px;font-weight:600;color:' + (n ? 'var(--tint)' : 'var(--label-tertiary)') + '">' +
+      months += '<button data-ym="' + i + '"' +
+        (n ? ' style="background-color:color-mix(in srgb, #FF3B30 8%, transparent)"' : '') + '>' +
+        '<span class="trunc" style="max-width:100%;font-size:15px;font-weight:700;color:var(--label);' +
+          'font-variant-numeric:tabular-nums">' + esc(monthShort(i)) + '</span>' +
+        '<span style="font-size:12px;font-weight:600;color:' + (n ? '#FF3B30' : 'var(--label-tertiary)') + '">' +
           esc(n ? t('goal.count', n) : '–') + '</span></button>';
     }
 
@@ -985,16 +991,17 @@ function render() {
       '<div class="card" style="border-radius:16px;border:.5px solid var(--separator);overflow:hidden">' +
         goalRows + '</div>' +
       '<div style="margin:22px 4px 10px;font-size:20px;font-weight:700">' + esc(t('goal.months')) + '</div>' +
-      // minmax(0,1fr) — 월 이름이 긴 로케일에서도 4열이 화면 밖으로 안 밀린다.
-      '<div class="card" style="border:.5px solid var(--separator);padding:12px;display:grid;' +
-        'grid-template-columns:repeat(4,minmax(0,1fr));gap:8px">' + months + '</div>';
+      // 격자 자체가 판이다 — 패딩 없이 12칸이 테두리에 딱 붙는다(레퍼런스의 12개월 블록).
+      '<div class="card cal-sheet cal-months">' + months + '</div>';
   }
 
   // -- month view -----------------------------------------------------------
   if (state.view === 'month') {
+    // 평일 글자는 보조 회색이 아니라 잉크 검정이다 — 레퍼런스의 요일 줄이 그렇다.
+    // 세로 괘선과 아래 이중선은 .cal-head 가 든다(css/style.css).
     const heads = dow().map((l, i) =>
-      '<div style="text-align:center;padding:11px 0 9px;font-size:12px;font-weight:600;color:' +
-      (i === 0 ? '#FF3B30' : i === 6 ? 'var(--tint)' : 'var(--label-secondary)') + '">' + l + '</div>').join('');
+      '<div style="text-align:center;padding:11px 0 9px;font-size:12px;font-weight:700;letter-spacing:.5px;color:' +
+      (i === 0 ? '#FF3B30' : i === 6 ? 'var(--tint)' : 'var(--label)') + '">' + l + '</div>').join('');
 
     const startOffset = new Date(state.cy, state.cm, 1).getDay();
     const dim = new Date(state.cy, state.cm + 1, 0).getDate();
@@ -1032,11 +1039,12 @@ function render() {
         // ★ 막대 자리를 칸 안에 **실제 높이로** 비운다. 한 주의 7칸이 같은 값을 비우므로
         //   알약 시작 줄이 안 어긋나고, 막대 층의 높이(lanes×BAR_ROW)와도 정확히 같다.
         //   일정이 없는 주는 lanes=0 → 이 div 자체가 없어 예전 화면과 픽셀까지 같다.
-        cells += '<div class="cell" data-day="' + ds + '" style="background:' +
+        // ★ 오늘은 파란 **원**이 아니라 빨간 **사각 반전**이다 — 옛 달력이 그 날에
+        //   찍는 도장이 그 모양이다. 크기(26px)와 아래 여백(4)은 .cal-day 가 들고,
+        //   그 값은 barSpacer 와 짝이라 바꾸면 막대 층이 어긋난다.
+        cells += '<div class="cell" data-day="' + ds + '" style="background-color:' +
           (isSel ? 'color-mix(in srgb, var(--tint) 7%, transparent)' : 'transparent') + ';opacity:' + (inM ? 1 : 0.35) + '">' +
-          '<div style="width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;' +
-            'font-size:13px;margin:0 auto 4px;font-weight:' + (isToday || isSel ? 700 : 500) +
-            ';background:' + (isToday ? 'var(--tint)' : 'transparent') +
+          '<div class="cal-day" style="background-color:' + (isToday ? '#FF3B30' : 'transparent') +
             ';color:' + (isToday ? '#fff' : d.getDay() === 0 ? '#FF3B30' : d.getDay() === 6 ? 'var(--tint)' : 'var(--label)') + '">' +
             d.getDate() + '</div>' +
           (lanes ? '<div data-barspace style="height:' + (lanes * BAR_ROW) + 'px"></div>' : '') +
@@ -1049,17 +1057,15 @@ function render() {
         'display:grid;grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:auto repeat(' +
         lanes + ',' + BAR_ROW + 'px);pointer-events:none">' + barSpacer +
         shown.map((r) => barHtml(r, byId[r.id])).join('') + '</div>' : '';
+      // ★ .cal-grid 는 **칸 격자에만** 건다. 막대 층(bars)은 형제로 남겨 둔다 —
+      //   거기까지 세로 괘선이 그어지면 기간 막대 하나가 하루짜리 여럿으로 읽힌다.
       grid += '<div style="position:relative">' +
-        '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr))">' + cells + '</div>' +
+        '<div class="cal-grid">' + cells + '</div>' +
         bars + '</div>';
     }
-    // 7열은 minmax(0,1fr). 1fr(=minmax(auto,1fr))은 열이 자식의 min-content 보다
-    // 작아지지 못해, nowrap 제목 하나가 나머지 요일을 화면 밖으로 밀어낸다.
-    // 월간은 .cell{overflow:hidden} 덕에 지금도 안 깨지지만 같은 요구사항이니
-    // 같은 방식으로 적어 둔다 — .cell 을 건드려도 안 터지게.
-    body += '<div class="card" style="border:.5px solid var(--separator);overflow:hidden">' +
-      '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr))">' + heads + '</div>' +
-      grid + '</div>';
+    // 7열 minmax(0,1fr) 의 근거는 .cal-grid / .cal-head 쪽 주석에 있다.
+    body += '<div class="card cal-sheet">' +
+      '<div class="cal-head">' + heads + '</div>' + grid + '</div>';
   }
 
   // -- week view ------------------------------------------------------------
@@ -1082,7 +1088,9 @@ function render() {
       const ds = addDays(ws, i);
       const d = parse(ds);
       const isToday = ds === today, isSel = ds === sel;
-      const edge = i === 0 ? 'none' : '.5px solid var(--separator)';
+      // ★ 열 사이 세로 괘선은 .cal-head / .cal-grid 가 든다(예전에는 여기서 열마다
+      //   border-left 를 인라인으로 줬다). 옛 달력 격자로 바뀌면서 머리줄과 본문이
+      //   같은 규칙을 쓰게 됐으니 여기서 따로 그리지 않는다.
       // 월간(3개)과 같은 이유로 접는다 — 안 접으면 17개짜리 날이 칸을 713px 로 늘린다.
       // ★ 시간 라벨을 뺐다(사용자 요청). 폰에서 열이 51px 라 '하루 종일' 이 두 줄로
       //   접혀 항목 하나가 48px 을 먹었고, 그 줄이 정보를 준 만큼 자리를 안 갚았다.
@@ -1110,20 +1118,20 @@ function render() {
       const more = hid
         ? '<div data-day="' + ds + '" style="cursor:pointer;font-size:10px;color:var(--label-tertiary);padding:0 7px">' +
           esc(t('cell.more', hid)) + '</div>' : '';
-      heads += '<div data-day="' + ds + '" style="cursor:pointer;text-align:center;padding:10px 4px 8px;' +
-          'border-left:' + edge + ';border-bottom:.5px solid var(--separator)">' +
-          '<div style="font-size:11px;font-weight:600;color:' +
-            (i === 0 ? '#FF3B30' : i === 6 ? 'var(--tint)' : 'var(--label-secondary)') + '">' + esc(wdow[i]) + '</div>' +
-          '<div style="width:28px;height:28px;margin:4px auto 0;border-radius:50%;display:flex;align-items:center;' +
-            'justify-content:center;font-size:15px;font-weight:600;background:' +
-            (isToday ? 'var(--tint)' : isSel ? 'var(--fill-tertiary)' : 'transparent') +
-            ';color:' + (isToday ? '#fff' : 'var(--label)') + '">' + d.getDate() + '</div></div>';
+      heads += '<div data-day="' + ds + '" style="cursor:pointer;text-align:center;padding:10px 4px 8px">' +
+          '<div style="font-size:11px;font-weight:700;letter-spacing:.5px;color:' +
+            (i === 0 ? '#FF3B30' : i === 6 ? 'var(--tint)' : 'var(--label)') + '">' + esc(wdow[i]) + '</div>' +
+          // 월간과 같은 각진 숫자판. 주간 칸이 넓어 28px 만 키운다(barSpacer 와 무관).
+          '<div class="cal-day" style="width:28px;height:28px;font-size:16px;margin:4px auto 0;background-color:' +
+            (isToday ? '#FF3B30' : isSel ? 'var(--fill-tertiary)' : 'transparent') +
+            ';color:' + (isToday ? '#fff' : d.getDay() === 0 ? '#FF3B30' : d.getDay() === 6 ? 'var(--tint)' : 'var(--label)') +
+            '">' + d.getDate() + '</div></div>';
       // min-height 는 예전 320(머리+본문)에서 머리 몫을 뺀 값이다. 머리 줄이 밖으로
       // 나갔으니 여기 320 을 그대로 두면 열이 통째로 64px 길어진다.
       // ★ 64 는 실측이다 — 위 머리 줄의 padding 10+8 · 라벨 11px/600 한 줄 · 여백 4 · 원 28.
       //   글꼴이나 저 숫자들을 바꾸면 다시 재서 이 256 을 고칠 것('5개' 근거가 여기 걸려 있다).
-      cols += '<div style="min-height:256px;border-left:' + edge +
-        ';padding:6px 5px;display:flex;flex-direction:column;gap:4px">' + pills + more + '</div>';
+      cols += '<div style="min-height:256px;padding:6px 5px;display:flex;flex-direction:column;gap:4px">' +
+        pills + more + '</div>';
     }
     // 막대 띠. 열 위에 가로로 눕는 별도 줄이다 — 하루짜리 일정도 여기 뜬다.
     // ★ 첫 줄이 0 인 이유: barHtml 이 월간의 자리 맞추기 줄(barSpacer) 때문에 2번
@@ -1131,13 +1139,12 @@ function render() {
     //   두 화면이 **같은 함수**로 그리게 하려고 치르는 값이다.
     const wbars = wlanes ? '<div data-bars="' + ws + '" style="display:grid;padding:5px 0;' +
       'grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:0 repeat(' + wlanes + ',' + BAR_ROW +
-      'px);border-bottom:.5px solid var(--separator)">' +
+      'px);border-bottom:1px solid var(--cal-rule-in)">' +
       wshown.map((r) => barHtml(r, byId[r.id])).join('') + '</div>' : '';
-    // ★ minmax(0,1fr) 이라야 한다. 1fr 이면 긴 제목(.trunc = nowrap)의 min-content 가
-    //   그 열을 밀어내 목·금·토가 화면 밖으로 나가고, overflow:hidden 이라 스크롤도 안 된다.
-    const g7 = '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr))">';
-    body += '<div class="card" style="border:.5px solid var(--separator);overflow:hidden">' +
-      g7 + heads + '</div>' + wbars + g7 + cols + '</div></div>';
+    // ★ 막대 띠는 .cal-grid 를 **안 쓴다** — 세로 괘선이 막대 위를 지나면 안 된다.
+    body += '<div class="card cal-sheet">' +
+      '<div class="cal-head">' + heads + '</div>' + wbars +
+      '<div class="cal-grid">' + cols + '</div></div>';
   }
 
   // -- day view -------------------------------------------------------------
@@ -1169,8 +1176,9 @@ function render() {
           // 눈금 라벨은 늘 'HH:00' 5글자다(로케일을 안 탄다). 공백이 없어 두 줄이 될 수는
           // 없지만 CDN 폰트가 늦어 시스템 폰트로 그려지면 42px 을 넘칠 수 있다 — .trunc 로
           // 축 폭 안에 가둔다. 최악이 '두 줄'이 아니라 '말줄임'이어야 한다.
-          '<div class="trunc" style="width:42px;text-align:right;font-size:11px;color:var(--label-tertiary);transform:translateY(-6px)">' +
-          pad(h) + ':00</div><div style="flex:1;border-top:.5px solid var(--separator)"></div></div>';
+          '<div class="trunc" style="width:42px;text-align:right;font-size:11px;font-weight:600;' +
+          'font-variant-numeric:tabular-nums;color:var(--label-secondary);transform:translateY(-6px)">' +
+          pad(h) + ':00</div><div style="flex:1;border-top:1px solid var(--cal-rule-in)"></div></div>';
       }
 
       // 현재 시각 선은 **보고 있는 날이 오늘이고** 지금이 축 범위 안일 때만.
@@ -1226,7 +1234,8 @@ function render() {
           ';border-left:3px solid ' + p.color + '">' + body + '</div>';
       }).join('');
 
-      axis = '<div style="position:relative;height:' + range.h + 'px">' + ticks + nowLine +
+      // .cal-axis 가 시간 라벨 칸과 본문 사이에 세로 괘선을 세운다(::before, left:50).
+      axis = '<div class="cal-axis" style="position:relative;height:' + range.h + 'px">' + ticks + nowLine +
         '<div style="position:absolute;left:' + DAY_PX.axisW + 'px;right:' + DAY_PX.gutter +
         'px;top:0;bottom:0">' + blocks + '</div></div>';
     } else {
@@ -1235,7 +1244,7 @@ function render() {
     }
 
     // ⚠️ 이 카드의 padding 16 은 DAY_PX.cardPad 와 같은 값이어야 한다(위 주석).
-    body += '<div class="card" style="border:.5px solid var(--separator);padding:16px 16px 20px">' + allDayBlock +
+    body += '<div class="card cal-sheet" style="padding:16px 16px 20px">' + allDayBlock +
       axis + '</div>';
   }
 
