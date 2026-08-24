@@ -786,6 +786,18 @@ PIN 재인증 → todos 삭제 → users + usernames 삭제 → Auth 계정 삭�
      `-webkit-text-stroke` 를 쓰지 마세요: 한글은 테두리가 안쪽으로 파고들어 속공간이 메워집니다.
    - `export.js` 의 `EX_COLORS` 가 같은 팔레트를 **캔버스용으로 미리 합성한** 값입니다.
      화면 색을 고치면 그 표의 `label2/label3/sep/ruleIn/head` 를 다시 계산하세요.
+7. **글꼴은 `fonts/` 에서 직접 서빙합니다** (CDN Pretendard 는 폴백으로만 남았습니다).
+   - **페이퍼로지** Medium(500)·Bold(700)·Black(900) 세 벌 = 1,286KB. 앱이 쓰는 굵기가
+     500~900 인데 CSS 매칭이 600→700, 800→900 으로 붙여 줘서 셋이면 충분합니다.
+     `cmap` 을 직접 열어 확인: 글리프 14,093 자로 **한자 `日月火水木金土` 가 있습니다.**
+   - **조선로고체**는 `.sign-title`(제호) 전용이고 **제호에 쓰는 글자만 남겨** 4,150KB →
+     12.6KB 로 잘랐습니다. **본문에 쓰지 마세요** — 사용자가 치는 글자는 대부분 없습니다.
+     잘린 글자는 브라우저가 **글자 단위로** 페이퍼로지로 넘겨서 통째로 깨지진 않습니다.
+   - 원본 TTF(16MB)는 작업 트리에서 지웠고 **git 이력에 남아 있습니다**. 다시 만들려면
+     `python -m fontTools.ttLib.woff2 compress` / `python -m fontTools.subset` (fonttools+brotli).
+   - ⚠️ **글꼴을 바꾸면 폭에 걸린 상수를 다시 재세요.** 페이퍼로지로 옮기면서
+     `T_FULL` 이 132 → **140** 이 됐습니다(시간 라벨 110.05 → 118.70px). `WEEK_FIT` 은
+     7 그대로(항목 21px, 예산 244px 중 7개 175px). 캔버스는 `EX_FAMILY` 를 같이 고칠 것.
 7. **7열 격자는 `repeat(7, minmax(0,1fr))`.** `1fr`(=`minmax(auto,1fr)`)로 쓰면 nowrap
    제목(`.trunc`·`.pill`)의 min-content 가 열을 밀어내 나머지 요일이 화면 밖으로 나가고,
    `.cal-sheet` 가 `overflow:hidden` 이라 가로 스크롤도 안 됩니다. **월간·주간 양쪽 다**
