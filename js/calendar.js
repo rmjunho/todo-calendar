@@ -471,6 +471,14 @@ function itemsOn(items, ds, showCompleted) {
 // 거기서는 둘이 같이 보여야 한다.
 const cellItems = (items, ds) => itemsOn(items, ds, SHOW_COMPLETED).filter((it) => !isEvent(it));
 
+// 일정을 앞으로 모은다. 각 묶음 **안의** 차례는 sortItems 가 준 시각 순 그대로다.
+// ★ 쓰는 곳은 둘뿐이다 — 화면 아래 목록과 일간 이미지. 종류가 바뀌는 자리에 굵은
+//   선을 **하나만** 긋기 위해 묶는 것이고(사용자 요청), 시각 순으로 두면 09시 할 일이
+//   14시 일정 위로 올라와 두 종류가 섞여서 그을 자리가 아예 안 생긴다.
+// ⚠️ 이걸 sortItems 나 itemsOn 안으로 옮기지 말 것. 그 둘은 월·주 칸의 알약과 막대
+//   층까지 지나는 통로라, 거기서 순서를 바꾸면 달력 격자가 통째로 흔들린다.
+const eventsFirst = (list) => list.filter(isEvent).concat(list.filter((it) => !isEvent(it)));
+
 // ws 주의 일정 막대들 — 층 배정까지 끝난 것. 정렬을 먼저 하는 이유는 층이 매번 같은
 // 자리에 오게 하기 위해서다(스냅샷이 오는 순서에 층이 흔들리면 막대가 위아래로 튄다).
 function weekEventBars(items, ws) {
@@ -1243,7 +1251,9 @@ function render() {
 
   // -- selected day list ----------------------------------------------------
   const selAll = itemsOn(items, sel, true);
-  const selShown = SHOW_COMPLETED ? selAll : selAll.filter((it) => !isDone(it, sel));
+  // ★ 여기서만 일정 → 할 일로 묶는다(eventsFirst 주석 참고). 아래 남은 개수·제목은
+  //   차례를 안 보므로 영향이 없고, 바뀌는 것은 그려지는 줄의 순서뿐이다.
+  const selShown = eventsFirst(SHOW_COMPLETED ? selAll : selAll.filter((it) => !isDone(it, sel)));
   // ★ 남은 개수는 **할 일만** 센다. 일정에는 완료 체크가 없어서(=영원히 안 끝난다)
   //   같이 세면 일정만 있는 날이 "2개 남음" 으로 굳는다. 일정뿐인 날은 라벨이 없다.
   const selTodos = selAll.filter((it) => !isEvent(it));
@@ -1253,6 +1263,10 @@ function render() {
 
   let listHtml;
   if (selShown.length) {
+    // 종류가 바뀌는 줄. 굵은 선은 **여기 한 곳**에만 간다.
+    // ★ 한쪽 종류만 있는 날은 findIndex 가 -1(할 일 없음) 또는 0(일정 없음)이라
+    //   어느 줄과도 안 맞는다 — 0 은 아래에서 첫 줄 규칙('none')이 먼저 가져간다.
+    const splitAt = selShown.findIndex((it) => !isEvent(it));
     listHtml = selShown.map((it, idx) => {
       const c = catOf(it).color;
       const done = isDone(it, sel);
@@ -1260,7 +1274,8 @@ function render() {
       // 여러 날 일정의 가운데를 눌러도 시작 날짜가 그리로 옮겨가면 안 된다 (pill.openDs).
       const open = 'data-open="' + esc(it.id) + '" data-ds="' + (occStart(it, sel) || sel) + '"';
       return '<div style="display:flex;align-items:center;gap:12px;padding:13px 16px;border-top:' +
-        (idx === 0 ? 'none' : '.5px solid var(--separator)') + '">' +
+        (idx === 0 ? 'none' : idx === splitAt ? '3px solid var(--separator)'
+          : '.5px solid var(--separator)') + '">' +
         // ★ 일정에는 체크 버튼을 안 그린다 — 완료라는 개념이 없다. 대신 같은 24px
         //   자리에 네모 점을 둬서 줄이 안 어긋나고, 동그라미가 아니라서 "눌러도
         //   안 되는 것" 이 모양으로 읽힌다.

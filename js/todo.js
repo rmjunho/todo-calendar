@@ -2358,6 +2358,30 @@ if (location.search.includes('selftest')) {
   ok(APP().innerHTML.indexOf(t('list.remain', 1)) < 0 && APP().innerHTML.indexOf(t('list.allDone')) < 0,
     'a day holding only events shows no remaining count — an event can never be finished');
 
+  // ★ 아래 목록은 일정을 위로 **묶어서** 그린다(사용자 요청). 픽스처를 일부러 거꾸로
+  //   놓는다 — 시각 없는 'AAA' 를 sortItems 는 09:00 일정보다 앞에 놓으므로, 그려진
+  //   차례가 뒤집혀 있어야 묶기가 실제로 돈 것이다. 원래 순서로 통과하면 검사가 아니다.
+  const listRows = () => [...APP().querySelectorAll('.row-title')].map((x) => x.parentElement.parentElement);
+  const borders = () => listRows().map((r) => parseFloat(getComputedStyle(r).borderTopWidth));
+  state.selected = '2026-08-20';
+  state.items = [EV({ id: 'ev1', title: '출장', date: '2026-08-20', time: '09:00', endTime: '10:00' }),
+    EV({ id: 'td1', kind: 'todo', title: 'AAA', date: '2026-08-20' }),
+    EV({ id: 'td2', kind: 'todo', title: 'BBB', date: '2026-08-20', time: '14:00' })];
+  render();
+  eq(titles(APP()).join(), '출장,AAA,BBB',
+    'the day list puts every event above the to-dos, even one that sorted earlier by time');
+  // px 을 리터럴로 안 적는다 — 확대 배율에서 소수가 된다. 굵기끼리 견준다.
+  const mixed = borders();
+  ok(mixed[1] > mixed[2],
+    'the line where the kind changes is thicker than the hairline between two to-dos',
+    mixed.join(' / '));
+
+  state.items = [EV({ id: 'td1', kind: 'todo', title: 'AAA', date: '2026-08-20' }),
+    EV({ id: 'td2', kind: 'todo', title: 'BBB', date: '2026-08-20', time: '14:00' })];
+  render();
+  eq(borders()[1], mixed[2],
+    'a day holding one kind gets no divider at all — every line stays a hairline');
+
   // 입력 시트의 판정. 저장 버튼·안내·saveForm 이 전부 이 둘만 본다.
   const F = (o) => Object.assign(blankForm('2026-08-05'), o);
   eq(formSpan(F({ kind: 'event', hasSpan: true, endDate: '2026-08-09' })), 5,

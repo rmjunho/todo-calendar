@@ -363,7 +363,8 @@ function exportModel(view, items, sel, cy, cm, includeMemo, includeDetail, inclu
   // 이미 아젠다 형식이라 상세를 붙이지 않는다 (토글도 안 보여 준다).
   // dayShape 를 지난다 — 화면의 일간 뷰와 같은 시각(첫날은 시작, 마지막 날은 종료,
   // 가운데는 하루 종일)이 이미지에도 그대로 간다.
-  const dayItems = itemsOn(items, sel, SHOW_COMPLETED);
+  // 화면 아래 목록과 **같은 묶음**이다 — 일정이 먼저, 할 일이 뒤(eventsFirst 참고).
+  const dayItems = eventsFirst(itemsOn(items, sel, SHOW_COMPLETED));
   const rows = dayItems.map((it) => exRow(dayShape(it, sel), sel, includeMemo));
   const L = exDayLayout(rows.map((r) => D_ROW + (r.memo ? D_MEMO : 0)));
   // 화면의 하단 목록과 같은 규칙 — 남은 개수는 할 일만 센다.
@@ -641,7 +642,15 @@ function exDrawDay(ctx, C, m) {
   const x = EX_PAD + 26, w = EX_GRID - 52;
   let y = EX_HEAD + 24;
   for (let i = 0; i < L.shown; i++) {
-    if (i > 0) exLine(ctx, x, y, x + w, C.sep);
+    // ★ 종류가 바뀌는 자리는 **굵은 선**이다 — 화면 아래 목록과 같은 규칙.
+    //   이미지는 화면의 약 2.4배라, 화면의 3px 에 맞추려면 여기서 7px 이다.
+    // ★ 높이를 한 픽셀도 안 먹는다 — 줄 사이에 이미 긋던 실선을 두껍게만 그린다.
+    //   exDayLayout 이 이미지 높이를 정하고 selftest 가 그 값을 붙잡고 있어서,
+    //   여기서 자리를 새로 만들면 일간 이미지가 통째로 길어진다.
+    if (i > 0) {
+      if (!m.rows[i].evt && m.rows[i - 1].evt) { ctx.fillStyle = C.sep; ctx.fillRect(x, y, w, 7); }
+      else exLine(ctx, x, y, x + w, C.sep);
+    }
     y += exDrawRow(ctx, C, m.rows[i], x, y, w);
   }
   if (L.hidden) exText(ctx, t('cell.more', L.hidden), x + 24, y + 22, exFont(600, 24), C.label3);
