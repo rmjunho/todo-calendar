@@ -2584,6 +2584,9 @@ if (location.search.includes('selftest')) {
     { id: 'cspan', kind: 'event', span: 4, title: '출장', repeat: 'none', time: '', endTime: '', pri: 'none',
       date: fmt(new Date(nowCal.getFullYear(), nowCal.getMonth(), 9)) },
     { id: 'ctime', kind: 'todo', span: 1, title: '회의', repeat: 'none', time: '09:00', endTime: '10:00',
+      pri: 'none', date: fmt(nowCal) },
+    // 겹치는 짝. 일간 뷰가 2열로 갈라져야 블록 사이 구분선이 생긴다 — 아래 검사가 그걸 본다.
+    { id: 'ctime2', kind: 'todo', span: 1, title: '검토', repeat: 'none', time: '09:30', endTime: '10:30',
       pri: 'none', date: fmt(nowCal) }
   ];
   state.selected = fmt(nowCal);
@@ -2653,6 +2656,18 @@ if (location.search.includes('selftest')) {
   ok(ink(7) !== ink(10) && ink(13) !== ink(10) && ink(7) !== ink(13),
     'Sunday, a weekday and Saturday print in three different inks',
     ink(7) + ' / ' + ink(10) + ' / ' + ink(13));
+  // 잉크는 **한 통**이다. 오늘 도장의 빨강과 일요일 숫자의 빨강이 같은 값이라야 한다 —
+  // 예전에 둘 다 iOS 의 #FF3B30 이었고, 하나만 인쇄 잉크로 옮기면 화면에서 두 빨강이
+  // 나란히 놓인다. 오늘이 일요일인 날에도 서지 않게 **도장이 안 찍힌** 일요일을 고른다.
+  const plainSun = mCells.filter((c, i) => i % 7 === 0)
+    .map((c) => c.querySelector('.cal-day'))
+    .filter((d) => clear(getComputedStyle(d).backgroundColor))[0];
+  const stampBg = getComputedStyle(
+    APP().querySelector('[data-day="' + fmt(nowCal) + '"] .cal-day')).backgroundColor;
+  ok(plainSun && getComputedStyle(plainSun).color === stampBg,
+    'the stamp and the Sunday numerals come out of the same tin of red ink',
+    'sunday=' + (plainSun && getComputedStyle(plainSun).color) + ' stamp=' + stampBg);
+
   const tStamp = APP().querySelector('[data-day="' + fmt(nowCal) + '"] .cal-day');
   ok(tStamp && parseFloat(getComputedStyle(tStamp).borderTopLeftRadius) === 0
     && !clear(getComputedStyle(tStamp).backgroundColor),
@@ -2685,6 +2700,14 @@ if (location.search.includes('selftest')) {
   ok(axis && parseFloat(getComputedStyle(axis, '::before').borderLeftWidth) > 0,
     'the hour labels are ruled off from the day itself',
     axis && getComputedStyle(axis, '::before').borderLeftWidth);
+  // 겹치는 일정을 가르는 선은 **종이색이라 보이지 않는 것**이지 흰 선이 아니다.
+  // 종이를 따뜻한 흰색으로 바꾸면서 이 둘이 갈라질 수 있어 같은 값인지 직접 잰다.
+  const gapBlock = [...APP().querySelectorAll('[data-block]')]
+    .filter((b) => parseFloat(getComputedStyle(b).borderRightWidth) > 0)[0];
+  const paper = getComputedStyle(APP().querySelector('.cal-sheet')).backgroundColor;
+  ok(gapBlock && getComputedStyle(gapBlock).borderRightColor === paper,
+    'the seam between overlapping events is the paper showing through, not a white line painted on it',
+    gapBlock ? getComputedStyle(gapBlock).borderRightColor + ' vs ' + paper : 'no overlapping blocks');
 
   Object.assign(state, kCal);
 
