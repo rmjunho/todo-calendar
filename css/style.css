@@ -221,9 +221,13 @@ input:focus,textarea:focus{outline:2px solid var(--tint);outline-offset:-1px}
    레퍼런스에서 숫자가 세로로 딱 맞아떨어지는 게 그 달력의 정체성이다.
    ★ 26px 정사각과 margin-bottom 4 는 **바꾸지 말 것**: calendar.js 의 barSpacer
      가 이 높이를 그대로 베껴서 기간 막대 층의 시작 y 를 맞춘다. */
-.cal-day{width:26px;height:26px;margin:0 auto 4px;display:flex;align-items:center;
-  justify-content:center;font-size:15px;font-weight:700;line-height:1;
+.cal-day{width:30px;height:30px;margin:0 auto 4px;display:flex;align-items:center;
+  justify-content:center;font-size:20px;font-weight:700;line-height:1;
   font-variant-numeric:tabular-nums}
+/* 요일은 [한자 / 영문] 두 줄이다 — 레퍼런스 달력이 전부 이 구성이다(日 위, SUN 아래).
+   글자 값은 i18n.js 의 DOW_HANJA / DOW_EN 이고 **일부러 로케일을 안 탄다**. */
+.cal-dow{font-size:17px;font-weight:700;line-height:1.15}
+.cal-dow-en{font-size:9px;font-weight:700;letter-spacing:.8px;line-height:1.2;opacity:.72}
 /* 년 뷰 12칸. gap 을 없애고 이웃끼리 괘선을 나눠 쓴다 — 레퍼런스 2023 달력
    왼쪽 페이지의 12개월 블록이 이 모양이다. 바깥 테두리는 .cal-sheet 가 이미
    그리므로 첫 행·첫 열의 괘선을 뺀다(안 빼면 이중선이 된다). */

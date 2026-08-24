@@ -464,11 +464,15 @@ function exDrawMonth(ctx, C, m) {
   }
   exRuleDouble(ctx, C, EX_PAD + EX_FRAME, EX_HEAD + M_DOW, EX_GRID - EX_FRAME * 2);
 
-  const names = dow();
+  // 요일은 [한자 / 영문] 두 줄이다 — 화면과 같은 DOW_HANJA/DOW_EN 을 쓴다.
+  // ★ M_DOW(56) 안에 두 줄을 넣는다. 머리줄을 키우면 exMonthLayout 의 이미지 높이가
+  //   달라지고, selftest 가 그 높이(1150/1326)를 못 박아 뒀다 — 예전에 내보낸 그림과
+  //   나란히 놨을 때 어긋나지 않게 하려는 결정이다. 그래서 **글자만** 키운다.
   for (let i = 0; i < 7; i++) {
+    const cx = EX_PAD + L.cellW * (i + 0.5);
     // 평일도 잉크 검정이다 — 화면의 요일 줄과 같다(예전엔 보조 회색이었다).
-    exText(ctx, names[i], EX_PAD + L.cellW * (i + 0.5), EX_HEAD + M_DOW / 2,
-      exFont(700, 24), exDowColor(C, i), 'center');
+    exText(ctx, DOW_HANJA[i], cx, EX_HEAD + 24, exFont(700, 26), exDowColor(C, i), 'center');
+    exText(ctx, DOW_EN[i], cx, EX_HEAD + 45, exFont(700, 13), exDowColor(C, i), 'center');
   }
 
   for (let i = 0; i < m.days.length; i++) {
@@ -506,13 +510,17 @@ function exDrawMonth(ctx, C, m) {
     if (!d.inMonth) ctx.globalAlpha = 0.35;
 
     // 오늘은 파란 원이 아니라 **빨간 사각 반전**이다 — 화면의 .cal-day 와 같다.
+    // 오늘은 파란 원이 아니라 **빨간 사각 도장**이다 — 화면의 .cal-day 와 같다.
+    // ★ 도장은 40px 이 한도다. 중심이 y+30 이고 알약이 y+52 에서 시작하므로
+    //   y+10 ~ y+50 까지만 쓸 수 있다. 더 키우려면 M_ROW 를 같이 키워야 하는데
+    //   그러면 selftest 가 못 박은 이미지 높이가 달라진다.
     const isToday = d.ds === today;
     const cx = x + L.cellW / 2, cy = y + 30;
     if (isToday) {
       ctx.fillStyle = C.sun;
-      ctx.fillRect(cx - 19, cy - 19, 38, 38);
+      ctx.fillRect(cx - 20, cy - 20, 40, 40);
     }
-    exText(ctx, String(d.day), cx, cy, exFont(700, 24),
+    exText(ctx, String(d.day), cx, cy, exFont(700, 34),
       isToday ? '#FFFFFF' : d.dow === 0 ? C.sun : d.dow === 6 ? C.tint : C.label, 'center');
 
     const shown = d.rows.slice(0, 3);
@@ -545,7 +553,6 @@ function exDrawWeek(ctx, C, m) {
   ctx.fillStyle = C.head;
   ctx.fillRect(EX_PAD + EX_FRAME, EX_HEAD + EX_FRAME, EX_GRID - EX_FRAME * 2, headBottom - EX_HEAD - EX_FRAME);
 
-  const names = dow();
   for (let i = 0; i < 7; i++) {
     const d = m.days[i];
     const x = EX_PAD + i * L.colW, cx = x + L.colW / 2;
@@ -557,14 +564,17 @@ function exDrawWeek(ctx, C, m) {
         exRuleV(ctx, C, x, L.bodyTop, EX_HEAD + cardH - EX_FRAME - L.bodyTop);
       } else exRuleV(ctx, C, x, EX_HEAD + EX_FRAME, cardH - EX_FRAME * 2);
     }
-    exText(ctx, names[i], cx, EX_HEAD + 30, exFont(700, 22), exDowColor(C, i), 'center');
-    // 월간과 같은 빨간 사각 반전. 날짜 색도 화면처럼 일/토가 갈린다.
+    // [한자 / 영문 / 날짜] 세 줄을 W_DOW(96) 안에 넣는다 — 월간과 같은 이유로
+    // 머리줄 높이를 못 키운다(빈 주 이미지의 하한 598px 이 selftest 에 박혀 있다).
+    exText(ctx, DOW_HANJA[i], cx, EX_HEAD + 24, exFont(700, 24), exDowColor(C, i), 'center');
+    exText(ctx, DOW_EN[i], cx, EX_HEAD + 43, exFont(700, 12), exDowColor(C, i), 'center');
+    // 월간과 같은 빨간 사각 도장. 날짜 색도 화면처럼 일/토가 갈린다.
     const isToday = d.ds === today;
     if (isToday) {
       ctx.fillStyle = C.sun;
-      ctx.fillRect(cx - 22, EX_HEAD + 44, 44, 44);
+      ctx.fillRect(cx - 22, EX_HEAD + 50, 44, 44);
     }
-    exText(ctx, String(d.day), cx, EX_HEAD + 66, exFont(700, 28),
+    exText(ctx, String(d.day), cx, EX_HEAD + 72, exFont(700, 34),
       isToday ? '#FFFFFF' : i === 0 ? C.sun : i === 6 ? C.tint : C.label, 'center');
 
     const shown = d.rows.slice(0, L.fit);

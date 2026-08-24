@@ -241,7 +241,9 @@ const barSpacer =
     'border-top:1px solid transparent;padding:5px 0 4px">' +
   // padding-bottom 4 로 준다 — 자식의 margin-bottom 은 부모 밖으로 새어(마진 상쇄)
   // 높이에 안 들어간다. 칸 쪽은 뒤에 형제가 있어서 그 4px 이 그대로 산다.
-  '<div style="height:26px"></div></div>';
+  // ★ 이 26 이 아니라 30 인 이유: .cal-day 의 높이와 **같아야** 한다(css/style.css).
+  //   날짜 숫자를 키우면서 26 → 30 이 됐다. 한쪽만 고치면 막대가 4px 어긋난다.
+  '<div style="height:30px"></div></div>';
 // 그리는 층의 최대 개수. 넘친 막대는 **버리지 않고** 그 날의 `+N개` 로 넘긴다.
 // 상한이 없으면 겹치는 주의 높이가 그대로 늘어난다 — 그걸 막으려고 종류 필터를 만든 것이다.
 // 주간이 더 깊은 이유는 그 화면이 한 주만 보여 주는 자리라서다(막대 띠가 칸 위에 따로 있다).
@@ -997,11 +999,16 @@ function render() {
 
   // -- month view -----------------------------------------------------------
   if (state.view === 'month') {
-    // 평일 글자는 보조 회색이 아니라 잉크 검정이다 — 레퍼런스의 요일 줄이 그렇다.
-    // 세로 괘선과 아래 이중선은 .cal-head 가 든다(css/style.css).
-    const heads = dow().map((l, i) =>
-      '<div style="text-align:center;padding:11px 0 9px;font-size:12px;font-weight:700;letter-spacing:.5px;color:' +
-      (i === 0 ? '#FF3B30' : i === 6 ? 'var(--tint)' : 'var(--label)') + '">' + l + '</div>').join('');
+    // 요일은 [한자 / 영문] 두 줄이다 — 레퍼런스 달력이 전부 이 구성이다.
+    // 평일 글자는 보조 회색이 아니라 잉크 검정이다. 세로 괘선과 아래 이중선은
+    // .cal-head 가 든다(css/style.css). 글자 값은 dow() 가 아니라 DOW_HANJA/DOW_EN 이다.
+    const dowInk = (i) => (i === 0 ? '#FF3B30' : i === 6 ? 'var(--tint)' : 'var(--label)');
+    let heads = '';
+    for (let i = 0; i < 7; i++) {
+      heads += '<div style="text-align:center;padding:8px 0 7px;color:' + dowInk(i) + '">' +
+        '<div class="cal-dow">' + DOW_HANJA[i] + '</div>' +
+        '<div class="cal-dow-en">' + DOW_EN[i] + '</div></div>';
+    }
 
     const startOffset = new Date(state.cy, state.cm, 1).getDay();
     const dim = new Date(state.cy, state.cm + 1, 0).getDate();
@@ -1070,8 +1077,7 @@ function render() {
 
   // -- week view ------------------------------------------------------------
   if (state.view === 'week') {
-    // 주 시작은 일요일 고정이다. Intl 은 이름만 주고 배열 순서는 getDay() 색인.
-    const wdow = dow();
+    // 주 시작은 일요일 고정이고, 배열 순서는 getDay() 색인이다 (DOW_HANJA/DOW_EN 도 같다).
     const ws = addDays(sel, -selD.getDay());
     // ★ 열 하나가 [머리 + 본문] 을 통째로 들던 것을 [머리 줄] · [막대 띠] · [본문 줄]
     //   셋으로 갈랐다 — 기간 막대는 열을 가로지르므로 열 안에 넣을 수가 없다.
@@ -1118,18 +1124,21 @@ function render() {
       const more = hid
         ? '<div data-day="' + ds + '" style="cursor:pointer;font-size:10px;color:var(--label-tertiary);padding:0 7px">' +
           esc(t('cell.more', hid)) + '</div>' : '';
-      heads += '<div data-day="' + ds + '" style="cursor:pointer;text-align:center;padding:10px 4px 8px">' +
-          '<div style="font-size:11px;font-weight:700;letter-spacing:.5px;color:' +
-            (i === 0 ? '#FF3B30' : i === 6 ? 'var(--tint)' : 'var(--label)') + '">' + esc(wdow[i]) + '</div>' +
-          // 월간과 같은 각진 숫자판. 주간 칸이 넓어 28px 만 키운다(barSpacer 와 무관).
-          '<div class="cal-day" style="width:28px;height:28px;font-size:16px;margin:4px auto 0;background-color:' +
+      heads += '<div data-day="' + ds + '" style="cursor:pointer;text-align:center;padding:8px 4px 8px;color:' +
+            (i === 0 ? '#FF3B30' : i === 6 ? 'var(--tint)' : 'var(--label)') + '">' +
+          '<div class="cal-dow">' + DOW_HANJA[i] + '</div>' +
+          '<div class="cal-dow-en">' + DOW_EN[i] + '</div>' +
+          // 월간과 같은 각진 숫자판. 주간은 칸이 넓어 더 키운다(barSpacer 와 무관하다 —
+          // 자리 맞추기가 필요한 것은 월간 칸뿐이다).
+          '<div class="cal-day" style="width:36px;height:36px;font-size:24px;margin:5px auto 0;background-color:' +
             (isToday ? '#FF3B30' : isSel ? 'var(--fill-tertiary)' : 'transparent') +
             ';color:' + (isToday ? '#fff' : d.getDay() === 0 ? '#FF3B30' : d.getDay() === 6 ? 'var(--tint)' : 'var(--label)') +
             '">' + d.getDate() + '</div></div>';
-      // min-height 는 예전 320(머리+본문)에서 머리 몫을 뺀 값이다. 머리 줄이 밖으로
-      // 나갔으니 여기 320 을 그대로 두면 열이 통째로 64px 길어진다.
-      // ★ 64 는 실측이다 — 위 머리 줄의 padding 10+8 · 라벨 11px/600 한 줄 · 여백 4 · 원 28.
-      //   글꼴이나 저 숫자들을 바꾸면 다시 재서 이 256 을 고칠 것('5개' 근거가 여기 걸려 있다).
+      // min-height 는 **본문 줄만의** 높이다(머리 줄은 위로 빠져 있다). 예전 320 에서
+      // 머리 몫 64 를 뺀 값으로 정했고, 그 뒤 머리 줄이 두 줄 + 큰 숫자로 커졌지만
+      // 이 256 은 그대로다 — WEEK_FIT=7 의 근거가 **본문 높이**에만 걸려 있어서,
+      // 머리 줄이 얼마나 커지든 접기 기준은 안 흔들린다(카드만 그만큼 길어진다).
+      // ★ 여기 padding 이나 항목 글자 크기를 바꾸면 WEEK_FIT 을 다시 잴 것.
       cols += '<div style="min-height:256px;padding:6px 5px;display:flex;flex-direction:column;gap:4px">' +
         pills + more + '</div>';
     }
