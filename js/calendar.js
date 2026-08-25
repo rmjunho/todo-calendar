@@ -104,9 +104,11 @@ const GLYPHS = {
   'plus': '<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>',
   'chevron.left': '<path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
   'chevron.right': '<path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+  // 접힌 메모를 펼치는 표시. 접을 때는 아이콘을 하나 더 두지 않고 **돌려서** 쓴다.
+  'chevron.down': '<path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
   'chevron.up.chevron.down': '<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10l4-4 4 4"/><path d="M8 14l4 4 4-4"/></g>',
-  // 순서를 바꿀 수 있다는 표시. 손잡이 자체가 잡히는 곳은 아니다 — 줄 아무 데나
-  // 길게 누르면 잡힌다. 이건 "끌 수 있다" 를 눈에 보이게 하는 역할만 한다.
+  // 순서 손잡이. **누르면 그 자리에서 잡힌다**(줄 본문은 길게 눌러야 잡힌다) —
+  // 자세한 건 todo.js 의 pointerdown 위임과 catDragPaint 를 볼 것.
   'line.3.horizontal': '<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 8h14"/><path d="M5 12h14"/><path d="M5 16h14"/></g>'
 };
 function icon(name, size, color) {
@@ -479,6 +481,48 @@ const cellItems = (items, ds) => itemsOn(items, ds, SHOW_COMPLETED).filter((it) 
 //   층까지 지나는 통로라, 거기서 순서를 바꾸면 달력 격자가 통째로 흔들린다.
 const eventsFirst = (list) => list.filter(isEvent).concat(list.filter((it) => !isEvent(it)));
 
+// 아래 목록의 **둘째 줄** — [카테고리(그 색)] · [메모] [펼침].
+// ★ 카테고리가 없는 항목에는 이름을 안 붙인다. 폴백 이름이 '없음' 이라, 붙이면 분류
+//   안 한 줄마다 "없음 · …" 이 떠서 정보가 아니라 잡음이 된다.
+// ★ 메모는 flex 칸이고 min-width:0 이라야 .trunc 가 먹는다 — 이게 없으면 flex 항목의
+//   최소 폭이 글자 길이라 줄이 말줄임 대신 **가로로 밀린다**.
+function subLine(it) {
+  const cat = catOf(it);
+  if (!cat.id && !it.memo) return '';
+  const on = !!state.memoOpen[it.id];
+  return '<div style="display:flex;align-items:flex-start;font-size:13px;' +
+      'color:var(--label-secondary);margin-top:1px;min-width:0">' +
+    (cat.id ? '<span style="flex:none;font-weight:600;color:' + cat.color + '">' +
+      esc(catName(cat)) + '</span>' : '') +
+    (cat.id && it.memo ? '<span aria-hidden="true" style="flex:none;color:var(--label-quaternary);' +
+      'padding:0 5px">·</span>' : '') +
+    (it.memo
+      ? '<span data-memotext="' + esc(it.id) + '"' +
+          (on ? ' style="flex:1;min-width:0;overflow-wrap:anywhere"' : ' class="trunc" style="flex:1;min-width:0"') +
+          '>' + esc(it.memo) + '</span>' +
+        // ★ 펼침 버튼은 **잘린 줄에만** 보인다(syncMemoBtns 가 그린 뒤 재서 켠다).
+        //   여기서는 늘 hidden 으로 낸다 — 반대로 두면 짧은 메모에서도 한 번 번쩍인다.
+        //   접는 화살표는 따로 안 만들고 같은 아이콘을 180도 돌려 쓴다.
+        '<button data-memo="' + esc(it.id) + '" hidden aria-expanded="' + on + '" ' +
+          'aria-label="' + esc(t(on ? 'list.memoLess' : 'list.memoMore')) + '" ' +
+          'style="flex:none;border:none;background:none;cursor:pointer;padding:0 0 0 6px;' +
+          'color:var(--label-tertiary);display:flex;align-items:center">' +
+          '<span style="display:flex' + (on ? ';rotate:180deg' : '') + '">' +
+          icon('chevron.down', 13) + '</span></button>'
+      : '') +
+    '</div>';
+}
+
+// 메모가 실제로 잘렸는지는 **그린 뒤에만** 알 수 있다 — CSS 로는 못 묻는다. 안 잘린
+// 줄에 펼침 버튼을 두면 눌러도 아무 일이 없어 고장으로 읽히므로, 여기서 재서 켠다.
+// 펼쳐 둔 줄은 재지 않는다 — 다 보여서 안 넘치지만 **접을 버튼은 있어야** 한다.
+function syncMemoBtns() {
+  document.querySelectorAll('[data-memo]').forEach((b) => {
+    const txt = b.previousElementSibling;
+    b.hidden = !(state.memoOpen[b.dataset.memo] || (txt && txt.scrollWidth > txt.clientWidth + 1));
+  });
+}
+
 // ws 주의 일정 막대들 — 층 배정까지 끝난 것. 정렬을 먼저 하는 이유는 층이 매번 같은
 // 자리에 오게 하기 위해서다(스냅샷이 오는 순서에 층이 흔들리면 막대가 위아래로 튄다).
 function weekEventBars(items, ws) {
@@ -544,6 +588,10 @@ const state = {
   // ★ 끄는 동안에는 render() 를 안 부른다 — #app 을 갈아엎으면 손가락이 잡고 있던
   //   줄이 사라진다(로그인 화면에서 키보드가 닫히던 것과 같은 원리). 대신 줄의
   //   transform 만 직접 민다. 놓을 때 한 번만 그린다.
+  // 아래 목록에서 펼쳐 둔 메모 { [itemId]: 1 }. 화면 전용이라 저장하지 않는다.
+  // ★ DOM 이 아니라 여기 있어야 한다 — render() 가 #app 을 통째로 다시 만들어서
+  //   펼친 표시를 요소에 두면 다음 render() 에 조용히 접힌다.
+  memoOpen: {},
   catDrag: null,
   showForm: false,
   editingId: null,
@@ -1291,8 +1339,7 @@ function render() {
         '<div ' + open + ' style="flex:1;min-width:0;cursor:pointer">' +
           '<div class="row-title" style="text-decoration:' + (done ? 'line-through' : 'none') +
             ';opacity:' + (done ? 0.45 : 1) + '">' + esc(it.title) + '</div>' +
-          (it.memo ? '<div class="trunc" style="font-size:13px;color:var(--label-secondary);margin-top:1px">' +
-            esc(it.memo) + '</div>' : '') +
+          subLine(it) +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;flex:none">' +
           // 여러 날 배지. 시각 라벨만 있으면 '09:00–18:00' 이 하루 안의 범위로 읽힌다.
@@ -1374,6 +1421,8 @@ function render() {
 
   document.getElementById('app').innerHTML = html;
   applyJumpScroll();
+  // ★ 반드시 innerHTML 뒤다 — 재려면 줄이 이미 문서에 붙어 있어야 한다.
+  syncMemoBtns();
 }
 
 // ---------------------------------------------------------------- 점프 팝오버

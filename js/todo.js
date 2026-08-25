@@ -827,6 +827,14 @@ app.addEventListener('click', (e) => {
     return render();
   }
   if ((el = hit('[data-toggle]'))) { e.stopPropagation(); return toggleDone(el.dataset.toggle, state.selected); }
+  // ★ [data-open] **앞이다.** 펼침 버튼은 그 안에 들어 있어서, 순서가 뒤면 메모를
+  //   펼치려고 누를 때마다 편집기가 먼저 열린다. 옮기지 말 것.
+  if ((el = hit('[data-memo]'))) {
+    e.stopPropagation();
+    const mid = el.dataset.memo;
+    if (state.memoOpen[mid]) delete state.memoOpen[mid]; else state.memoOpen[mid] = 1;
+    return render();
+  }
   if ((el = hit('[data-open]'))) { e.stopPropagation(); return openForm(el.dataset.open, el.dataset.ds); }
   if ((el = hit('[data-day]'))) {
     const ds = el.dataset.day, d = parse(ds);
@@ -2381,6 +2389,55 @@ if (location.search.includes('selftest')) {
   render();
   eq(borders()[1], mixed[2],
     'a day holding one kind gets no divider at all — every line stays a hairline');
+
+  // ★ 둘째 줄 = [카테고리(그 색)] · [메모]. 색을 리터럴로 안 적는다 — 서로 **다른**
+  //   카테고리가 서로 다른 색으로 나오는지를 본다(한 색으로 굳어 버리면 걸린다).
+  const keepCats = state.cats;
+  state.cats = [{ id: 'c1', name: '업무', color: CAT_COLORS[0], order: 0 },
+                { id: 'c2', name: '집', color: CAT_COLORS[1], order: 1 }];
+  const subOf = (title) => [...APP().querySelectorAll('.row-title')]
+    .find((x) => x.textContent === title).nextElementSibling;
+  // 화면 폭을 모르므로 **확실히** 넘치게 길게 만든다 — 짧으면 안 잘려서 검사가 헛돈다.
+  const longMemo = '한 줄에 절대 안 들어가는 아주 긴 메모입니다. '.repeat(8);
+  state.items = [EV({ id: 'm1', kind: 'todo', title: '업무줄', date: '2026-08-20', memo: '짧음' }),
+    EV({ id: 'm2', kind: 'todo', title: '집줄', date: '2026-08-20', categoryId: 'c2', memo: '짧음' }),
+    EV({ id: 'm3', kind: 'todo', title: '분류없음', date: '2026-08-20', categoryId: '', memo: '짧음' }),
+    EV({ id: 'm4', kind: 'todo', title: '긴메모', date: '2026-08-20', memo: longMemo })];
+  render();
+  ok(getComputedStyle(subOf('업무줄').firstElementChild).color
+    !== getComputedStyle(subOf('집줄').firstElementChild).color,
+    'each row names its category in that category own colour, not one shared colour',
+    getComputedStyle(subOf('업무줄').firstElementChild).color + ' vs ' +
+    getComputedStyle(subOf('집줄').firstElementChild).color);
+  eq(subOf('분류없음').textContent, '짧음',
+    'an item with no category names none — the fallback label would just read "none" on every row');
+
+  // ★ 펼침 버튼은 **잘린 줄에만** 뜬다. 안 잘린 줄에 두면 눌러도 아무 일이 없어 고장으로
+  //   읽힌다. 잘렸는지는 그린 뒤에 재야 알 수 있어서 syncMemoBtns() 가 켜고 끈다.
+  const btnOf = (title) => subOf(title).querySelector('[data-memo]');
+  ok(btnOf('업무줄').hidden && !btnOf('긴메모').hidden,
+    'the expand arrow shows only on the row whose note is actually clipped');
+  btnOf('긴메모').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  const opened = subOf('긴메모').querySelector('[data-memotext]');
+  ok(opened.className.indexOf('trunc') < 0 && !state.showForm,
+    'tapping that arrow opens the note in place and does not open the editor instead',
+    opened.className + ' / showForm=' + !!state.showForm);
+  btnOf('긴메모').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  ok(subOf('긴메모').querySelector('[data-memotext]').className.indexOf('trunc') >= 0,
+    'and tapping it again folds the note back');
+
+  // 내보내기: 카테고리와 메모는 **같은 스위치**를 타고, 기본은 꺼짐이다.
+  const exOff = exportModel('day', state.items, '2026-08-20', 2026, 7, false, false, true);
+  const exOn = exportModel('day', state.items, '2026-08-20', 2026, 7, true, false, true);
+  ok(exOff.rows.every((r) => !r.cat && !r.memo) && exOn.rows.some((r) => r.cat && r.memo),
+    'the image carries the category and the note only while that one switch is on');
+  ok(exRowH({ cat: '업무' }) > exRowH({}),
+    'a category with no note still claims the second line — otherwise it is drawn on unreserved space');
+  openExport();
+  ok(state.exp.memo === false, 'and the export sheet opens with that switch off');
+  state.exp = null;
+  state.memoOpen = {};
+  state.cats = keepCats;
 
   // 입력 시트의 판정. 저장 버튼·안내·saveForm 이 전부 이 둘만 본다.
   const F = (o) => Object.assign(blankForm('2026-08-05'), o);

@@ -86,6 +86,12 @@ const W_DOW = 96, W_ITEM = 52, W_GRID_MIN = 384, W_GRID_MAX = 1486;
 // 있는데(캔버스 필요), 레이아웃 함수는 캔버스 없이 시험 가능해야 하므로 고정한다.
 const D_MIN = 700, D_ROW = 110, D_MEMO = 62, D_MEMO_LINE = 30;
 
+// 아젠다 한 줄의 높이. ★ 예전에는 이 식이 **세 군데에 따로** 적혀 있었다(일간 배치·
+// 상세 배치·그리기). 카테고리 이름이 둘째 줄에 끼면서 조건이 `memo` 하나가 아니게
+// 됐고, 셋 중 하나만 고치면 배치와 그리기가 어긋나 글자가 다음 줄을 밟는다.
+// 부르는 곳이 셋이라는 것이 곧 합쳐야 할 이유였다 — 여기만 고치면 셋이 같이 따라온다.
+const exRowH = (r) => D_ROW + (r.memo || r.cat ? D_MEMO : 0);
+
 // 상세 목록 — 격자 아래에 폭 1080 을 통째로 쓴다. 셀 폭 154px 에서 잘리는
 // 제목·메모를 여기서 온전히 보여 준다. 날짜 헤더는 **할 일이 있는 날만** 그린다.
 const DT_HEAD = 56, DT_GAP = 20, DT_MORE = 44;
@@ -199,7 +205,7 @@ function exDayLayout(heights) {
 // budget 은 격자·머리말·꼬리말을 뺀 나머지 높이다.
 // `hidden` 은 그룹이 아니라 **항목 수**다 — `+N개` 에 그대로 쓴다.
 function exDetailLayout(groups, budget) {
-  const groupH = (g) => DT_HEAD + g.rows.reduce((a, r) => a + D_ROW + (r.memo ? D_MEMO : 0), 0);
+  const groupH = (g) => DT_HEAD + g.rows.reduce((a, r) => a + exRowH(r), 0);
   const fit = (cap) => {
     let used = 0, shown = 0;
     for (let i = 0; i < groups.length; i++) {
@@ -252,7 +258,15 @@ function exRow(it, ds, includeMemo) {
     }
   }
   const memo = (it.memo || '').trim();
-  if (includeMemo && memo) r.memo = memo;
+  // ★ 카테고리 이름도 **같은 스위치**를 탄다(사용자 요청, 기본은 꺼짐). 메모만 가리고
+  //   카테고리를 남기면 분류 이름이 그대로 이미지로 나간다 — 이름 자체가 사적인 경우가
+  //   있어서 둘을 한 스위치로 묶었다. 화면 아래 목록과 같은 규칙으로 카테고리가 없는
+  //   항목에는 안 붙인다(폴백 '없음' 은 정보가 아니라 잡음이다).
+  if (includeMemo) {
+    const c = catOf(it);
+    if (c.id) r.cat = catName(c);
+    if (memo) r.memo = memo;
+  }
   return r;
 }
 
@@ -366,7 +380,7 @@ function exportModel(view, items, sel, cy, cm, includeMemo, includeDetail, inclu
   // 화면 아래 목록과 **같은 묶음**이다 — 일정이 먼저, 할 일이 뒤(eventsFirst 참고).
   const dayItems = eventsFirst(itemsOn(items, sel, SHOW_COMPLETED));
   const rows = dayItems.map((it) => exRow(dayShape(it, sel), sel, includeMemo));
-  const L = exDayLayout(rows.map((r) => D_ROW + (r.memo ? D_MEMO : 0)));
+  const L = exDayLayout(rows.map(exRowH));
   // 화면의 하단 목록과 같은 규칙 — 남은 개수는 할 일만 센다.
   const dayTodos = dayItems.filter((it) => !isEvent(it));
   return { view: view, layout: L, rows: rows, title: exTitle(dayTitle(parse(sel))),
@@ -574,7 +588,7 @@ function exDrawWeek(ctx, C, m) {
 // 아젠다 한 줄. 일간 뷰와 월·주의 상세 목록이 **같은 렌더러**를 쓴다.
 // 돌려주는 값은 이 행이 먹은 높이다.
 function exDrawRow(ctx, C, r, x, y, w) {
-  const rh = D_ROW + (r.memo ? D_MEMO : 0);
+  const rh = exRowH(r);
   ctx.save();
   if (r.done) ctx.globalAlpha = C.doneA;
 
@@ -616,12 +630,21 @@ function exDrawRow(ctx, C, r, x, y, w) {
   const timeW = ctx.measureText(r.time).width;
   exClip(ctx, r.title, x + 42, y + 44, Math.min(w - 248, w - 62 - timeW), exFont(600, 30), C.label, r.done);
   exText(ctx, r.time, x + w, y + 44, exFont(600, 25), r.allDay ? C.label3 : C.label2, 'right');
-  if (r.memo) {
-    // 메모만 여러 줄로 흐른다. 한글은 공백이 없어 글자 단위로 끊긴다.
+  if (r.memo || r.cat) {
+    // 둘째 줄 = [카테고리(그 색)] · [메모]. 화면 아래 목록과 같은 모양이다.
     ctx.font = exFont(500, 24);
-    const memoLines = exWrap(r.memo, w - 48, 2, (v) => ctx.measureText(v).width);
-    for (let k = 0; k < memoLines.length; k++) {
-      exText(ctx, memoLines[k], x + 42, y + 80 + k * D_MEMO_LINE, exFont(500, 24), C.label3);
+    const lead = r.cat ? r.cat + (r.memo ? ' · ' : '') : '';
+    const leadW = lead ? ctx.measureText(lead).width : 0;
+    if (lead) exText(ctx, lead, x + 42, y + 80, exFont(500, 24), r.color);
+    if (r.memo) {
+      // ★ 메모는 카테고리 **뒤에서** 시작하고, 넘친 둘째 줄도 같은 자리로 들여쓴다
+      //   (매달린 들여쓰기). 폭도 그만큼 좁혀 준다 — 안 좁히면 넘친 글자가 오른쪽
+      //   시각 라벨 밑으로 파고든다. 한글은 공백이 없어 글자 단위로 끊긴다.
+      ctx.font = exFont(500, 24);
+      const memoLines = exWrap(r.memo, w - 48 - leadW, 2, (v) => ctx.measureText(v).width);
+      for (let k = 0; k < memoLines.length; k++) {
+        exText(ctx, memoLines[k], x + 42 + leadW, y + 80 + k * D_MEMO_LINE, exFont(500, 24), C.label3);
+      }
     }
   }
   ctx.restore();
@@ -709,7 +732,9 @@ const blankExp = (memo, detail, grid) =>
   ({ memo: memo, detail: detail, grid: grid, busy: true, url: '', file: null, canShare: false, err: '' });
 
 function openExport() {
-  state.exp = blankExp(true, true, true);
+  // ★ 카테고리·메모는 **꺼진 채로** 연다(사용자 요청). 이미지는 남에게 보내는 것이라
+  //   기본이 켜짐이면 사적인 메모가 한 번의 부주의로 그대로 나간다. 격자·상세는 켠다.
+  state.exp = blankExp(false, true, true);
   render();
   buildExport();
 }
