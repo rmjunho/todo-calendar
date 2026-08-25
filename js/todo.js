@@ -2483,6 +2483,24 @@ if (location.search.includes('selftest')) {
   ok(subOf('긴메모').querySelector('[data-memotext]').className.indexOf('trunc') >= 0,
     'and tapping it again folds the note back');
 
+  // ★ 줄바꿈이 든 메모. 접히면 **첫 줄만**, 펼치면 줄바꿈까지 그대로다(사용자 요청).
+  //   첫 줄이 짧아 안 잘려도 뒷줄이 있으면 펼침 버튼이 떠야 한다 — 예전 규칙(가로로
+  //   잘렸을 때만)이었다면 여기서 감춰진 줄을 꺼낼 방법이 아예 없다.
+  state.items = [EV({ id: 'nl', kind: 'todo', title: '여러줄', date: '2026-08-20',
+    memo: '첫 줄\n둘째 줄\n셋째 줄' })];
+  render();
+  const nlText = () => subOf('여러줄').querySelector('[data-memotext]');
+  eq(nlText().textContent, '첫 줄', 'a folded note shows its first line only');
+  ok(!subOf('여러줄').querySelector('[data-memo]').hidden,
+    'and the arrow shows even though that short first line was never clipped');
+  subOf('여러줄').querySelector('[data-memo]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  eq(nlText().textContent, '첫 줄\n둘째 줄\n셋째 줄', 'opening it brings back every line');
+  // 계산값으로 본다 — pre-wrap 이 아니면 브라우저가 \n 을 공백 하나로 뭉갠다.
+  ok(getComputedStyle(nlText()).whiteSpace.indexOf('pre') === 0,
+    'and the line breaks are drawn as breaks, not collapsed into spaces',
+    getComputedStyle(nlText()).whiteSpace);
+  state.memoOpen = {};
+
   // 내보내기: 카테고리와 메모는 **같은 스위치**를 타고, 기본은 꺼짐이다.
   const exOff = exportModel('day', state.items, '2026-08-20', 2026, 7, false, false, true);
   const exOn = exportModel('day', state.items, '2026-08-20', 2026, 7, true, false, true);

@@ -506,6 +506,11 @@ function subLine(it) {
   const cat = catOf(it);
   if (!cat.id && !it.memo) return '';
   const on = !!state.memoOpen[it.id];
+  // 접었을 때 보일 **첫 줄**. 빈 줄로 시작하는 메모가 빈칸으로 보이지 않게 내용이
+  // 있는 첫 줄을 고른다. more = 그 줄 말고 더 있나 — 첫 줄이 짧아 안 잘려도
+  // 뒷줄이 있으면 펼침 버튼이 떠야 한다(syncMemoBtns 가 이 표시를 읽는다).
+  const head = ((it.memo || '').split('\n').find((l) => l.trim()) || '').trim();
+  const more = (it.memo || '').trim() !== head;
   return '<div style="display:flex;align-items:flex-start;font-size:13px;' +
       'color:var(--label-secondary);margin-top:1px;min-width:0">' +
     (cat.id ? '<span style="flex:none;font-weight:600;color:' + cat.color + '">' +
@@ -513,9 +518,13 @@ function subLine(it) {
     (cat.id && it.memo ? '<span aria-hidden="true" style="flex:none;color:var(--label-quaternary);' +
       'padding:0 5px">·</span>' : '') +
     (it.memo
-      ? '<span data-memotext="' + esc(it.id) + '"' +
-          (on ? ' style="flex:1;min-width:0;overflow-wrap:anywhere"' : ' class="trunc" style="flex:1;min-width:0"') +
-          '>' + esc(it.memo) + '</span>' +
+      ? '<span data-memotext="' + esc(it.id) + '"' + (more ? ' data-memomore' : '') +
+          // ★ 접히면 **첫 줄만**, 펼치면 줄바꿈까지 그대로다(사용자 요청).
+          //   pre-wrap 이라야 메모에 든 \n 이 진짜 줄바꿈으로 선다 — 기본값에서는
+          //   HTML 이 공백 하나로 뭉개서 여러 줄 메모가 한 문단처럼 이어져 보인다.
+          (on ? ' style="flex:1;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere"'
+              : ' class="trunc" style="flex:1;min-width:0"') +
+          '>' + esc(on ? it.memo.trim() : head) + '</span>' +
         // ★ 펼침 버튼은 **잘린 줄에만** 보인다(syncMemoBtns 가 그린 뒤 재서 켠다).
         //   여기서는 늘 hidden 으로 낸다 — 반대로 두면 짧은 메모에서도 한 번 번쩍인다.
         //   접는 화살표는 따로 안 만들고 같은 아이콘을 180도 돌려 쓴다.
@@ -535,7 +544,10 @@ function subLine(it) {
 function syncMemoBtns() {
   document.querySelectorAll('[data-memo]').forEach((b) => {
     const txt = b.previousElementSibling;
-    b.hidden = !(state.memoOpen[b.dataset.memo] || (txt && txt.scrollWidth > txt.clientWidth + 1));
+    // 뒷줄이 있으면(data-memomore) 재 볼 것도 없이 뜬다 — 첫 줄이 짧아 안 잘려도
+    // 감춰 둔 줄이 있다는 뜻이다. 한 줄짜리 메모는 예전처럼 잘렸을 때만 뜬다.
+    b.hidden = !txt || !(state.memoOpen[b.dataset.memo]
+      || txt.dataset.memomore !== undefined || txt.scrollWidth > txt.clientWidth + 1);
   });
 }
 
