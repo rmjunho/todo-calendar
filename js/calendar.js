@@ -108,7 +108,7 @@ const GLYPHS = {
   'chevron.down': '<path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
   'chevron.up.chevron.down': '<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10l4-4 4 4"/><path d="M8 14l4 4 4-4"/></g>',
   // 순서 손잡이. **누르면 그 자리에서 잡힌다**(줄 본문은 길게 눌러야 잡힌다) —
-  // 자세한 건 todo.js 의 pointerdown 위임과 catDragPaint 를 볼 것.
+  // 자세한 건 todo.js 의 pointerdown 위임과 dragPaint 를 볼 것.
   'line.3.horizontal': '<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 8h14"/><path d="M5 12h14"/><path d="M5 16h14"/></g>'
 };
 function icon(name, size, color) {
@@ -431,8 +431,24 @@ const blockTier = (colW, h) =>
 // 소수 4자리에서 끊어 '33.3333%' 처럼 값이 항상 같은 모양으로 나오게 한다.
 const pct = (v) => (Math.round(v * 1e4) / 1e4) + '%';
 
+// 손으로 정한 순서. sortCats 의 order 와 같은 규칙이다 — 번호가 있으면 그 순서로,
+// 없으면 **뒤로** 보내고 자기들끼리는 원래(시각·제목) 차례를 지킨다. 옛 항목에는
+// 번호가 없으므로 필수로 만들면 안 된다.
+// ⚠️ 번호는 **항목마다 하나**다(날짜별이 아니다). 반복·여러 날 항목은 여러 날에
+//   나타나지만 문서는 하나라, 한 날에서 바꾼 순서가 그 항목이 나오는 모든 날에
+//   똑같이 적용된다. 날짜별로 두려면 항목마다 날짜→번호 맵을 들어야 해서 문서가
+//   계속 자란다 — 개인용 앱에는 과하다고 보고 안 했다(사용자와 합의).
+const ITEM_ORDER_LAST = Number.MAX_SAFE_INTEGER;
+const ordOf = (it) => (typeof it.order === 'number' ? it.order : ITEM_ORDER_LAST);
+
 function sortItems(list) {
   return list.slice().sort((x, y) => {
+    // ★ 손으로 정한 순서가 **제일 먼저**다(사용자 요청: 달력 칸까지 반영).
+    //   이 함수가 월 칸·주 열·아래 목록·내보내기가 다 지나는 통로라 여기 한 줄이면
+    //   전부 따라온다. 같이 따라오는 것이 하나 더 있다 — weekEventBars 가 이 순서로
+    //   막대 **층**을 배정하므로, 일정 순서를 바꾸면 달력의 막대가 위아래로 움직인다.
+    const ox = ordOf(x), oy = ordOf(y);
+    if (ox !== oy) return ox - oy;
     const tx = x.time || '', ty = y.time || '';
     // 시간이 같으면 제목순. localeCompare 를 쓰지 않는다 — 정렬은 화면에 보이는
     // 순서라 표시처럼 보이지만, ?selftest 가 lang='en' 에서 정렬이 한 글자도 안
@@ -592,7 +608,7 @@ const state = {
   // ★ DOM 이 아니라 여기 있어야 한다 — render() 가 #app 을 통째로 다시 만들어서
   //   펼친 표시를 요소에 두면 다음 render() 에 조용히 접힌다.
   memoOpen: {},
-  catDrag: null,
+  drag: null,
   showForm: false,
   editingId: null,
   form: null,
@@ -1315,13 +1331,23 @@ function render() {
     // ★ 한쪽 종류만 있는 날은 findIndex 가 -1(할 일 없음) 또는 0(일정 없음)이라
     //   어느 줄과도 안 맞는다 — 0 은 아래에서 첫 줄 규칙('none')이 먼저 가져간다.
     const splitAt = selShown.findIndex((it) => !isEvent(it));
+    // 두 무리의 크기. 손잡이를 그릴지 정하는 데만 쓴다 — 끌기는 제 무리 안에서만
+    // 되므로, 무리에 줄이 하나뿐이면 손잡이가 있어도 갈 곳이 없다.
+    const evCount = splitAt < 0 ? selShown.length : splitAt;
     listHtml = selShown.map((it, idx) => {
       const c = catOf(it).color;
       const done = isDone(it, sel);
       const evt = isEvent(it);
+      const groupSize = evt ? evCount : selShown.length - evCount;
       // 여러 날 일정의 가운데를 눌러도 시작 날짜가 그리로 옮겨가면 안 된다 (pill.openDs).
       const open = 'data-open="' + esc(it.id) + '" data-ds="' + (occStart(it, sel) || sel) + '"';
-      return '<div style="display:flex;align-items:center;gap:12px;padding:13px 16px;border-top:' +
+      // ★ data-itemdrag / data-itemkind 는 순서 끌기가 읽는다(todo.js 의 itemDragCfg).
+      //   kind 가 필요한 이유는 **경계** 때문이다 — 같은 종류가 이어지는 구간 밖으로는
+      //   못 나간다. user-select:none 이 없으면 길게 누르는 400ms 동안 안드로이드가
+      //   글자를 선택하고 복사 메뉴를 띄워서 끌기가 시작도 못 한다(카테고리와 같다).
+      return '<div data-itemdrag="' + esc(it.id) + '" data-itemkind="' + (evt ? 'event' : 'todo') +
+        '" style="display:flex;align-items:center;gap:12px;padding:13px 16px;' +
+        'user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;border-top:' +
         (idx === 0 ? 'none' : idx === splitAt ? '3px solid var(--separator)'
           : '.5px solid var(--separator)') + '">' +
         // ★ 일정에는 체크 버튼을 안 그린다 — 완료라는 개념이 없다. 대신 같은 24px
@@ -1352,6 +1378,16 @@ function render() {
               'padding:3px 8px;border-radius:999px">' + esc(repLabel(it.repeat, it.days)) + '</span>' : '') +
           (it.time ? '<span style="font-size:13px;font-weight:500;color:var(--label-secondary);' +
             'font-variant-numeric:tabular-nums">' + esc(timeRange(it.time, it.endTime || '')) + '</span>' : '') +
+          // 순서 손잡이. 카테고리 목록과 **같은 규칙**이다 — 누르면 즉시 잡히고, 위아래
+          // padding 과 같은 크기의 음수 margin 이 짝이라 누르는 띠만 넓히고 줄 높이는
+          // 안 움직인다. touch-action:none 이 없으면 폰에서 손잡이 위에서 시작한 손짓을
+          // 브라우저가 스크롤로 먼저 채 간다.
+          // ★ 제 무리에 혼자면 안 그린다 — 끌 데가 없는 손잡이는 눌러도 아무 일이 없어
+          //   고장으로 읽힌다(일정과 할 일 무리는 서로 못 넘는다).
+          (groupSize > 1
+            ? '<span data-draghandle aria-hidden="true" style="color:var(--label-quaternary);' +
+              'display:flex;cursor:grab;touch-action:none;padding:10px 0;margin:-10px 0">' +
+              icon('line.3.horizontal', 15) + '</span>' : '') +
           '<span ' + open + ' style="cursor:pointer;color:var(--label-tertiary);display:flex">' +
             icon('chevron.right', 15) + '</span>' +
         '</div></div>';

@@ -125,7 +125,7 @@ function applyLoggedOut() {
   state.admSort = 'joined';
   state.showCats = false;
   state.catDraft = null;
-  state.catDrag = null;     // 끄는 중에 세션이 끊기면 줄이 밀린 채로 남는다
+  state.drag = null;     // 끄는 중에 세션이 끊기면 줄이 밀린 채로 남는다
   state.goalDraft = null;   // ★ 안 비우면 sheetBusy() 가 영영 true 로 남는다
   state.booting = false;
   // ★ 열려 있던 시트를 전부 닫는다. 안 닫으면 sheetBusy() 가 영영 true 로 남아

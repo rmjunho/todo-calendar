@@ -341,7 +341,7 @@ function openCats() {
 function closeCats() {
   state.showCats = false;
   state.catDraft = null;
-  state.catDrag = null;   // 끌던 중에 닫으면 밀린 줄이 그대로 남는다
+  state.drag = null;   // 끌던 중에 닫으면 밀린 줄이 그대로 남는다
   render();   // ★ sheetBusy() 로 밀려 있던 원격 스냅샷을 여기서 반영한다
 }
 function newCat() {
@@ -406,37 +406,43 @@ function syncCatSheet() {
   if (warn) warn.hidden = !catTaken(d);
 }
 
-// ---------------------------------------------------------- 카테고리 순서 끌기
+// ------------------------------------------------------------------ 순서 끌기
+// 카테고리 관리 목록과 아래 할 일 목록이 **같은 엔진**을 쓴다. 두 벌로 두면 다음에
+// 한쪽만 고쳐진다. 다른 것은 셋뿐이라 그 셋만 인자로 받는다 —
+//   sel   어떤 줄들을 끄는가 (선택자)
+//   lo·hi 넘어갈 수 없는 경계 (아래 목록은 일정/할 일 무리를 못 넘는다)
+//   drop  놓았을 때 무엇을 하는가
 // ★ 끄는 동안에는 render() 를 **한 번도** 부르지 않는다. render() 는 #app 을 통째로
 //   다시 만들어서 손가락이 잡고 있던 줄이 문서에서 사라진다 — 로그인 화면에서
 //   키보드가 바로 닫히던 것과 똑같은 원리다. 그래서 syncSheet() 처럼 DOM 을 직접
-//   만지고(줄의 transform 만 민다), 놓을 때 한 번만 그린다.
-// 길게 눌러야 잡히는 이유는 폰이다. 누르자마자 잡으면 시트를 위아래로 굴리려는
+//   만지고(줄을 transform 으로 민다), 놓을 때 한 번만 그린다.
+// 길게 눌러야 잡히는 이유는 폰이다. 누르자마자 잡으면 화면을 위아래로 굴리려는
 // 손짓이 전부 순서 바꾸기가 된다. 가만히 400ms → 잡기, 그 전에 움직이면 스크롤.
-const CAT_HOLD_MS = 400;
-const CAT_SLOP = 10;        // 잡히기 전 이만큼 넘게 움직이면 스크롤로 본다
+// (손잡이에서 시작하면 안 기다린다 — 손잡이가 이미 "끄는 자리" 라고 말하고 있다.)
+const DRAG_HOLD_MS = 400;
+const DRAG_SLOP = 10;       // 잡히기 전 이만큼 넘게 움직이면 스크롤로 본다
 // 잡힌 줄이 살짝 떠오르는 정도. 1.03 을 넘기지 말 것 — scale 은 자리(레이아웃)를
 // 안 바꾸지만 **스크롤 넓이에는 잡힌다.** 시트 좌우 여백이 20px 이라 그 안에서
-// 커지는 동안은 조용하고, 더 키우면 시트에 가로 스크롤바가 생긴다.
-const CAT_LIFT = '1.03';
-const CAT_LIFT_TR = 'scale .16s ease, box-shadow .16s ease, ' +
+// 커지는 동안은 조용하고, 더 키우면 가로 스크롤바가 생긴다.
+const DRAG_LIFT = '1.03';
+const DRAG_LIFT_TR = 'scale .16s ease, box-shadow .16s ease, ' +
   'background-color .16s ease, border-radius .16s ease';
-let catDragged = false;     // 방금 끝난 끌기 — 뒤따라오는 click 을 한 번 삼킨다
+let dragged = false;        // 방금 끝난 끌기 — 뒤따라오는 click 을 한 번 삼킨다
 
-const catRows = () => [...document.querySelectorAll('[data-catedit]')];
+const dragRows = () => (state.drag ? [...document.querySelectorAll(state.drag.sel)] : []);
 
 // 끌기를 접는다. 잡히기 전이면 아무 흔적이 없어 되돌릴 것도 없다.
-function catDragEnd(repaint) {
-  const g = state.catDrag;
+function dragEnd(repaint) {
+  const g = state.drag;
   if (!g) return;
   clearTimeout(g.timer);
-  state.catDrag = null;
+  state.drag = null;
   if (repaint && g.on) render();
 }
 
-function catDragPaint() {
-  const g = state.catDrag;
-  const rows = catRows();
+function dragPaint() {
+  const g = state.drag;
+  const rows = dragRows();
   if (!rows.length) return;
   // 한 줄 높이는 **잰다.** 줄마다 위 테두리(.5px)가 붙고 안 붙어 높이가 갈리므로
   // 첫 줄 높이를 쓰면 칸이 조금씩 어긋난다 — 이웃한 두 줄의 간격이 진짜 보폭이다.
@@ -459,9 +465,9 @@ function catDragPaint() {
     //   ⚠️ 잡힌 줄의 이동을 transform 으로 되돌리지 말 것 — 되돌리는 순간
     //     아래 transition 이 이동에도 걸려서 끌기가 미끄덩거린다.
     r.style.translate = held ? '0 ' + (g.dy || 0) + 'px' : '';
-    r.style.scale = held ? CAT_LIFT : '';
+    r.style.scale = held ? DRAG_LIFT : '';
     // 자리를 비켜 주는 줄은 미끄러지듯 옮겨 가야 순서가 바뀐 게 눈에 보인다.
-    r.style.transition = held ? CAT_LIFT_TR : 'transform .16s ease';
+    r.style.transition = held ? DRAG_LIFT_TR : 'transform .16s ease';
     r.style.position = held ? 'relative' : '';
     r.style.zIndex = held ? '2' : '';
     r.style.backgroundColor = held ? 'var(--bg-secondary)' : '';
@@ -470,17 +476,66 @@ function catDragPaint() {
   });
 }
 
-function catDragDrop() {
-  const g = state.catDrag;
+function dragDrop() {
+  const g = state.drag;
   if (!g) return;
   clearTimeout(g.timer);
-  state.catDrag = null;
+  state.drag = null;
   if (!g.on) return;          // 짧게 눌렀다 뗀 것 — click 위임이 편집기를 연다
-  catDragged = true;          // 이 뒤에 오는 click 한 번은 삼킨다
+  dragged = true;             // 이 뒤에 오는 click 한 번은 삼킨다
   if (g.to === g.from) return render();   // 제자리 — 민 줄만 되돌린다
-  const next = state.cats.slice();
-  next.splice(g.to, 0, next.splice(g.from, 1)[0]);
-  commitCatOrder(next);       // 안에서 render() 를 부른다
+  g.drop(g.from, g.to);       // 안에서 render() 를 부른다
+}
+
+// 한 칸 옮긴 새 배열. 두 목록이 같은 식을 쓴다.
+const movedTo = (list, from, to) => {
+  const n = list.slice();
+  n.splice(to, 0, n.splice(from, 1)[0]);
+  return n;
+};
+
+// 카테고리 줄에서 시작한 끌기. 경계가 없다 — 목록 전체가 한 무리다.
+function catDragCfg(row) {
+  if (state.catDraft || state.cats.length < 2) return null;
+  const from = [...document.querySelectorAll('[data-catedit]')].indexOf(row);
+  if (from < 0) return null;
+  return { sel: '[data-catedit]', from: from, lo: 0, hi: state.cats.length - 1,
+    drop: (a, b) => commitCatOrder(movedTo(state.cats, a, b)) };
+}
+
+// 아래 목록 줄에서 시작한 끌기.
+// ★ 순서는 **그려진 DOM 에서** 읽는다. render() 가 만든 selShown 은 어디에도 안 남아
+//   있고, 다시 계산하면 정렬·묶기 규칙을 두 번 적는 셈이 된다 — 화면에 보이는 차례가
+//   곧 사용자가 끌고 있는 차례다.
+// ★ 경계는 **같은 종류가 이어지는 구간**이다. 일정과 할 일 사이의 굵은 선을 넘어가면
+//   "선 위 = 일정" 이 거짓이 되어 선 자체가 뜻을 잃는다.
+function itemDragCfg(row) {
+  const rows = [...document.querySelectorAll('[data-itemdrag]')];
+  const from = rows.indexOf(row);
+  if (from < 0 || rows.length < 2) return null;
+  const kind = rows[from].dataset.itemkind;
+  let lo = from, hi = from;
+  while (lo > 0 && rows[lo - 1].dataset.itemkind === kind) lo--;
+  while (hi < rows.length - 1 && rows[hi + 1].dataset.itemkind === kind) hi++;
+  if (lo === hi) return null;             // 그 무리에 혼자면 끌 데가 없다
+  const ids = rows.map((r) => r.dataset.itemdrag);
+  return { sel: '[data-itemdrag]', from: from, lo: lo, hi: hi,
+    drop: (a, b) => commitItemOrder(movedTo(ids, a, b)) };
+}
+
+// 그날 목록에 보이는 항목들을 0부터 다시 매긴다. 카테고리와 같은 이유로 빈칸을
+// 안 남긴다 — 구멍이 있으면 새 항목을 몇 번에 끼울지가 다시 문제가 된다.
+// ★ saveTodo 는 **merge** 라 한 필드만 보내도 나머지가 안 날아간다(firebase.js).
+//   카테고리(setDoc 통째 교체)와 정반대라, 여기서는 제목·메모를 실을 필요가 없다.
+// ★ 낙관적 업데이트. 스냅샷이 돌아오기 전에 화면이 먼저 새 순서로 서야 한다.
+function commitItemOrder(ids) {
+  const at = {};
+  ids.forEach((id, i) => { at[id] = i; });
+  state.items = state.items.map((it) => (at[it.id] === undefined || it.order === at[it.id]
+    ? it : Object.assign({}, it, { order: at[it.id] })));
+  render();
+  Promise.all(ids.map((id, i) => fb.saveTodo(id, { order: i })))
+    .catch((e) => fb.fail(t('err.save'), e));
 }
 
 function renderCatSheet() {
@@ -534,7 +589,7 @@ function renderCatSheet() {
         //   손가락에 너무 작아 누르는 띠만 36px 로 넓히고, margin 이 그만큼 도로
         //   빼서 줄 높이는 한 픽셀도 안 움직인다. 좌우로는 안 넓힌다 — 가로 음수
         //   margin 은 줄의 gap:12px 을 갉아먹어 아이콘 사이가 붙어 보인다.
-        (state.cats.length > 1 ? '<span data-cathandle aria-hidden="true" ' +
+        (state.cats.length > 1 ? '<span data-draghandle aria-hidden="true" ' +
           'style="color:var(--label-quaternary);display:flex;cursor:grab;' +
           'touch-action:none;padding:10px 0;margin:-10px 0">' +
           icon('line.3.horizontal', 16) + '</span>' : '') +
@@ -763,7 +818,7 @@ app.addEventListener('click', (e) => {
 
   // 방금 끌기를 끝냈으면 그 뒤에 따라오는 click 하나를 삼킨다 — 안 삼키면 순서를
   // 바꾸고 손을 떼는 순간 그 카테고리의 편집기가 같이 열린다.
-  if (catDragged) { catDragged = false; return; }
+  if (dragged) { dragged = false; return; }
 
   if ((el = hit('[data-authmode]'))) {
     state.auth.mode = el.dataset.authmode;
@@ -994,43 +1049,45 @@ app.addEventListener('input', (e) => {
   syncSheet();
 });
 
-// 카테고리 순서 끌기. 개별 요소가 아니라 click·input 과 **같은 층의 위임 하나**다.
+// 순서 끌기. 개별 요소가 아니라 click·input 과 **같은 층의 위임 하나**다.
+// ★ 두 목록이 한 위임을 나눠 쓴다. 시트가 열려 있으면 그 시트가 먼저다 — 아래 목록은
+//   시트에 가려 안 보이는데, 순서를 뒤집으면 가려진 줄이 잡힌다.
 app.addEventListener('pointerdown', (e) => {
-  catDragged = false;   // 지난 끌기의 플래그가 눌러붙어 다음 탭을 삼키지 않게
-  if (!state.showCats || state.catDraft || state.cats.length < 2) return;
-  const row = e.target.closest('[data-catedit]');
-  if (!row) return;
-  const from = catRows().indexOf(row);
-  if (from < 0) return;
-  const g = { id: row.dataset.catedit, from: from, to: from,
-    y0: e.clientY, dy: 0, rowH: 0, on: false, timer: 0 };
-  state.catDrag = g;
+  dragged = false;   // 지난 끌기의 플래그가 눌러붙어 다음 탭을 삼키지 않게
+  let row, cfg = null;
+  if (state.showCats && (row = e.target.closest('[data-catedit]'))) cfg = catDragCfg(row);
+  else if (!sheetBusy() && (row = e.target.closest('[data-itemdrag]'))) cfg = itemDragCfg(row);
+  if (!cfg) return;
+  const g = Object.assign({ to: cfg.from, y0: e.clientY, dy: 0, rowH: 0, on: false, timer: 0 }, cfg);
+  state.drag = g;
   // ★ 손잡이에서 시작했으면 **기다리지 않는다.** 400ms 는 "이 줄을 굴리려는 건지
   //   옮기려는 건지" 를 가리려고 두는 시간인데, 손잡이는 그 답을 이미 말하고 있다.
-  //   줄 본문에서 시작한 손짓은 시트를 굴리려는 것일 수 있으니 그대로 길게 눌러야
+  //   줄 본문에서 시작한 손짓은 화면을 굴리려는 것일 수 있으니 그대로 길게 눌러야
   //   잡힌다 — 여기서 타이머를 걷어내면 폰에서 스크롤이 전부 순서 바꾸기가 된다.
-  if (e.target.closest('[data-cathandle]')) { g.on = true; return catDragPaint(); }
-  g.timer = setTimeout(() => { g.on = true; catDragPaint(); }, CAT_HOLD_MS);
+  if (e.target.closest('[data-draghandle]')) { g.on = true; return dragPaint(); }
+  g.timer = setTimeout(() => { g.on = true; dragPaint(); }, DRAG_HOLD_MS);
 });
 app.addEventListener('pointermove', (e) => {
-  const g = state.catDrag;
+  const g = state.drag;
   if (!g) return;
   const dy = e.clientY - g.y0;
-  // 아직 안 잡혔는데 움직였다면 시트를 굴리려는 손짓이다 — 끌기를 접는다.
-  if (!g.on) { if (Math.abs(dy) > CAT_SLOP) catDragEnd(false); return; }
+  // 아직 안 잡혔는데 움직였다면 화면을 굴리려는 손짓이다 — 끌기를 접는다.
+  if (!g.on) { if (Math.abs(dy) > DRAG_SLOP) dragEnd(false); return; }
   g.dy = dy;
-  g.to = Math.max(0, Math.min(state.cats.length - 1, g.from + Math.round(dy / (g.rowH || 1))));
-  catDragPaint();
+  // ★ lo·hi 로 자른다. 아래 목록에서는 이것이 **일정/할 일 경계**다 — 굵은 선을
+  //   넘어가면 "선 위 = 일정" 이 거짓이 된다. 카테고리는 목록 전체가 한 무리다.
+  g.to = Math.max(g.lo, Math.min(g.hi, g.from + Math.round(dy / (g.rowH || 1))));
+  dragPaint();
 });
 // 뗄 때와 취소는 **창 단위**로 받는다 — 데스크톱에서 마우스를 #app 밖에서 떼면
 // app 리스너로는 안 와서 끌기가 잡힌 채로 남는다. 브라우저가 제스처를 가져가면
 // (스크롤 시작·전화 수신) pointercancel 이 오고, 밀어 둔 줄을 되돌려야 한다.
-window.addEventListener('pointerup', catDragDrop);
-window.addEventListener('pointercancel', () => catDragEnd(true));
-// 잡힌 뒤에는 시트가 같이 굴러가지 않게 막는다. #app 에 거는 리스너라 기본이
+window.addEventListener('pointerup', dragDrop);
+window.addEventListener('pointercancel', () => dragEnd(true));
+// 잡힌 뒤에는 화면이 같이 굴러가지 않게 막는다. #app 에 거는 리스너라 기본이
 // non-passive 다 — document·window 였다면 preventDefault 가 조용히 무시된다.
 app.addEventListener('touchmove', (e) => {
-  if (state.catDrag && state.catDrag.on) e.preventDefault();
+  if (state.drag && state.drag.on) e.preventDefault();
 });
 
 document.addEventListener('keydown', (e) => {
@@ -1985,10 +2042,10 @@ if (location.search.includes('selftest')) {
   // ★ 손잡이는 **기다리지 않는다** — 400ms 를 세는 건 줄 본문에서 시작했을 때뿐이다.
   //   타이머를 기다려 보고 통과시키면 손잡이가 400ms 뒤에 잡혀도 검사가 안 걸리므로,
   //   누른 **직후에 이미 잡혀 있는지**를 본다.
-  const grip = document.querySelector('[data-catedit] [data-cathandle]');
+  const grip = document.querySelector('[data-catedit] [data-draghandle]');
   ok(!!grip, 'every row carries a handle to grab');
   grip.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientY: 0 }));
-  ok(!!state.catDrag && state.catDrag.on,
+  ok(!!state.drag && state.drag.on,
     'pressing the handle grabs the row at once — there is no hold to wait out');
   // ★ 여기서는 getComputedStyle 이 아니라 **인라인 값**을 본다. 뜨는 걸 transition 에
   //   맡겼기 때문에, 누른 직후 계산값은 목표(1.03)가 아니라 **시작값(1)** 이 잡힌다.
@@ -2004,22 +2061,22 @@ if (location.search.includes('selftest')) {
   ok(['translate', 'transform', 'all'].every((p) => lift[0].transitionProperty.indexOf(p) < 0),
     'the held row never eases its travel, so it keeps up with the finger',
     lift[0].transitionProperty);
-  catDragEnd(false);
+  dragEnd(false);
   render();
 
   const heldRow = document.querySelectorAll('[data-catedit]')[0];
-  state.catDrag = { id: 'a', from: 0, to: 2, y0: 0, dy: 90, rowH: 44, on: true, timer: 0 };
-  catDragPaint();
+  state.drag = Object.assign(catDragCfg(heldRow), { to: 2, y0: 0, dy: 90, rowH: 44, on: true, timer: 0 });
+  dragPaint();
   ok(document.contains(heldRow),
     'painting a drag never rebuilds the sheet — the held row survives, so the finger keeps it');
   eq(document.querySelectorAll('[data-catedit]')[1].style.transform, 'translateY(-44px)',
     'the rows it passed slide up by exactly one row height');
 
-  catDragDrop();
+  dragDrop();
   eq(catIds(), 'b,c,a', 'dropping the first row two places down redraws the list in the new order');
   eq(catSent.join(' '), 'b:0 c:1 a:2',
     'and every category is renumbered from zero — no gaps and no document left without an order');
-  ok(state.catDrag === null, 'the drag state is cleared on drop');
+  ok(state.drag === null, 'the drag state is cleared on drop');
 
   // 놓자마자 따라오는 click 하나는 삼킨다 — 안 삼키면 순서를 바꾸고 손을 떼는 순간
   // 그 카테고리의 편집기가 같이 열린다.
@@ -2037,7 +2094,7 @@ if (location.search.includes('selftest')) {
     'renaming a category leaves it exactly where it was');
   eq(catSent.join(' '), 'b:0 c:1 a:2', 'and the rename still carries every order back to the server');
   window.fb = kFb;
-  state.catDrag = null;
+  state.drag = null;
   state.catDraft = null;
   state.cats = [];
 
@@ -2438,6 +2495,56 @@ if (location.search.includes('selftest')) {
   state.exp = null;
   state.memoOpen = {};
   state.cats = keepCats;
+
+  // ★ 할 일 순서 끌기. 카테고리와 **같은 엔진**이라 여기서는 이 목록에만 있는 둘을 본다 —
+  //   무리 경계를 못 넘는 것, 그리고 바뀐 순서가 **달력 칸까지** 따라가는 것.
+  const keepFb = window.fb, ordSent = [];
+  window.fb = Object.assign({}, keepFb, {
+    saveTodo: (id, d) => { ordSent.push(id + ':' + d.order); return Promise.resolve(); },
+    fail: () => {} });
+  state.view = 'month'; state.selected = '2026-08-20'; state.cy = 2026; state.cm = 7;
+  state.items = [EV({ id: 'e1', title: '일정1', date: '2026-08-20' }),
+    EV({ id: 't1', kind: 'todo', title: '할일1', date: '2026-08-20' }),
+    EV({ id: 't2', kind: 'todo', title: '할일2', date: '2026-08-20' }),
+    EV({ id: 't3', kind: 'todo', title: '할일3', date: '2026-08-20' })];
+  render();
+  const dragRow = (i) => APP().querySelectorAll('[data-itemdrag]')[i];
+  const listIds = () => [...APP().querySelectorAll('[data-itemdrag]')]
+    .map((r) => r.dataset.itemdrag).join();
+  const cellIds = () => [...APP().querySelector('[data-day="2026-08-20"]')
+    .querySelectorAll('[data-open]')].map((p) => p.dataset.open).join();
+  eq(listIds(), 'e1,t1,t2,t3', 'the day list starts in its sorted order, event first');
+  ok(!dragRow(0).querySelector('[data-draghandle]') && !!dragRow(1).querySelector('[data-draghandle]'),
+    'the lone event gets no handle — it has nowhere to go, while the three to-dos each get one');
+
+  // 무리 경계. 할 일을 한참 위로 끌어도 일정 위로는 못 간다 — 굵은 선이 거짓이 된다.
+  const grab = (i) => dragRow(i).querySelector('[data-draghandle]')
+    .dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientY: 0 }));
+  grab(1);
+  dragRow(1).dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientY: -400 }));
+  window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+  eq(listIds(), 'e1,t1,t2,t3',
+    'dragging a to-do far above the divider leaves it put — it cannot become the first row');
+  eq(ordSent.join(), '', 'and nothing is written when the drop lands where it started');
+
+  // 진짜로 옮기기. 첫 할 일을 무리의 맨 아래로.
+  grab(1);
+  const step = dragRow(2).getBoundingClientRect().top - dragRow(1).getBoundingClientRect().top;
+  dragRow(1).dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientY: step * 2 }));
+  window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+  eq(listIds(), 'e1,t2,t3,t1', 'dropping it two rows down redraws the list in the new order');
+  eq(ordSent.join(' '), 'e1:0 t2:1 t3:2 t1:3',
+    'and every row is renumbered from zero — no gaps and no document left without an order');
+  // ★ 이것이 "달력 칸까지 반영" 이다 — sortItems 가 order 를 먼저 보므로 월간 칸의
+  //   작은 글씨도 같은 차례로 선다. 칸에는 일정이 안 들어간다(막대 층이 그린다).
+  eq(cellIds(), 't2,t3,t1', 'the month cell for that day lists them in the same hand-picked order');
+
+  // 놓자마자 따라오는 click 은 삼킨다 — 안 삼키면 손을 떼는 순간 편집기가 열린다.
+  dragRow(1).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  ok(!state.showForm, 'the click that follows a drop does not open the editor');
+  window.fb = keepFb;
+  state.drag = null;
+  state.items = [];
 
   // 입력 시트의 판정. 저장 버튼·안내·saveForm 이 전부 이 둘만 본다.
   const F = (o) => Object.assign(blankForm('2026-08-05'), o);
