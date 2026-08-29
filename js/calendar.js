@@ -541,15 +541,28 @@ function subLine(it) {
 // 메모가 실제로 잘렸는지는 **그린 뒤에만** 알 수 있다 — CSS 로는 못 묻는다. 안 잘린
 // 줄에 펼침 버튼을 두면 눌러도 아무 일이 없어 고장으로 읽히므로, 여기서 재서 켠다.
 // 펼쳐 둔 줄은 재지 않는다 — 다 보여서 안 넘치지만 **접을 버튼은 있어야** 한다.
+// "다음 줄로 넘어갈 만큼" 의 기준. 1~2px 은 반올림 오차라, 그걸로 버튼을 띄우면
+// 넉넉히 들어가는 줄에도 화살표가 붙어 **무조건 보이는 것처럼** 읽힌다.
+const MEMO_CLIP_SLOP = 4;
+
 function syncMemoBtns() {
   document.querySelectorAll('[data-memo]').forEach((b) => {
     const txt = b.previousElementSibling;
     // 뒷줄이 있으면(data-memomore) 재 볼 것도 없이 뜬다 — 첫 줄이 짧아 안 잘려도
-    // 감춰 둔 줄이 있다는 뜻이다. 한 줄짜리 메모는 예전처럼 잘렸을 때만 뜬다.
-    b.hidden = !txt || !(state.memoOpen[b.dataset.memo]
-      || txt.dataset.memomore !== undefined || txt.scrollWidth > txt.clientWidth + 1);
+    // 감춰 둔 줄이 있다는 뜻이다. 한 줄짜리 메모는 **정말로 넘칠 때만** 뜬다.
+    b.hidden = !txt || !(state.memoOpen[b.dataset.memo] || txt.dataset.memomore !== undefined
+      || txt.scrollWidth - txt.clientWidth > MEMO_CLIP_SLOP);
   });
+  // ★ 폰트가 늦게 오면 방금 잰 값이 거짓이 된다. 대체 글꼴이 더 넓어서(실측: 같은
+  //   메모가 211px → 248px) 웹폰트 전에는 "넘쳤다" 로 나오는데, 폰트가 온 뒤엔 넉넉히
+  //   들어가는데도 판정만 굳어 있다. CDN 폰트가 늦는 폰에서 특히 잦다 — 한 번 더 잰다.
+  //   ⚠️ status 를 먼저 볼 것. ready 는 이미 끝났어도 resolve 되므로 무조건 걸면
+  //     자기 자신을 끝없이 다시 부른다.
+  if (document.fonts && document.fonts.status !== 'loaded') document.fonts.ready.then(syncMemoBtns);
 }
+// 화면을 돌리거나 창을 줄이면 메모 칸 폭이 바뀐다 — 다시 안 재면 판정이 낡는다.
+// ★ 클릭·입력 위임에 얹을 수 없는 **창 단위** 사건이라 여기서 직접 듣는다.
+window.addEventListener('resize', syncMemoBtns);
 
 // ws 주의 일정 막대들 — 층 배정까지 끝난 것. 정렬을 먼저 하는 이유는 층이 매번 같은
 // 자리에 오게 하기 위해서다(스냅샷이 오는 순서에 층이 흔들리면 막대가 위아래로 튄다).

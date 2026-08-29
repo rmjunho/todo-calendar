@@ -2501,6 +2501,25 @@ if (location.search.includes('selftest')) {
     getComputedStyle(nlText()).whiteSpace);
   state.memoOpen = {};
 
+  // ★ 몇 px 넘친 것으로는 버튼을 안 띄운다. 반올림 오차라 그걸로 띄우면 넉넉히 들어가
+  //   보이는 줄에도 화살표가 붙어 "무조건 보인다" 가 된다(폰에서 나온 지적).
+  //   재는 값을 흉내 낼 수 없으니 칸을 **딱 그만큼** 좁혀 놓고 다시 재게 한다.
+  state.items = [EV({ id: 'sl', kind: 'todo', title: '살짝', date: '2026-08-20', memo: '가나다라마바사' })];
+  render();
+  const slopTxt = subOf('살짝').querySelector('[data-memotext]');
+  const slopBtn = () => subOf('살짝').querySelector('[data-memo]');
+  const narrowTo = (over) => {
+    slopTxt.style.flex = 'none';
+    slopTxt.style.width = (slopTxt.scrollWidth - over) + 'px';
+    syncMemoBtns();
+    return slopTxt.scrollWidth - slopTxt.clientWidth;
+  };
+  const hair = narrowTo(MEMO_CLIP_SLOP);
+  ok(slopBtn().hidden, 'a note overflowing by only a rounding hair keeps its arrow hidden',
+    hair + 'px over');
+  const real = narrowTo(MEMO_CLIP_SLOP * 5);
+  ok(!slopBtn().hidden, 'but one that truly runs past the line gets it', real + 'px over');
+
   // 내보내기: 카테고리와 메모는 **같은 스위치**를 타고, 기본은 꺼짐이다.
   const exOff = exportModel('day', state.items, '2026-08-20', 2026, 7, false, false, true);
   const exOn = exportModel('day', state.items, '2026-08-20', 2026, 7, true, false, true);
