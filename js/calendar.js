@@ -528,10 +528,14 @@ function subLine(it) {
         // ★ 펼침 버튼은 **잘린 줄에만** 보인다(syncMemoBtns 가 그린 뒤 재서 켠다).
         //   여기서는 늘 hidden 으로 낸다 — 반대로 두면 짧은 메모에서도 한 번 번쩍인다.
         //   접는 화살표는 따로 안 만들고 같은 아이콘을 180도 돌려 쓴다.
+        // ⚠️ 초기값이 `display:none` 인 것이 핵심이다. 여기에 `display:flex` 를 적고
+        //   `hidden` 속성만 믿으면 **버튼이 안 숨는다** — 인라인 스타일이 브라우저
+        //   기본 규칙 `[hidden]{display:none}` 을 이기기 때문이다. 실제로 그렇게 짰다가
+        //   메모가 있는 줄마다 화살표가 다 떴다. syncMemoBtns 가 display 를 직접 켠다.
         '<button data-memo="' + esc(it.id) + '" hidden aria-expanded="' + on + '" ' +
           'aria-label="' + esc(t(on ? 'list.memoLess' : 'list.memoMore')) + '" ' +
           'style="flex:none;border:none;background:none;cursor:pointer;padding:0 0 0 6px;' +
-          'color:var(--label-tertiary);display:flex;align-items:center">' +
+          'color:var(--label-tertiary);display:none;align-items:center">' +
           '<span style="display:flex' + (on ? ';rotate:180deg' : '') + '">' +
           icon('chevron.down', 13) + '</span></button>'
       : '') +
@@ -550,8 +554,13 @@ function syncMemoBtns() {
     const txt = b.previousElementSibling;
     // 뒷줄이 있으면(data-memomore) 재 볼 것도 없이 뜬다 — 첫 줄이 짧아 안 잘려도
     // 감춰 둔 줄이 있다는 뜻이다. 한 줄짜리 메모는 **정말로 넘칠 때만** 뜬다.
-    b.hidden = !txt || !(state.memoOpen[b.dataset.memo] || txt.dataset.memomore !== undefined
+    const show = !!txt && (state.memoOpen[b.dataset.memo] || txt.dataset.memomore !== undefined
       || txt.scrollWidth - txt.clientWidth > MEMO_CLIP_SLOP);
+    // ⚠️ display 를 **직접** 켜고 끈다. hidden 만 세우면 버튼의 인라인 display 가
+    //   `[hidden]{display:none}` 을 이겨서 화면에서는 하나도 안 숨는다. hidden 은
+    //   보조기기용으로 같이 맞춰 둔다.
+    b.hidden = !show;
+    b.style.display = show ? 'flex' : 'none';
   });
   // ★ 폰트가 늦게 오면 방금 잰 값이 거짓이 된다. 대체 글꼴이 더 넓어서(실측: 같은
   //   메모가 211px → 248px) 웹폰트 전에는 "넘쳤다" 로 나오는데, 폰트가 온 뒤엔 넉넉히

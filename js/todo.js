@@ -2471,8 +2471,11 @@ if (location.search.includes('selftest')) {
 
   // ★ 펼침 버튼은 **잘린 줄에만** 뜬다. 안 잘린 줄에 두면 눌러도 아무 일이 없어 고장으로
   //   읽힌다. 잘렸는지는 그린 뒤에 재야 알 수 있어서 syncMemoBtns() 가 켜고 끈다.
+  // ★ hidden **속성**이 아니라 그려진 결과(display)를 본다. 속성만 보면 인라인
+  //   display 가 [hidden]{display:none} 을 이겨서 화면엔 다 보이는데도 검사는 통과한다.
   const btnOf = (title) => subOf(title).querySelector('[data-memo]');
-  ok(btnOf('업무줄').hidden && !btnOf('긴메모').hidden,
+  const btnShown = (title) => getComputedStyle(btnOf(title)).display !== 'none';
+  ok(!btnShown('업무줄') && btnShown('긴메모'),
     'the expand arrow shows only on the row whose note is actually clipped');
   btnOf('긴메모').dispatchEvent(new MouseEvent('click', { bubbles: true }));
   const opened = subOf('긴메모').querySelector('[data-memotext]');
@@ -2491,7 +2494,7 @@ if (location.search.includes('selftest')) {
   render();
   const nlText = () => subOf('여러줄').querySelector('[data-memotext]');
   eq(nlText().textContent, '첫 줄', 'a folded note shows its first line only');
-  ok(!subOf('여러줄').querySelector('[data-memo]').hidden,
+  ok(getComputedStyle(subOf('여러줄').querySelector('[data-memo]')).display !== 'none',
     'and the arrow shows even though that short first line was never clipped');
   subOf('여러줄').querySelector('[data-memo]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
   eq(nlText().textContent, '첫 줄\n둘째 줄\n셋째 줄', 'opening it brings back every line');
@@ -2515,10 +2518,11 @@ if (location.search.includes('selftest')) {
     return slopTxt.scrollWidth - slopTxt.clientWidth;
   };
   const hair = narrowTo(MEMO_CLIP_SLOP);
-  ok(slopBtn().hidden, 'a note overflowing by only a rounding hair keeps its arrow hidden',
-    hair + 'px over');
+  ok(getComputedStyle(slopBtn()).display === 'none',
+    'a note overflowing by only a rounding hair keeps its arrow hidden', hair + 'px over');
   const real = narrowTo(MEMO_CLIP_SLOP * 5);
-  ok(!slopBtn().hidden, 'but one that truly runs past the line gets it', real + 'px over');
+  ok(getComputedStyle(slopBtn()).display !== 'none',
+    'but one that truly runs past the line gets it', real + 'px over');
 
   // 내보내기: 카테고리와 메모는 **같은 스위치**를 타고, 기본은 꺼짐이다.
   const exOff = exportModel('day', state.items, '2026-08-20', 2026, 7, false, false, true);
