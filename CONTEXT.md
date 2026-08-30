@@ -100,13 +100,34 @@ dev\todo-calendar\
 ├── tools\og.html                  og.png 생성기. 앱이 안 읽는다(로드 순서와 무관).
 │                                  캔버스라 서체가 안 실려도 조용히 폴백으로 그린다 —
 │                                  파일 안에서 폭을 재서 Pretendard 적용을 확인한다
+├── robots.txt · sitemap.xml       검색엔진용. ★ css·js·_ds 를 **막지 않는다**
 ├── CHANGELOG.md · CONTEXT.md
-└── 백업·시안 (앱은 안 씀)
-    할일캘린더.html · Todo Calendar.dc.html · support.js · legacy\
+└── 백업 (앱은 안 씀)              support.js · legacy\
 ```
 
-`할일캘린더.html` 과 `legacy\index-single-file.html` 은 분리 전 원본과 같은 코드입니다
-(토큰 인라인 여부만 다름). 원본 전체는 커밋 `6c98f75` 에 있습니다.
+옛 단일 파일 원본은 `legacy\index-single-file.html` 에 있고, 원본 전체는 커밋
+`6c98f75` 에 있습니다.
+
+**루트에 있던 `할일캘린더.html` · `Todo Calendar.dc.html` 은 지웠습니다**(2026-08-29).
+전자는 **제목이 `할 일 캘린더` 로 index.html 과 똑같아** 검색이 그쪽을 대표 페이지로
+고를 수 있었고, 그러면 방문자가 7월 25일자 옛 화면을 봅니다. 둘 다 Firebase 를 안 쓰고
+사이트 어디서도 링크되지 않아(검색으로 확인) 지워도 깨지는 링크가 없었습니다.
+되살리려면 `git checkout 6c98f75 -- "할일캘린더.html"`.
+
+### 검색 노출(SEO)
+
+`robots.txt` 는 **크롤을 열어 둡니다.** 이 앱은 HTML 에 내용이 없고 스크립트가 화면을
+만들기 때문에, `css/`·`js/`·`_ds/` 를 막으면 구글이 빈 화면으로 읽습니다 — 막지 마세요.
+개발 문서(`CONTEXT.md` 등)만 검색 결과에서 뺍니다. ⚠️ 저장소가 공개라 이건 **비밀 유지
+장치가 아닙니다.**
+
+네 페이지 모두 `<link rel="canonical">` 을 답니다. 없으면 `/`·`/index.html`·`/?selftest`
+가 따로 색인돼 한 페이지의 평가가 쪼개집니다. `index.html` 의 canonical 은 **`og:url`
+과 같은 값**이어야 합니다.
+
+`sitemap.xml` 의 `lastmod` 는 손으로 적습니다 — 페이지를 고치면 같이 고치세요.
+**Google Search Console 등록은 사람이 해야 합니다**(소유 확인 필요). 등록 전에는
+색인이 아주 느립니다.
 
 ### 로드 순서 — 바꾸면 깨집니다
 

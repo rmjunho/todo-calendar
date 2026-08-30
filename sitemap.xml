@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 실제로 사람이 볼 페이지 넷만 싣는다. lastmod 는 git 의 마지막 커밋 날짜다
+     (YYYY-MM-DD, 사이트맵 표준 형식). 페이지를 고치면 여기 날짜도 같이 고칠 것 —
+     안 고치면 크롤러가 "안 바뀌었다" 고 믿고 한참 다시 안 온다.
+     ★ 앱 화면 자체는 로그인 벽이라 색인될 글이 많지 않다. 이 사이트맵의 값어치는
+       약관·처리방침·계정 삭제 페이지가 확실히 색인되는 데 있다 — 스토어 심사가
+       그 주소들을 요구한다. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://todo-calendar.kro.kr/</loc>
+    <lastmod>2026-08-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://todo-calendar.kro.kr/privacy.html</loc>
+    <lastmod>2026-08-18</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://todo-calendar.kro.kr/terms.html</loc>
+    <lastmod>2026-08-18</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://todo-calendar.kro.kr/delete-account.html</loc>
+    <lastmod>2026-08-18</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+</urlset>

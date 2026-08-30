@@ -1,0 +1,22 @@
+# https://todo-calendar.kro.kr/
+#
+# ★ css/ · js/ · _ds/ 를 **막지 않는다.** 이 앱은 HTML 에 내용이 없고 스크립트가
+#   화면을 만든다 — 구글은 페이지를 실제로 그려 보고 판단하므로, 스타일이나
+#   스크립트를 막으면 빈 화면으로 읽고 색인에서 손해를 본다.
+User-agent: *
+Allow: /
+
+# 검색 결과에 나올 이유가 없는 것들 — 개발 문서와 옛 보관본.
+# ⚠️ 이건 **비밀 유지 장치가 아니다.** 저장소가 공개라 이 파일들은 GitHub 에서
+#    그대로 읽힌다. 여기서 막는 것은 "검색 결과에 안 뜨게" 까지다.
+Disallow: /legacy/
+Disallow: /tools/
+Disallow: /CONTEXT.md
+Disallow: /CLAUDE.md
+Disallow: /PROJECT-BRIEF.md
+Disallow: /CHANGELOG.md
+Disallow: /firestore.rules
+Disallow: /firestore.indexes.json
+Disallow: /firebase.json
+
+Sitemap: https://todo-calendar.kro.kr/sitemap.xml
