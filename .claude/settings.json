@@ -1,0 +1,5 @@
+{
+  "env": {
+    "GATEGUARD_BASH_ROUTINE_DISABLED": "1"
+  }
+}
