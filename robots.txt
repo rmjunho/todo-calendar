@@ -9,12 +9,11 @@ Allow: /
 # 검색 결과에 나올 이유가 없는 것들 — 개발 문서와 옛 보관본.
 # ⚠️ 이건 **비밀 유지 장치가 아니다.** 저장소가 공개라 이 파일들은 GitHub 에서
 #    그대로 읽힌다. 여기서 막는 것은 "검색 결과에 안 뜨게" 까지다.
-Disallow: /legacy/
-Disallow: /tools/
 Disallow: /CONTEXT.md
 Disallow: /CLAUDE.md
 Disallow: /PROJECT-BRIEF.md
 Disallow: /CHANGELOG.md
+Disallow: /WORKLOG.md
 Disallow: /firestore.rules
 Disallow: /firestore.indexes.json
 Disallow: /firebase.json

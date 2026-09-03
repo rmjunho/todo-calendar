@@ -101,12 +101,12 @@ dev\todo-calendar\
 │                                  캔버스라 서체가 안 실려도 조용히 폴백으로 그린다 —
 │                                  파일 안에서 폭을 재서 Pretendard 적용을 확인한다
 ├── robots.txt · sitemap.xml       검색엔진용. ★ css·js·_ds 를 **막지 않는다**
-├── CHANGELOG.md · CONTEXT.md
-└── 백업 (앱은 안 씀)              support.js · legacy\
+└── CHANGELOG.md · CONTEXT.md · WORKLOG.md
 ```
 
-옛 단일 파일 원본은 `legacy\index-single-file.html` 에 있고, 원본 전체는 커밋
-`6c98f75` 에 있습니다.
+**옛 원본은 저장소에 없습니다 — 커밋 `6c98f75` 에만 있습니다.** `legacy\` 와
+`support.js` 도 `08b3a21` 에서 지웠습니다(`git checkout 08b3a21^ -- legacy support.js`
+로 되살립니다). 회차별 작업 이력은 [WORKLOG.md](WORKLOG.md) 에 있습니다.
 
 **루트에 있던 `할일캘린더.html` · `Todo Calendar.dc.html` 은 지웠습니다**(2026-08-29).
 전자는 **제목이 `할 일 캘린더` 로 index.html 과 똑같아** 검색이 그쪽을 대표 페이지로
